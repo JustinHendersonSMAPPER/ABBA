@@ -172,3 +172,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Processing folder with large files
+processing/
+
+# Data folder as it may contain large files
+data/

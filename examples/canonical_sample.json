@@ -1,0 +1,212 @@
+{
+  "format_version": "1.0.0",
+  "metadata": {
+    "generated_at": "2024-01-01T00:00:00Z",
+    "generator_version": "abba-tools-1.0.0",
+    "sources": [
+      {
+        "type": "translation",
+        "id": "ESV",
+        "version": "2016",
+        "copyright": "Copyright 2001 by Crossway",
+        "license": "Usage restricted"
+      },
+      {
+        "type": "original",
+        "id": "BHS",
+        "name": "Biblia Hebraica Stuttgartensia",
+        "version": "1997"
+      }
+    ]
+  },
+  "books": [
+    {
+      "id": "GEN",
+      "names": {
+        "en": {
+          "full": "Genesis",
+          "short": "Gen",
+          "alternate": ["1 Moses", "Bereshit"]
+        },
+        "he": {
+          "full": "בְּרֵאשִׁית",
+          "short": "בר׳"
+        }
+      },
+      "metadata": {
+        "author": {
+          "traditional": "Moses",
+          "critical": "Multiple sources (J, E, P, D)"
+        },
+        "date_written": {
+          "traditional": "1440-1400 BCE",
+          "critical": "950-500 BCE"
+        },
+        "original_language": "Hebrew"
+      },
+      "chapters": [
+        {
+          "number": 1,
+          "metadata": {
+            "theme": "Creation",
+            "outline": [
+              {"verses": "1-2", "title": "The Initial State"},
+              {"verses": "3-5", "title": "Day 1: Light"}
+            ]
+          },
+          "verses": [
+            {
+              "canonical_id": "GEN.1.1",
+              "number": 1,
+              "translations": {
+                "ESV": {
+                  "text": "In the beginning, God created the heavens and the earth."
+                },
+                "HEBREW": {
+                  "text": "בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים אֵ֥ת הַשָּׁמַ֖יִם וְאֵ֥ת הָאָֽרֶץ׃",
+                  "transliteration": "bereshit bara elohim et hashamayim ve'et ha'aretz"
+                }
+              },
+              "original_language": {
+                "language": "Hebrew",
+                "tokens": [
+                  {
+                    "position": 1,
+                    "surface": "בְּרֵאשִׁ֖ית",
+                    "transliteration": "bereshit",
+                    "lemma": "רֵאשִׁית",
+                    "strongs": ["H7225"],
+                    "morphology": {
+                      "pos": "noun",
+                      "gender": "feminine",
+                      "number": "singular",
+                      "state": "construct"
+                    },
+                    "gloss": "beginning"
+                  },
+                  {
+                    "position": 2,
+                    "surface": "בָּרָ֣א",
+                    "transliteration": "bara",
+                    "lemma": "בָּרָא",
+                    "strongs": ["H1254"],
+                    "morphology": {
+                      "pos": "verb",
+                      "stem": "qal",
+                      "aspect": "perfect",
+                      "person": "third",
+                      "gender": "masculine",
+                      "number": "singular"
+                    },
+                    "gloss": "he created"
+                  },
+                  {
+                    "position": 3,
+                    "surface": "אֱלֹהִ֑ים",
+                    "transliteration": "elohim",
+                    "lemma": "אֱלֹהִים",
+                    "strongs": ["H430"],
+                    "morphology": {
+                      "pos": "noun",
+                      "gender": "masculine",
+                      "number": "plural"
+                    },
+                    "gloss": "God"
+                  }
+                ]
+              },
+              "annotations": {
+                "topics": [
+                  {
+                    "id": "creation",
+                    "confidence": 1.0,
+                    "scope": "verse"
+                  }
+                ]
+              }
+            },
+            {
+              "canonical_id": "GEN.1.2",
+              "number": 2,
+              "translations": {
+                "ESV": {
+                  "text": "The earth was without form and void, and darkness was over the face of the deep. And the Spirit of God was hovering over the face of the waters."
+                }
+              },
+              "annotations": {
+                "topics": [
+                  {
+                    "id": "holy_spirit",
+                    "confidence": 0.9,
+                    "scope": "verse"
+                  }
+                ]
+              }
+            },
+            {
+              "canonical_id": "GEN.1.3",
+              "number": 3,
+              "translations": {
+                "ESV": {
+                  "text": "And God said, \"Let there be light,\" and there was light."
+                }
+              },
+              "annotations": {
+                "topics": [
+                  {
+                    "id": "divine_speech",
+                    "confidence": 1.0,
+                    "scope": "verse"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "cross_references": [
+    {
+      "id": "xref_gen1_1_joh1_1",
+      "source": {
+        "verses": ["GEN.1.1"],
+        "context": "Creation account"
+      },
+      "target": {
+        "verses": ["JOH.1.1"],
+        "context": "Word as creator"
+      },
+      "relationship": {
+        "type": "theological_parallel",
+        "confidence": 0.95
+      }
+    }
+  ],
+  "annotations": [
+    {
+      "id": "topic_creation",
+      "type": "topic",
+      "hierarchy": "/theology/god/works/creation",
+      "names": {
+        "en": "Creation"
+      }
+    },
+    {
+      "id": "topic_holy_spirit",
+      "type": "topic",
+      "hierarchy": "/theology/trinity/holy_spirit",
+      "names": {
+        "en": "Holy Spirit"
+      }
+    },
+    {
+      "id": "topic_divine_speech",
+      "type": "topic",
+      "hierarchy": "/theology/god/attributes/speech",
+      "names": {
+        "en": "Divine Speech"
+      }
+    }
+  ]
+}
