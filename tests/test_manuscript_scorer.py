@@ -1,0 +1,279 @@
+"""Tests for manuscript confidence scorer."""
+
+import pytest
+
+from abba.manuscript.scorer import ConfidenceScorer, ManuscriptWeight
+from abba.manuscript.models import (
+    Manuscript,
+    ManuscriptType,
+    ManuscriptFamily,
+    VariantReading,
+    VariantUnit,
+    VariantType,
+    Witness,
+    WitnessType,
+)
+
+
+class TestManuscriptWeight:
+    """Test manuscript weight calculations."""
+
+    def test_weight_calculation(self):
+        """Test total weight calculation."""
+        weight = ManuscriptWeight(
+            siglum="P46",
+            age_weight=1.0,
+            text_type_weight=1.0,
+            accuracy_weight=0.95,
+            completeness_weight=0.85,
+            family_weight=1.0,
+            geographic_weight=0.3,
+        )
+
+        total = weight.calculate_total()
+
+        # Check calculation: (1.0*0.3 + 1.0*0.25 + 0.95*0.2 + 1.0*0.15 + 0.3*0.1)
+        expected = 0.3 + 0.25 + 0.19 + 0.15 + 0.03
+        assert abs(total - expected) < 0.01
+        assert weight.total_weight == total
+
+
+class TestConfidenceScorer:
+    """Test confidence scorer."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        # Create manuscript database
+        self.manuscript_db = {
+            "P46": Manuscript(
+                siglum="P46",
+                name="Chester Beatty II",
+                type=ManuscriptType.PAPYRUS,
+                date_numeric=200,
+                family=ManuscriptFamily.ALEXANDRIAN,
+                accuracy_rating=0.95,
+                completeness=0.85,
+            ),
+            "B": Manuscript(
+                siglum="B",
+                name="Codex Vaticanus",
+                type=ManuscriptType.UNCIAL,
+                date_numeric=350,
+                family=ManuscriptFamily.ALEXANDRIAN,
+                accuracy_rating=0.98,
+                completeness=0.90,
+            ),
+            "D": Manuscript(
+                siglum="D",
+                name="Codex Bezae",
+                type=ManuscriptType.UNCIAL,
+                date_numeric=450,
+                family=ManuscriptFamily.WESTERN,
+                accuracy_rating=0.75,
+                completeness=0.95,
+            ),
+        }
+
+        self.scorer = ConfidenceScorer(manuscript_db=self.manuscript_db)
+
+    def test_score_single_reading(self):
+        """Test scoring a single reading."""
+        reading = VariantReading(
+            text="εν χριστω ιησου",
+            witnesses=[
+                Witness(siglum="P46", type=WitnessType.MANUSCRIPT),
+                Witness(siglum="B", type=WitnessType.MANUSCRIPT),
+            ],
+        )
+
+        score = self.scorer.score_reading(reading)
+
+        assert 0.0 <= score <= 1.0
+        assert score > 0.7  # Should be high with good witnesses
+
+    def test_score_variant_unit(self):
+        """Test scoring all readings in a variant unit."""
+        reading1 = VariantReading(
+            text="εν χριστω ιησου",
+            witnesses=[
+                Witness(siglum="P46", type=WitnessType.MANUSCRIPT),
+                Witness(siglum="B", type=WitnessType.MANUSCRIPT),
+            ],
+        )
+        reading2 = VariantReading(
+            text="εν ιησου χριστω", witnesses=[Witness(siglum="D", type=WitnessType.MANUSCRIPT)]
+        )
+
+        unit = VariantUnit(
+            start_word=1, end_word=3, readings=[reading1, reading2], type=VariantType.WORD_ORDER
+        )
+
+        scores = self.scorer.score_variant_unit(unit)
+
+        assert len(scores) == 2
+        assert all(0.0 <= s <= 1.0 for s in scores.values())
+
+        # Reading 1 should score higher (better witnesses)
+        assert scores[reading1.text] > scores[reading2.text]
+
+        # Check that best reading is marked as original
+        assert reading1.is_original
+        assert not reading2.is_original
+
+    def test_witness_weight_calculation(self):
+        """Test calculating witness weights."""
+        # Known manuscript
+        weight_p46 = self.scorer._get_witness_weight(
+            Witness(siglum="P46", type=WitnessType.MANUSCRIPT)
+        )
+        assert weight_p46 > 0.8  # Early papyrus should have high weight
+
+        # Unknown manuscript with heuristics
+        weight_unknown = self.scorer._get_witness_weight(
+            Witness(siglum="P75", type=WitnessType.MANUSCRIPT)
+        )
+        assert weight_unknown > 0.9  # Papyri get high weight
+
+        # Corrector should have slightly less weight
+        weight_corrector = self.scorer._get_witness_weight(
+            Witness(siglum="B", type=WitnessType.MANUSCRIPT, corrector="2")
+        )
+        weight_original = self.scorer._get_witness_weight(
+            Witness(siglum="B", type=WitnessType.MANUSCRIPT)
+        )
+        assert weight_corrector < weight_original
+
+    def test_external_score_calculation(self):
+        """Test external (manuscript) evidence scoring."""
+        # Many good witnesses
+        reading1 = VariantReading(
+            text="test",
+            witnesses=[
+                Witness(siglum="P46", type=WitnessType.MANUSCRIPT),
+                Witness(siglum="P75", type=WitnessType.MANUSCRIPT),
+                Witness(siglum="B", type=WitnessType.MANUSCRIPT),
+                Witness(siglum="א", type=WitnessType.MANUSCRIPT),
+            ],
+        )
+        score1 = self.scorer._calculate_external_score(reading1)
+        assert score1 > 0.8
+
+        # Few late witnesses
+        reading2 = VariantReading(
+            text="test",
+            witnesses=[
+                Witness(siglum="K", type=WitnessType.MANUSCRIPT),
+                Witness(siglum="L", type=WitnessType.MANUSCRIPT),
+            ],
+        )
+        score2 = self.scorer._calculate_external_score(reading2)
+        assert score2 < score1
+
+        # No witnesses
+        reading3 = VariantReading(text="test", witnesses=[])
+        score3 = self.scorer._calculate_external_score(reading3)
+        assert score3 == 0.0
+
+    def test_internal_score_calculation(self):
+        """Test internal evidence scoring."""
+        # Shorter reading (lectio brevior)
+        unit = VariantUnit(
+            readings=[VariantReading(text="ιησου"), VariantReading(text="κυριου ιησου χριστου")]
+        )
+
+        score_short = self.scorer._calculate_internal_score(unit.readings[0], unit)
+        score_long = self.scorer._calculate_internal_score(unit.readings[1], unit)
+
+        assert score_short > score_long  # Shorter should score higher
+
+    def test_distribution_score_calculation(self):
+        """Test geographic/temporal distribution scoring."""
+        # Geographically diverse
+        reading1 = VariantReading(
+            text="test",
+            witnesses=[
+                Witness(siglum="P46", type=WitnessType.MANUSCRIPT),  # Egypt
+                Witness(siglum="D", type=WitnessType.MANUSCRIPT),  # Western
+                Witness(siglum="A", type=WitnessType.MANUSCRIPT),  # Egypt
+            ],
+        )
+        score1 = self.scorer._calculate_distribution_score(reading1)
+
+        # Single location
+        reading2 = VariantReading(
+            text="test",
+            witnesses=[
+                Witness(siglum="B", type=WitnessType.MANUSCRIPT),
+                Witness(siglum="C", type=WitnessType.MANUSCRIPT),
+            ],
+        )
+        score2 = self.scorer._calculate_distribution_score(reading2)
+
+        assert score1 > score2  # More diverse should score higher
+
+    def test_late_witnesses_detection(self):
+        """Test detection of readings with only late witnesses."""
+        # Early witnesses
+        reading1 = VariantReading(
+            text="test",
+            witnesses=[
+                Witness(siglum="P46", type=WitnessType.MANUSCRIPT),
+                Witness(siglum="K", type=WitnessType.MANUSCRIPT),
+            ],
+        )
+        assert not self.scorer._has_only_late_witnesses(reading1)
+
+        # Only late witnesses
+        reading2 = VariantReading(
+            text="test",
+            witnesses=[
+                Witness(siglum="K", type=WitnessType.MANUSCRIPT),
+                Witness(siglum="L", type=WitnessType.MANUSCRIPT),
+                Witness(siglum="M", type=WitnessType.MANUSCRIPT),
+            ],
+        )
+        assert self.scorer._has_only_late_witnesses(reading2)
+
+    def test_apparatus_confidence_rating(self):
+        """Test overall apparatus confidence rating."""
+        # Clear winner
+        readings1 = [
+            VariantReading(text="A", confidence=0.95),
+            VariantReading(text="B", confidence=0.45),
+        ]
+        assert self.scorer.calculate_apparatus_confidence(readings1) == "A"
+
+        # Uncertain
+        readings2 = [
+            VariantReading(text="A", confidence=0.65),
+            VariantReading(text="B", confidence=0.60),
+        ]
+        assert self.scorer.calculate_apparatus_confidence(readings2) == "C"
+
+        # Very uncertain
+        readings3 = [
+            VariantReading(text="A", confidence=0.45),
+            VariantReading(text="B", confidence=0.40),
+        ]
+        assert self.scorer.calculate_apparatus_confidence(readings3) == "D"
+
+    def test_version_witness_weight(self):
+        """Test weight calculation for version witnesses."""
+        # Old Latin (early and valuable)
+        weight_it = self.scorer._estimate_witness_weight(
+            Witness(siglum="it", type=WitnessType.VERSION)
+        )
+        assert 0.5 <= weight_it <= 0.7
+
+        # Vulgate (later)
+        weight_vg = self.scorer._estimate_witness_weight(
+            Witness(siglum="vg", type=WitnessType.VERSION)
+        )
+        assert weight_vg < weight_it
+
+    def test_church_father_weight(self):
+        """Test weight calculation for church father citations."""
+        weight = self.scorer._estimate_witness_weight(
+            Witness(siglum="Orig", type=WitnessType.FATHER)
+        )
+        assert 0.3 <= weight <= 0.5  # Fathers have lower weight

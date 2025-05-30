@@ -1,0 +1,179 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/jhenderson/ABBA/schemas/split_verse.schema.json",
+  "title": "ABBA Split Verse Schema",
+  "description": "Schema for handling verses that are split or combined across different translations",
+  "type": "object",
+  "required": ["canonical_id", "split_type", "parts"],
+  "properties": {
+    "canonical_id": {
+      "type": "string",
+      "description": "Base canonical verse ID (without part suffix)",
+      "pattern": "^[A-Z]{3}\\.[0-9]+\\.[0-9]+$",
+      "examples": ["PSA.13.5", "ROM.3.23"]
+    },
+    "split_type": {
+      "type": "string",
+      "description": "Type of verse division",
+      "enum": ["split", "combined", "reordered", "variant"],
+      "$comment": "split: verse divided into parts; combined: multiple verses merged; reordered: verse order differs; variant: textual variant affects division"
+    },
+    "parts": {
+      "type": "array",
+      "description": "List of verse parts and their mappings",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/versePart"
+      }
+    },
+    "mapping_rules": {
+      "type": "array",
+      "description": "Rules for mapping between different versification systems",
+      "items": {
+        "$ref": "#/definitions/mappingRule"
+      }
+    },
+    "affected_translations": {
+      "type": "array",
+      "description": "List of translation versions affected by this split",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z]{3,10}$"
+      },
+      "examples": [["KJV", "ESV", "NIV"]]
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional context about why this verse is split"
+    }
+  },
+  "definitions": {
+    "versePart": {
+      "type": "object",
+      "required": ["part_id", "translations"],
+      "properties": {
+        "part_id": {
+          "type": "string",
+          "description": "Verse part identifier (canonical_id + part)",
+          "pattern": "^[A-Z]{3}\\.[0-9]+\\.[0-9]+[a-z]?$",
+          "examples": ["PSA.13.5a", "PSA.13.5b"]
+        },
+        "order": {
+          "type": "integer",
+          "description": "Order of this part in sequence",
+          "minimum": 1
+        },
+        "translations": {
+          "type": "object",
+          "description": "Which translations use this part",
+          "additionalProperties": {
+            "$ref": "#/definitions/translationMapping"
+          }
+        }
+      }
+    },
+    "translationMapping": {
+      "type": "object",
+      "required": ["verse_id"],
+      "properties": {
+        "verse_id": {
+          "type": "string",
+          "description": "How this translation identifies this verse part",
+          "examples": ["13:5", "13:6", "3:23a"]
+        },
+        "text_portion": {
+          "type": "string",
+          "description": "Which portion of the verse text this represents",
+          "enum": ["full", "first_half", "second_half", "first_third", "middle_third", "last_third", "custom"],
+          "default": "full"
+        },
+        "word_range": {
+          "type": "object",
+          "description": "Specific word range in the original text",
+          "properties": {
+            "start": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "end": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": ["start", "end"]
+        }
+      }
+    },
+    "mappingRule": {
+      "type": "object",
+      "required": ["source_system", "target_system", "rule"],
+      "properties": {
+        "source_system": {
+          "type": "string",
+          "description": "Source versification system",
+          "examples": ["MT", "LXX", "Vulgate", "KJV", "Modern"]
+        },
+        "target_system": {
+          "type": "string",
+          "description": "Target versification system"
+        },
+        "rule": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["direct", "split", "merge", "offset", "complex"]
+            },
+            "description": {
+              "type": "string"
+            },
+            "mapping": {
+              "type": "object",
+              "description": "Specific mapping details",
+              "additionalProperties": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "canonical_id": "PSA.13.5",
+      "split_type": "split",
+      "parts": [
+        {
+          "part_id": "PSA.13.5a",
+          "order": 1,
+          "translations": {
+            "KJV": {
+              "verse_id": "13:5",
+              "text_portion": "first_half"
+            },
+            "ESV": {
+              "verse_id": "13:5",
+              "text_portion": "first_half"
+            }
+          }
+        },
+        {
+          "part_id": "PSA.13.5b",
+          "order": 2,
+          "translations": {
+            "KJV": {
+              "verse_id": "13:6",
+              "text_portion": "full"
+            },
+            "ESV": {
+              "verse_id": "13:5",
+              "text_portion": "second_half"
+            }
+          }
+        }
+      ],
+      "affected_translations": ["KJV", "ESV"],
+      "notes": "KJV splits this into two verses while ESV keeps as one"
+    }
+  ]
+}
