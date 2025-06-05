@@ -514,3 +514,60 @@ class FontManager:
                 fonts.append(font)
 
         return fonts
+
+
+@dataclass
+class FontChain:
+    """Font chain for text rendering."""
+    
+    fonts: List[Font]
+    features: Set[FontFeature] = field(default_factory=set)
+    
+    def to_css(self) -> str:
+        """Convert to CSS font-family."""
+        names = [f'"{font.name}"' for font in self.fonts]
+        names.append("serif")  # Generic fallback
+        return ", ".join(names)
+        
+
+@dataclass 
+class RenderingHints:
+    """Rendering hints for proper text display."""
+    
+    font_chain: FontChain
+    direction: str = "ltr"  # ltr or rtl
+    line_height: float = 1.5
+    letter_spacing: float = 0.0
+    features: Dict[str, str] = field(default_factory=dict)
+    
+    def to_css(self) -> Dict[str, str]:
+        """Convert to CSS properties."""
+        css = {
+            "font-family": self.font_chain.to_css(),
+            "direction": self.direction,
+            "line-height": str(self.line_height),
+        }
+        
+        if self.letter_spacing != 0:
+            css["letter-spacing"] = f"{self.letter_spacing}em"
+            
+        if self.features:
+            feature_settings = []
+            for feature, value in self.features.items():
+                feature_settings.append(f'"{feature}" {value}')
+            css["font-feature-settings"] = ", ".join(feature_settings)
+            
+        return css
+
+
+def detect_font_requirements(text: str) -> FontRequirements:
+    """Detect font requirements for text.
+    
+    Args:
+        text: Text to analyze
+        
+    Returns:
+        Font requirements
+    """
+    manager = FontManager()
+    return manager.analyze_requirements(text)

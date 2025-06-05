@@ -174,6 +174,10 @@ class ConfidenceEnsemble:
         source_length = len(alignment.source_tokens)
         target_length = len(alignment.target_words)
 
+        # Handle empty alignments
+        if source_length == 0 or target_length == 0:
+            return 0.0
+
         # Prefer 1:1 alignments, penalize many:many
         length_ratio = min(source_length, target_length) / max(source_length, target_length)
 

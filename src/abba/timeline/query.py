@@ -391,6 +391,26 @@ class TimelineQuery:
             },
         }
 
+    def _query_date_period(
+        self, period_str: str, filters: Optional[QueryFilter]
+    ) -> Dict[str, Any]:
+        """Query events during a specific period (e.g., 'David's reign')."""
+        # Try to extract participant name from period string
+        import re
+        reign_match = re.match(r"(\w+)(?:'s)?\s*reign", period_str, re.I)
+        
+        if reign_match:
+            participant = reign_match.group(1)
+            # Query events involving this participant (which would include their reign)
+            return self._query_participant(participant, filters)
+        
+        # Otherwise, return empty result
+        return {
+            "events": [],
+            "error": f"Could not parse period: {period_str}",
+            "query_type": "date_period",
+        }
+    
     def _query_participant(
         self, participant: str, filters: Optional[QueryFilter]
     ) -> Dict[str, Any]:

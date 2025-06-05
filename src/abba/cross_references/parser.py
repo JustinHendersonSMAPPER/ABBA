@@ -20,6 +20,7 @@ from .models import (
     ReferenceCollection,
 )
 from ..verse_id import VerseID, parse_verse_id
+from .. import book_codes
 
 
 class CrossReferenceParser:
@@ -32,7 +33,20 @@ class CrossReferenceParser:
 
     def _build_book_abbreviations(self) -> Dict[str, str]:
         """Build mapping of book abbreviations to canonical codes."""
-        return {
+        abbrevs = {}
+        
+        # Add standard book names
+        book_info = book_codes.BOOK_INFO
+        for code, info in book_info.items():
+            # Add full name
+            abbrevs[info["name"]] = code
+            # Add abbreviation
+            abbrevs[info["abbr"]] = code
+            # Add the code itself
+            abbrevs[code] = code
+        
+        # Add common variations
+        common_variations = {
             # Old Testament
             "Gen": "GEN",
             "Genesis": "GEN",
@@ -86,6 +100,7 @@ class CrossReferenceParser:
             "Sol": "SNG",
             "Song of Solomon": "SNG",
             "SOS": "SNG",
+            "Song": "SNG",
             "Isa": "ISA",
             "Isaiah": "ISA",
             "Is": "ISA",
@@ -120,22 +135,20 @@ class CrossReferenceParser:
             "Haggai": "HAG",
             "Zec": "ZEC",
             "Zechariah": "ZEC",
-            "Zech": "ZEC",
             "Mal": "MAL",
             "Malachi": "MAL",
             # New Testament
             "Mat": "MAT",
+            "Matt": "MAT",
             "Matthew": "MAT",
-            "Mt": "MAT",
             "Mar": "MRK",
             "Mark": "MRK",
-            "Mk": "MRK",
+            "Mrk": "MRK",
             "Luk": "LUK",
             "Luke": "LUK",
-            "Lk": "LUK",
             "Joh": "JHN",
             "John": "JHN",
-            "Jn": "JHN",
+            "Jhn": "JHN",
             "Act": "ACT",
             "Acts": "ACT",
             "Rom": "ROM",
@@ -151,8 +164,8 @@ class CrossReferenceParser:
             "Eph": "EPH",
             "Ephesians": "EPH",
             "Phi": "PHP",
-            "Philippians": "PHP",
             "Phil": "PHP",
+            "Philippians": "PHP",
             "Col": "COL",
             "Colossians": "COL",
             "1Th": "1TH",
@@ -173,8 +186,9 @@ class CrossReferenceParser:
             "Philemon": "PHM",
             "Heb": "HEB",
             "Hebrews": "HEB",
-            "Jas": "JAS",
+            "Jam": "JAS",
             "James": "JAS",
+            "Jas": "JAS",
             "1Pe": "1PE",
             "1 Peter": "1PE",
             "1 Pet": "1PE",
@@ -183,409 +197,381 @@ class CrossReferenceParser:
             "2 Pet": "2PE",
             "1Jo": "1JN",
             "1 John": "1JN",
-            "1 Jn": "1JN",
+            "1Jn": "1JN",
             "2Jo": "2JN",
             "2 John": "2JN",
-            "2 Jn": "2JN",
+            "2Jn": "2JN",
             "3Jo": "3JN",
             "3 John": "3JN",
-            "3 Jn": "3JN",
+            "3Jn": "3JN",
             "Jud": "JUD",
             "Jude": "JUD",
             "Rev": "REV",
             "Revelation": "REV",
         }
+        
+        abbrevs.update(common_variations)
+        return abbrevs
 
     def _build_reference_patterns(self) -> List[re.Pattern]:
-        """Build regex patterns for parsing biblical references."""
-        patterns = [
-            # Full format: "Genesis 1:1"
-            re.compile(r"([123]?\s*[A-Za-z]+)\s+(\d+):(\d+)(?:-(\d+))?"),
-            # Short format: "Gen 1:1"
-            re.compile(r"([123]?[A-Za-z]+)\s+(\d+):(\d+)(?:-(\d+))?"),
-            # Abbreviated: "Ge1:1"
-            re.compile(r"([123]?[A-Za-z]+)(\d+):(\d+)(?:-(\d+))?"),
-            # With periods: "Gen. 1:1"
-            re.compile(r"([123]?\s*[A-Za-z]+)\.\s+(\d+):(\d+)(?:-(\d+))?"),
-        ]
+        """Build regex patterns for parsing references."""
+        patterns = []
+        
+        # Pattern: Book Chapter:Verse (e.g., "John 3:16")
+        patterns.append(
+            re.compile(r"([1-3]?\s*\w+)\s+(\d+):(\d+)(?:-(\d+))?")
+        )
+        
+        # Pattern: Book Chapter.Verse (e.g., "John 3.16")
+        patterns.append(
+            re.compile(r"([1-3]?\s*\w+)\s+(\d+)\.(\d+)(?:-(\d+))?")
+        )
+        
+        # Pattern: Book Chapter Verse (e.g., "John 3 16")
+        patterns.append(
+            re.compile(r"([1-3]?\s*\w+)\s+(\d+)\s+(\d+)(?:-(\d+))?")
+        )
+        
         return patterns
 
-    def parse_reference_string(self, ref_string: str) -> Optional[VerseID]:
-        """Parse a biblical reference string into a VerseID."""
-        ref_string = ref_string.strip()
-
-        for pattern in self.reference_patterns:
-            match = pattern.match(ref_string)
-            if match:
-                book_str = match.group(1).strip()
-                chapter = int(match.group(2))
-                verse = int(match.group(3))
-
-                # Normalize book name
-                canonical_book = self.known_abbreviations.get(book_str)
-                if canonical_book:
-                    try:
-                        return VerseID(book=canonical_book, chapter=chapter, verse=verse)
-                    except ValueError:
-                        continue
-
+    def normalize_book_name(self, book_name: str) -> Optional[str]:
+        """Normalize a book name to its canonical code."""
+        # Clean the book name
+        book_name = book_name.strip()
+        
+        # Try direct lookup
+        if book_name in self.known_abbreviations:
+            return self.known_abbreviations[book_name]
+        
+        # Try case-insensitive lookup
+        for name, code in self.known_abbreviations.items():
+            if name.lower() == book_name.lower():
+                return code
+        
+        # Try using book_codes module
+        normalized = book_codes.normalize_book_name(book_name)
+        if normalized:
+            return normalized
+        
         return None
 
-    def parse_reference_range(self, ref_string: str) -> List[VerseID]:
-        """Parse a reference that might include verse ranges."""
-        # Handle ranges like "Gen 1:1-3" or "Gen 1:1-2:5"
-        if "-" in ref_string:
-            parts = ref_string.split("-")
-            if len(parts) == 2:
-                start_ref = self.parse_reference_string(parts[0].strip())
-                end_part = parts[1].strip()
-
-                if start_ref:
-                    # If end part is just a number, it's a verse range in same chapter
-                    if end_part.isdigit():
-                        end_verse = int(end_part)
-                        verses = []
-                        for v in range(start_ref.verse, end_verse + 1):
-                            verses.append(
-                                VerseID(book=start_ref.book, chapter=start_ref.chapter, verse=v)
-                            )
-                        return verses
-                    else:
-                        # Try to parse as full reference
-                        end_ref = self.parse_reference_string(end_part)
-                        if end_ref:
-                            # Generate range between start and end
-                            return self._generate_verse_range(start_ref, end_ref)
-
-        # Single verse
-        single_ref = self.parse_reference_string(ref_string)
-        return [single_ref] if single_ref else []
-
-    def _generate_verse_range(self, start: VerseID, end: VerseID) -> List[VerseID]:
-        """Generate all verses in a range."""
+    def parse_reference_string(self, ref_string: str, expand_ranges: bool = False) -> List[VerseID]:
+        """
+        Parse a reference string into VerseID object(s).
+        
+        Args:
+            ref_string: Reference string (e.g., "John 3:16" or "John 3:16; Matt 5:17-19")
+            expand_ranges: If True, expand ranges to all verses. If False, only return start verse.
+            
+        Returns:
+            List[VerseID] for all parsed references
+        """
         verses = []
-
-        if start.book != end.book:
-            # Cross-book ranges not supported for simplicity
-            return [start, end]
-
-        if start.chapter == end.chapter:
-            # Same chapter
-            for v in range(start.verse, end.verse + 1):
-                verses.append(VerseID(book=start.book, chapter=start.chapter, verse=v))
-        else:
-            # Cross-chapter range - just return endpoints for now
-            verses = [start, end]
-
+        
+        # Split by common separators
+        parts = re.split(r"[;,]", ref_string)
+        
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            
+            # Try each pattern
+            for pattern in self.reference_patterns:
+                match = pattern.match(part)
+                if match:
+                    groups = match.groups()
+                    book_name = groups[0]
+                    chapter = int(groups[1])
+                    start_verse = int(groups[2])
+                    end_verse = int(groups[3]) if groups[3] else start_verse
+                    
+                    # Normalize book name
+                    book_code = self.normalize_book_name(book_name)
+                    if book_code:
+                        if expand_ranges:
+                            # Add all verses in range
+                            for verse_num in range(start_verse, end_verse + 1):
+                                try:
+                                    verse_id = VerseID(book_code, chapter, verse_num)
+                                    verses.append(verse_id)
+                                except:
+                                    # Skip invalid verses
+                                    pass
+                        else:
+                            # Only add start verse
+                            try:
+                                verse_id = VerseID(book_code, chapter, start_verse)
+                                verses.append(verse_id)
+                            except:
+                                # Skip invalid verses
+                                pass
+                    break
+            else:
+                # Try simple parsing
+                try:
+                    verse_id = parse_verse_id(part)
+                    if verse_id:
+                        verses.append(verse_id)
+                except:
+                    pass
+        
+        # Always return a list
         return verses
+    
+    def parse_reference_list(self, ref_string: str) -> List[VerseID]:
+        """
+        Parse a list of references (alias for parse_reference_string).
+        
+        Args:
+            ref_string: Reference string with multiple references
+            
+        Returns:
+            List of VerseID objects
+        """
+        # For lists, we don't expand ranges by default
+        return self.parse_reference_string(ref_string, expand_ranges=False)
+    
+    def parse_reference_range(self, ref_string: str) -> List[VerseID]:
+        """
+        Parse a single reference that may contain a range.
+        
+        Args:
+            ref_string: Single reference string (e.g., "Gen 1:1-3")
+            
+        Returns:
+            List of VerseID objects for all verses in range
+        """
+        # For ranges, we want to expand them
+        return self.parse_reference_string(ref_string, expand_ranges=True)
 
-    def parse_reference_list(self, ref_list_string: str) -> List[VerseID]:
-        """Parse a list of references separated by semicolons or commas."""
-        # Split on common separators
-        separators = [";", ",", "|"]
-        ref_strings = [ref_list_string]
-
-        for sep in separators:
-            new_strings = []
-            for s in ref_strings:
-                new_strings.extend(s.split(sep))
-            ref_strings = new_strings
-
-        verses = []
-        for ref_str in ref_strings:
-            ref_str = ref_str.strip()
-            if ref_str:
-                verses.extend(self.parse_reference_range(ref_str))
-
-        return [v for v in verses if v is not None]
-
-    def parse_json_references(self, file_path: Path) -> ReferenceCollection:
-        """Parse cross-references from JSON format."""
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
+    def parse_json_references(self, json_path: str) -> ReferenceCollection:
+        """
+        Parse cross-references from JSON file.
+        
+        Args:
+            json_path: Path to JSON file
+            
+        Returns:
+            ReferenceCollection object
+        """
         references = []
-
-        for item in data.get("references", []):
-            source_verse = parse_verse_id(item["source"])
-            target_refs = self.parse_reference_list(item["target"])
-
-            for target_verse in target_refs:
-                # Create basic confidence
-                confidence = ReferenceConfidence(
-                    overall_score=item.get("confidence", 0.8),
-                    textual_similarity=item.get("textual_similarity", 0.5),
-                    thematic_similarity=item.get("thematic_similarity", 0.7),
-                    structural_similarity=item.get("structural_similarity", 0.3),
-                    scholarly_consensus=item.get("scholarly_consensus", 0.8),
-                    uncertainty_factors=item.get("uncertainty_factors", []),
-                )
-
+        metadata = {}
+        
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Handle different JSON structures
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            # Extract metadata - check for explicit metadata field first
+            if "metadata" in data:
+                metadata = data["metadata"]
+            else:
+                # Otherwise extract all non-references keys as metadata
+                metadata = {k: v for k, v in data.items() if k != "references"}
+            items = data.get("references", [])
+        else:
+            items = []
+        
+        for item in items:
+            try:
+                # Parse source and target verses
+                source_verse = self._parse_verse_from_json(item.get("source"))
+                target_verse = self._parse_verse_from_json(item.get("target"))
+                
+                if not source_verse or not target_verse:
+                    continue
+                
                 # Determine reference type
-                ref_type = ReferenceType.THEMATIC_PARALLEL
-                if "type" in item:
-                    try:
-                        ref_type = ReferenceType(item["type"])
-                    except ValueError:
-                        pass
-
-                # Determine relationship
-                relationship = ReferenceRelationship.PARALLELS
-                if "relationship" in item:
-                    try:
-                        relationship = ReferenceRelationship(item["relationship"])
-                    except ValueError:
-                        pass
-
+                ref_type = self._determine_reference_type(item)
+                relationship = self._determine_relationship(item)
+                
+                # Create confidence
+                confidence = ReferenceConfidence(
+                    overall_score=item.get("confidence", 0.5),
+                    textual_similarity=item.get("text_similarity", 0.5),
+                    thematic_similarity=item.get("thematic_similarity", 0.5),
+                    structural_similarity=item.get("structural_similarity", 0.5),
+                    scholarly_consensus=item.get("scholarly_consensus", 0.5),
+                    uncertainty_factors=item.get("uncertainty", [])
+                )
+                
+                # Create reference
                 ref = CrossReference(
                     source_verse=source_verse,
                     target_verse=target_verse,
                     reference_type=ref_type,
                     relationship=relationship,
                     confidence=confidence,
-                    source="json_import",
+                    source=item.get("source_db", "json"),
+                    verified=item.get("verified", False)
                 )
+                
                 references.append(ref)
+                
+            except Exception as e:
+                # Skip problematic entries
+                continue
+        
+        # Create and return collection
+        collection = ReferenceCollection(
+            references=references,
+            metadata=metadata
+        )
+        return collection
 
-        metadata = data.get("metadata", {})
-        metadata["format"] = "json"
-        metadata["source_file"] = str(file_path)
-
-        return ReferenceCollection(references=references, metadata=metadata)
-
-    def parse_xml_references(self, file_path: Path) -> ReferenceCollection:
-        """Parse cross-references from XML format."""
-        tree = ET.parse(file_path)
-        root = tree.getroot()
-
-        references = []
-
-        # Look for different XML structures
-        for ref_elem in root.findall(".//reference"):
-            source_str = ref_elem.get("source") or ref_elem.find("source").text
-            target_str = ref_elem.get("target") or ref_elem.find("target").text
-
-            source_verse = self.parse_reference_string(source_str)
-            target_verses = self.parse_reference_list(target_str)
-
-            if source_verse:
-                for target_verse in target_verses:
-                    confidence = ReferenceConfidence(
-                        overall_score=float(ref_elem.get("confidence", 0.8)),
-                        textual_similarity=0.5,
-                        thematic_similarity=0.7,
-                        structural_similarity=0.3,
-                        scholarly_consensus=0.8,
-                        uncertainty_factors=[],
-                    )
-
-                    ref_type_str = ref_elem.get("type", "thematic_parallel")
+    def _parse_verse_from_json(self, verse_data: Any) -> Optional[VerseID]:
+        """Parse verse from JSON data."""
+        if not verse_data:
+            return None
+        
+        if isinstance(verse_data, str):
+            # Try parsing as string reference
+            result = self.parse_reference_string(verse_data)
+            if isinstance(result, VerseID):
+                return result
+            elif isinstance(result, list) and len(result) > 0:
+                return result[0]
+            return None
+        
+        elif isinstance(verse_data, dict):
+            # Parse from dict
+            book = verse_data.get("book")
+            chapter = verse_data.get("chapter")
+            verse = verse_data.get("verse")
+            
+            if book and chapter and verse:
+                book_code = self.normalize_book_name(book)
+                if book_code:
                     try:
-                        ref_type = ReferenceType(ref_type_str)
-                    except ValueError:
-                        ref_type = ReferenceType.THEMATIC_PARALLEL
+                        return VerseID(book_code, int(chapter), int(verse))
+                    except:
+                        pass
+        
+        return None
 
-                    ref = CrossReference(
-                        source_verse=source_verse,
-                        target_verse=target_verse,
-                        reference_type=ref_type,
-                        relationship=ReferenceRelationship.PARALLELS,
-                        confidence=confidence,
-                        source="xml_import",
-                    )
-                    references.append(ref)
-
-        metadata = {"format": "xml", "source_file": str(file_path)}
-
-        return ReferenceCollection(references=references, metadata=metadata)
-
-    def parse_treasury_format(self, file_path: Path) -> ReferenceCollection:
-        """Parse Treasury of Scripture Knowledge format."""
-        references = []
-
-        with open(file_path, "r", encoding="utf-8") as f:
-            current_verse = None
-
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-
-                # Check if this is a verse header
-                verse_match = re.match(r"^([A-Za-z0-9 ]+\s+\d+:\d+)", line)
-                if verse_match:
-                    current_verse = self.parse_reference_string(verse_match.group(1))
-                    # Extract references from the rest of the line
-                    ref_part = line[verse_match.end() :].strip()
-                    if ref_part:
-                        target_verses = self.parse_reference_list(ref_part)
-                        self._add_treasury_references(references, current_verse, target_verses)
-                elif current_verse:
-                    # Continuation line with more references
-                    target_verses = self.parse_reference_list(line)
-                    self._add_treasury_references(references, current_verse, target_verses)
-
-        metadata = {
-            "format": "treasury",
-            "source_file": str(file_path),
-            "description": "Treasury of Scripture Knowledge cross-references",
+    def _determine_reference_type(self, item: Dict) -> ReferenceType:
+        """Determine reference type from JSON data."""
+        ref_type = item.get("type", "").lower()
+        
+        type_mapping = {
+            "quote": ReferenceType.DIRECT_QUOTE,
+            "direct_quote": ReferenceType.DIRECT_QUOTE,
+            "partial": ReferenceType.PARTIAL_QUOTE,
+            "partial_quote": ReferenceType.PARTIAL_QUOTE,
+            "paraphrase": ReferenceType.PARAPHRASE,
+            "allusion": ReferenceType.ALLUSION,
+            "parallel": ReferenceType.THEMATIC_PARALLEL,
+            "thematic": ReferenceType.THEMATIC_PARALLEL,
+            "prophecy": ReferenceType.PROPHECY_FULFILLMENT,
+            "type": ReferenceType.TYPE_ANTITYPE,
         }
+        
+        return type_mapping.get(ref_type, ReferenceType.ALLUSION)
 
-        return ReferenceCollection(references=references, metadata=metadata)
-
-    def _add_treasury_references(
-        self, references: List[CrossReference], source_verse: VerseID, target_verses: List[VerseID]
-    ):
-        """Add Treasury-style references to the collection."""
-        for target_verse in target_verses:
-            confidence = ReferenceConfidence(
-                overall_score=0.75,  # Treasury has good historical reliability
-                textual_similarity=0.4,
-                thematic_similarity=0.8,
-                structural_similarity=0.3,
-                scholarly_consensus=0.9,  # Well-established references
-                uncertainty_factors=[],
-            )
-
-            ref = CrossReference(
-                source_verse=source_verse,
-                target_verse=target_verse,
-                reference_type=ReferenceType.THEMATIC_PARALLEL,
-                relationship=ReferenceRelationship.PARALLELS,
-                confidence=confidence,
-                source="treasury",
-            )
-            references.append(ref)
-
+    def _determine_relationship(self, item: Dict) -> ReferenceRelationship:
+        """Determine relationship from JSON data."""
+        rel = item.get("relationship", "").lower()
+        
+        rel_mapping = {
+            "quotes": ReferenceRelationship.QUOTES,
+            "quoted_by": ReferenceRelationship.QUOTED_BY,
+            "alludes": ReferenceRelationship.ALLUDES_TO,
+            "alludes_to": ReferenceRelationship.ALLUDES_TO,
+            "fulfills": ReferenceRelationship.FULFILLS,
+            "explains": ReferenceRelationship.EXPLAINS,
+            "parallels": ReferenceRelationship.PARALLELS,
+        }
+        
+        return rel_mapping.get(rel, ReferenceRelationship.ALLUDES_TO)
+    
     def create_sample_references(self) -> ReferenceCollection:
-        """Create sample cross-references for testing and demonstration."""
-        references = []
-
-        # Genesis 1:1 references
-        gen_1_1 = VerseID(book="GEN", chapter=1, verse=1)
-        john_1_1 = VerseID(book="JHN", chapter=1, verse=1)
-
-        # John 1:1 echoes Genesis 1:1 ("In the beginning")
-        confidence = ReferenceConfidence(
-            overall_score=0.95,
-            textual_similarity=0.9,  # "In the beginning" phrase
-            thematic_similarity=0.95,  # Creation theme
-            structural_similarity=0.7,
-            scholarly_consensus=0.98,
-            uncertainty_factors=[],
-            lexical_links=3,  # "in", "the", "beginning"
-            semantic_links=2,  # creation, divine action
-            contextual_support=5,
+        """Create a sample collection of cross references for testing."""
+        collection = ReferenceCollection(
+            references=[],
+            metadata={"format": "sample", "created": "2024-01-01"}
         )
-
-        ref1 = CrossReference(
-            source_verse=john_1_1,
-            target_verse=gen_1_1,
-            reference_type=ReferenceType.ALLUSION,
-            relationship=ReferenceRelationship.ALLUDES_TO,
-            confidence=confidence,
-            source="sample_data",
-            theological_theme="creation_parallel",
-        )
-        references.append(ref1)
-
-        # Psalm 23:1 and John 10:11 (shepherd theme)
-        ps_23_1 = VerseID(book="PSA", chapter=23, verse=1)
-        john_10_11 = VerseID(book="JHN", chapter=10, verse=11)
-
-        confidence = ReferenceConfidence(
-            overall_score=0.88,
-            textual_similarity=0.6,  # Different words, same concept
-            thematic_similarity=0.98,  # Shepherd theme
-            structural_similarity=0.4,
-            scholarly_consensus=0.95,
-            uncertainty_factors=[],
-            lexical_links=1,  # "shepherd"
-            semantic_links=4,  # care, protection, guidance, provision
-            contextual_support=4,
-        )
-
-        ref2 = CrossReference(
-            source_verse=john_10_11,
-            target_verse=ps_23_1,
-            reference_type=ReferenceType.THEMATIC_PARALLEL,
-            relationship=ReferenceRelationship.FULFILLS,
-            confidence=confidence,
-            source="sample_data",
-            theological_theme="shepherd_messiah",
-        )
-        references.append(ref2)
-
-        # Isaiah 53:7 quoted in Acts 8:32
-        isa_53_7 = VerseID(book="ISA", chapter=53, verse=7)
-        acts_8_32 = VerseID(book="ACT", chapter=8, verse=32)
-
-        confidence = ReferenceConfidence(
-            overall_score=0.99,
-            textual_similarity=0.95,  # Near exact quotation
-            thematic_similarity=0.98,
-            structural_similarity=0.9,
-            scholarly_consensus=0.99,
-            uncertainty_factors=[],
-            lexical_links=8,  # Most words match
-            semantic_links=3,
-            contextual_support=5,
-        )
-
-        ref3 = CrossReference(
-            source_verse=acts_8_32,
-            target_verse=isa_53_7,
-            reference_type=ReferenceType.DIRECT_QUOTE,
-            relationship=ReferenceRelationship.QUOTES,
-            confidence=confidence,
-            source="sample_data",
-            theological_theme="suffering_servant",
-        )
-        references.append(ref3)
-
-        # Create bidirectional references
-        all_refs = []
-        for ref in references:
-            all_refs.append(ref)
-            # Add reverse reference if it makes sense
-            if ref.relationship != ReferenceRelationship.PARALLELS:
-                all_refs.append(ref.get_reverse_reference())
-
-        metadata = {
-            "format": "sample",
-            "description": "Sample cross-references for testing",
-            "version": "1.0",
-            "created_by": "ABBA system",
-        }
-
-        return ReferenceCollection(references=all_refs, metadata=metadata)
-
+        
+        # Add some sample references
+        sample_refs = [
+            {
+                "source_verse": "MAT.5.17",
+                "target_verses": ["DEU.4.2", "DEU.12.32"],
+                "type": ReferenceType.DIRECT_QUOTE,
+                "relationship": ReferenceRelationship.QUOTES,
+                "confidence": 0.9,
+                "text_match": "Do not think that I have come to abolish the Law"
+            },
+            {
+                "source_verse": "HEB.11.1",
+                "target_verses": ["ROM.8.24", "2CO.5.7"],
+                "type": ReferenceType.THEMATIC_PARALLEL,
+                "relationship": ReferenceRelationship.PARALLELS,
+                "confidence": 0.85,
+                "notes": "Faith and hope theme"
+            },
+            {
+                "source_verse": "REV.22.13",
+                "target_verses": ["ISA.44.6", "ISA.48.12"],
+                "type": ReferenceType.ALLUSION,
+                "relationship": ReferenceRelationship.ALLUDES_TO,
+                "confidence": 0.95,
+                "text_match": "I am the Alpha and the Omega"
+            }
+        ]
+        
+        for ref_data in sample_refs:
+            source = parse_verse_id(ref_data["source_verse"])
+            if source:
+                for target_str in ref_data["target_verses"]:
+                    target = parse_verse_id(target_str)
+                    if target:
+                        # Create confidence object
+                        conf_score = ref_data.get("confidence", 0.8)
+                        confidence = ReferenceConfidence(
+                            overall_score=conf_score,
+                            textual_similarity=conf_score,
+                            thematic_similarity=conf_score * 0.9,
+                            structural_similarity=conf_score * 0.8,
+                            scholarly_consensus=conf_score * 0.85,
+                            uncertainty_factors=[]
+                        )
+                        
+                        ref = CrossReference(
+                            source_verse=source,
+                            target_verse=target,
+                            reference_type=ref_data["type"],
+                            relationship=ref_data["relationship"],
+                            confidence=confidence
+                        )
+                        collection.references.append(ref)
+        
+        return collection
+    
     def merge_collections(self, collections: List[ReferenceCollection]) -> ReferenceCollection:
         """Merge multiple reference collections, removing duplicates."""
-        all_references = []
-        all_metadata = {}
-
-        # Collect references and detect duplicates
-        seen_pairs = set()
-
+        merged = ReferenceCollection(
+            references=[],
+            metadata={"format": "merged", "source_collections": len(collections)}
+        )
+        
+        # Track unique references to avoid duplicates
+        seen_refs = set()
+        
         for collection in collections:
-            all_metadata.update(collection.metadata)
-
             for ref in collection.references:
-                # Create a key for duplicate detection
-                key = (str(ref.source_verse), str(ref.target_verse), ref.reference_type)
-
-                if key not in seen_pairs:
-                    seen_pairs.add(key)
-                    all_references.append(ref)
-                else:
-                    # TODO: Could merge confidence scores here
-                    pass
-
-        merged_metadata = {
-            "format": "merged",
-            "source_collections": len(collections),
-            "merged_data": all_metadata,
-        }
-
-        return ReferenceCollection(references=all_references, metadata=merged_metadata)
+                # Create a unique key for the reference
+                ref_key = (
+                    str(ref.source_verse),
+                    str(ref.target_verse),
+                    ref.reference_type,
+                    ref.relationship
+                )
+                
+                if ref_key not in seen_refs:
+                    seen_refs.add(ref_key)
+                    merged.references.append(ref)
+        
+        return merged

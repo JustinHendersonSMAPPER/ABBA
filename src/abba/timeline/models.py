@@ -7,11 +7,47 @@ with full support for uncertainty and multiple chronologies.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Any, Set, Tuple
+from typing import Dict, List, Optional, Any, Set, Tuple, Union
 from datetime import datetime, timedelta
 import json
 
 from ..verse_id import VerseID
+
+
+def create_bce_date(year: int, month: int = 1, day: int = 1) -> datetime:
+    """
+    Create a datetime object for BCE dates.
+    
+    Since Python's datetime doesn't support negative years, we use a convention:
+    - BCE dates are stored as (5000 - bce_year)
+    - So 586 BCE becomes year 4414 (5000 - 586)
+    - This allows dates from 4999 BCE to 5000 CE
+    """
+    if year < 0:
+        # Already negative, convert to positive BCE
+        year = abs(year)
+    
+    # Convert BCE year to our internal representation
+    internal_year = 5000 - year
+    if internal_year < 1:
+        raise ValueError(f"BCE year {year} is too large (max 4999 BCE)")
+    
+    return datetime(internal_year, month, day)
+
+
+def datetime_to_bce_year(dt: datetime) -> int:
+    """Convert our internal datetime back to BCE year (negative)."""
+    if dt.year >= 5000:
+        # This is a CE date
+        return dt.year - 5000
+    else:
+        # This is a BCE date stored as (5000 - bce_year)
+        return -(5000 - dt.year)
+
+
+def is_bce_date(dt: datetime) -> bool:
+    """Check if a datetime represents a BCE date in our encoding."""
+    return dt.year < 5000
 
 
 class CalendarSystem(Enum):
@@ -145,17 +181,22 @@ class TimePoint:
     def get_display_date(self) -> str:
         """Get human-readable date string."""
         if self.exact_date:
-            year = self.exact_date.year
+            year = datetime_to_bce_year(self.exact_date)
             if year < 0:
                 return f"{abs(year)} BCE"
             else:
                 return f"{year} CE"
         elif self.earliest_date and self.latest_date:
-            early_year = self.earliest_date.year
-            late_year = self.latest_date.year
-            if early_year < 0:
-                return f"{abs(late_year)}-{abs(early_year)} BCE"
+            early_year = datetime_to_bce_year(self.earliest_date)
+            late_year = datetime_to_bce_year(self.latest_date)
+            if early_year < 0 and late_year < 0:
+                # Both BCE - larger absolute value is earlier
+                return f"{abs(early_year)}-{abs(late_year)} BCE"
+            elif early_year < 0 and late_year >= 0:
+                # Spans BCE to CE
+                return f"{abs(early_year)} BCE - {late_year} CE"
             else:
+                # Both CE
                 return f"{early_year}-{late_year} CE"
         elif self.relative_to_event:
             return (
@@ -214,13 +255,50 @@ class TimeRange:
 
     def contains_date(self, date: datetime) -> bool:
         """Check if a date falls within this range."""
-        # Implementation would handle uncertainty
-        pass
+        # Get effective dates from TimePoints
+        start_date = self.start.exact_date or self.start.earliest_date
+        end_date = self.end.exact_date or self.end.latest_date
+        
+        if not start_date or not end_date:
+            # Can't determine containment without dates
+            return False
+        
+        # Handle inclusivity
+        if self.start_inclusive:
+            start_check = date >= start_date
+        else:
+            start_check = date > start_date
+            
+        if self.end_inclusive:
+            end_check = date <= end_date
+        else:
+            end_check = date < end_date
+            
+        return start_check and end_check
 
     def overlaps_with(self, other: "TimeRange") -> bool:
         """Check if this range overlaps with another."""
-        # Implementation would handle uncertainty
-        pass
+        # Get effective dates from TimePoints
+        self_start = self.start.exact_date or self.start.earliest_date
+        self_end = self.end.exact_date or self.end.latest_date
+        other_start = other.start.exact_date or other.start.earliest_date
+        other_end = other.end.exact_date or other.end.latest_date
+        
+        if not all([self_start, self_end, other_start, other_end]):
+            # Can't determine overlap without dates
+            return False
+        
+        # Ranges overlap if one starts before the other ends
+        # Consider inclusivity for edge cases
+        if self_start == other_end:
+            # Edge case: self starts exactly when other ends
+            return self.start_inclusive and other.end_inclusive
+        elif self_end == other_start:
+            # Edge case: self ends exactly when other starts
+            return self.end_inclusive and other.start_inclusive
+        else:
+            # Normal case: check if ranges intersect
+            return self_start < other_end and other_start < self_end
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""

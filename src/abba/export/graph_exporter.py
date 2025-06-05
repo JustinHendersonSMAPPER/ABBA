@@ -25,7 +25,7 @@ from .base import (
     ExportUtilities,
     StreamingDataProcessor,
 )
-from ..alignment.unified_reference import UnifiedVerse
+from ..parsers.translation_parser import TranslationVerse
 from ..annotations.models import Annotation
 from ..timeline.models import Event, TimePeriod
 
@@ -55,6 +55,27 @@ class GraphConfig(ExportConfig):
 
         if not hasattr(self, "format_type"):
             self.format_type = ExportFormat.NEO4J
+            
+    def validate(self) -> ValidationResult:
+        """Validate graph configuration."""
+        # Start with base validation
+        result = super().validate()
+        errors = list(result.errors)
+        warnings = list(result.warnings)
+        
+        # Validate server URL
+        if not self.server_url:
+            errors.append("Server URL is required for graph export")
+            
+        # Validate batch size for graph operations
+        if self.batch_size > 10000:
+            warnings.append("Large batch sizes may cause memory issues in graph databases")
+            
+        return ValidationResult(
+            is_valid=len(errors) == 0,
+            errors=errors,
+            warnings=warnings
+        )
 
 
 @dataclass
@@ -203,12 +224,20 @@ class GraphExporter(DataExporter):
             f"Collected {len(self.nodes)} nodes and {len(self.relationships)} relationships"
         )
 
-    async def _collect_verse_nodes(self, verses: Iterator[UnifiedVerse]):
+    async def _collect_verse_nodes(self, verses: Iterator[TranslationVerse]):
         """Collect verses as graph nodes."""
         verse_count = 0
 
         for verse in verses:
             node_id = f"verse:{verse.verse_id}"
+
+            # Handle both canonical verses and simple TranslationVerse objects
+            translations = {}
+            if hasattr(verse, 'translations'):
+                translations = verse.translations or {}
+            elif hasattr(verse, 'text'):
+                # For simple TranslationVerse, create a basic translation entry
+                translations = {"default": verse.text}
 
             self.nodes[node_id] = {
                 "id": node_id,
@@ -218,16 +247,16 @@ class GraphExporter(DataExporter):
                     "book": verse.verse_id.book,
                     "chapter": verse.verse_id.chapter,
                     "verse": verse.verse_id.verse,
-                    "translations": verse.translations or {},
+                    "translations": translations,
                     "created_at": datetime.utcnow().isoformat(),
                 },
             }
 
             # Add original language data as related nodes
-            if verse.hebrew_tokens:
+            if hasattr(verse, 'hebrew_tokens') and verse.hebrew_tokens:
                 await self._add_language_tokens(node_id, verse.hebrew_tokens, "Hebrew")
 
-            if verse.greek_tokens:
+            if hasattr(verse, 'greek_tokens') and verse.greek_tokens:
                 await self._add_language_tokens(node_id, verse.greek_tokens, "Greek")
 
             verse_count += 1
@@ -288,36 +317,33 @@ class GraphExporter(DataExporter):
             }
 
             # Create relationship: Verse -> ANNOTATED_WITH -> Annotation
-            verse_node_id = f"verse:{annotation.verse_id}"
+            verse_node_id = f"verse:{annotation.start_verse}"
             self.relationships.append(
                 {
                     "source": verse_node_id,
                     "target": annotation_id,
                     "type": "ANNOTATED_WITH",
-                    "properties": {"confidence": annotation.confidence},
+                    "properties": {"confidence": annotation.confidence.overall_score if annotation.confidence else 0.0},
                 }
             )
 
             # Create topic nodes and relationships
-            if annotation.topics:
-                for topic in annotation.topics:
-                    topic_id = f"topic:{topic.id}"
+            if annotation.topic_id:
+                topic_id = f"topic:{annotation.topic_id}"
 
-                    # Create topic node if not seen before
-                    if topic_id not in topics_seen:
-                        self.nodes[topic_id] = {
-                            "id": topic_id,
-                            "label": "Topic",
-                            "properties": {
-                                "topic_id": topic.id,
-                                "name": topic.name,
-                                "category": (
-                                    topic.category.value if hasattr(topic, "category") else None
-                                ),
-                                "importance": getattr(topic, "importance_score", 0.5),
-                            },
-                        }
-                        topics_seen.add(topic_id)
+                # Create topic node if not seen before
+                if topic_id not in topics_seen:
+                    self.nodes[topic_id] = {
+                        "id": topic_id,
+                        "label": "Topic",
+                        "properties": {
+                            "topic_id": annotation.topic_id,
+                            "name": annotation.topic_name or "",
+                            "category": None,
+                            "importance": 0.5,
+                        },
+                    }
+                    topics_seen.add(topic_id)
 
                     # Create relationship: Annotation -> ABOUT -> Topic
                     self.relationships.append(
@@ -325,7 +351,7 @@ class GraphExporter(DataExporter):
                             "source": annotation_id,
                             "target": topic_id,
                             "type": "ABOUT",
-                            "properties": {"confidence": getattr(topic, "confidence", 1.0)},
+                            "properties": {"confidence": annotation.confidence.overall_score if annotation.confidence else 1.0},
                         }
                     )
 

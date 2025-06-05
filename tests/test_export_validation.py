@@ -32,7 +32,7 @@ from abba.export.base import (
     ExportResult,
     ExportStatus,
     ValidationResult,
-    ExportStatistics,
+    ExportStats,
 )
 
 
@@ -172,6 +172,12 @@ class TestSQLiteValidator:
                     verse INTEGER
                 );
                 
+                CREATE TABLE original_language (
+                    verse_id TEXT,
+                    text TEXT,
+                    language TEXT
+                );
+                
                 CREATE TABLE verse_translations (
                     verse_id TEXT,
                     translation_id TEXT,
@@ -185,10 +191,28 @@ class TestSQLiteValidator:
                     confidence REAL
                 );
                 
+                CREATE TABLE annotation_topics (
+                    topic_id TEXT PRIMARY KEY,
+                    name TEXT
+                );
+                
+                CREATE TABLE cross_references (
+                    id INTEGER PRIMARY KEY,
+                    source_verse_id TEXT,
+                    target_verse_id TEXT
+                );
+                
                 CREATE TABLE timeline_events (
                     event_id TEXT PRIMARY KEY,
                     name TEXT,
                     description TEXT
+                );
+                
+                CREATE TABLE timeline_periods (
+                    period_id TEXT PRIMARY KEY,
+                    name TEXT,
+                    start_date TEXT,
+                    end_date TEXT
                 );
                 
                 CREATE TABLE export_metadata (
@@ -220,7 +244,7 @@ class TestSQLiteValidator:
             format_type=ExportFormat.SQLITE,
             status=ExportStatus.COMPLETED,
             output_path=temp_db,
-            stats=ExportStatistics(),
+            stats=ExportStats(),
         )
 
     @pytest.mark.asyncio
@@ -299,7 +323,7 @@ class TestSQLiteValidator:
 
         validation = await validator.validate(result)
         assert not validation.is_valid
-        assert any("not found" in error.lower() for error in validation.errors)
+        assert any("does not exist" in error.lower() for error in validation.errors)
 
 
 class TestJSONValidator:
@@ -356,6 +380,7 @@ class TestJSONValidator:
             # Create manifest
             manifest = {
                 "format": "static_json",
+                "version": "1.0",
                 "progressive_loading": True,
                 "files": [
                     {"path": "api/v1/meta/books.json", "category": "metadata"},
@@ -374,7 +399,7 @@ class TestJSONValidator:
             format_type=ExportFormat.STATIC_JSON,
             status=ExportStatus.COMPLETED,
             output_path=temp_json_export,
-            stats=ExportStatistics(),
+            stats=ExportStats(),
         )
 
     @pytest.mark.asyncio
@@ -511,7 +536,9 @@ class TestExportValidator:
 
         # Create result with unknown format
         result = ExportResult(
-            format_type="UNKNOWN_FORMAT", status=ExportStatus.COMPLETED  # Not a real format
+            format_type="UNKNOWN_FORMAT", 
+            status=ExportStatus.COMPLETED,
+            output_path="/tmp/unknown.dat"  # Not a real format
         )
 
         validation = await validator.validate_export(result)
@@ -656,6 +683,117 @@ class TestIntegrityChecker:
 class TestPerformanceBenchmark:
     """Test performance benchmarking."""
 
+    @pytest.fixture
+    def temp_db(self):
+        """Create temporary SQLite database for testing."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+            db_path = tmp.name
+
+        # Create test database structure
+        with sqlite3.connect(db_path) as conn:
+            conn.executescript(
+                """
+                CREATE TABLE verses (
+                    verse_id TEXT PRIMARY KEY,
+                    book TEXT,
+                    chapter INTEGER,
+                    verse INTEGER
+                );
+                
+                CREATE TABLE original_language (
+                    verse_id TEXT,
+                    text TEXT,
+                    language TEXT
+                );
+                
+                CREATE TABLE verse_translations (
+                    verse_id TEXT,
+                    translation_id TEXT,
+                    text TEXT
+                );
+                
+                CREATE TABLE annotations (
+                    annotation_id TEXT PRIMARY KEY,
+                    verse_id TEXT,
+                    type TEXT,
+                    confidence REAL
+                );
+                
+                CREATE TABLE annotation_topics (
+                    topic_id TEXT PRIMARY KEY,
+                    name TEXT
+                );
+                
+                CREATE TABLE cross_references (
+                    id INTEGER PRIMARY KEY,
+                    source_verse_id TEXT,
+                    target_verse_id TEXT
+                );
+                
+                CREATE TABLE timeline_events (
+                    event_id TEXT PRIMARY KEY,
+                    name TEXT,
+                    description TEXT
+                );
+                
+                CREATE TABLE timeline_periods (
+                    period_id TEXT PRIMARY KEY,
+                    name TEXT,
+                    start_date TEXT,
+                    end_date TEXT
+                );
+                
+                CREATE TABLE export_metadata (
+                    format TEXT,
+                    version TEXT,
+                    exported_at TEXT
+                );
+                
+                -- Insert test data
+                INSERT INTO verses VALUES ('GEN.1.1', 'GEN', 1, 1);
+                INSERT INTO verses VALUES ('GEN.1.2', 'GEN', 1, 2);
+                
+                INSERT INTO verse_translations VALUES ('GEN.1.1', 'ESV', 'In the beginning...');
+                INSERT INTO cross_references VALUES (1, 'GEN.1.1', 'JHN.1.1');
+            """
+            )
+
+        yield db_path
+
+        # Cleanup
+        Path(db_path).unlink(missing_ok=True)
+
+    @pytest.fixture
+    def temp_json_export(self):
+        """Create temporary JSON export structure."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_dir = Path(temp_dir)
+
+            # Create minimal structure for benchmarking
+            api_dir = export_dir / "api" / "v1"
+            meta_dir = api_dir / "meta"
+            books_dir = api_dir / "books"
+
+            meta_dir.mkdir(parents=True)
+            books_dir.mkdir(parents=True)
+
+            # Create some test files
+            test_data = {
+                "verses": [
+                    {"verse_id": "GEN.1.1", "text": "In the beginning..."},
+                    {"verse_id": "GEN.1.2", "text": "And the earth was..."}
+                ],
+                "verse_count": 2
+            }
+            
+            with open(meta_dir / "test.json", "w") as f:
+                json.dump(test_data, f)
+                
+            with open(books_dir / "test.json", "w") as f:
+                json.dump(test_data, f)
+
+            yield str(export_dir)
+
     def test_benchmark_initialization(self):
         """Test benchmark initialization."""
         benchmark = PerformanceBenchmark()
@@ -672,13 +810,13 @@ class TestPerformanceBenchmark:
                 format_type=ExportFormat.SQLITE,
                 status=ExportStatus.COMPLETED,
                 output_path="/tmp/test.db",
-                stats=ExportStatistics(output_size_bytes=1024000),
+                stats=ExportStats(output_size_bytes=1024000),
             ),
             ExportResult(
                 format_type=ExportFormat.STATIC_JSON,
                 status=ExportStatus.COMPLETED,
                 output_path="/tmp/json_output",
-                stats=ExportStatistics(output_size_bytes=2048000),
+                stats=ExportStats(output_size_bytes=2048000),
             ),
         ]
 

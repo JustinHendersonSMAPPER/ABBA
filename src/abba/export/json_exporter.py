@@ -25,7 +25,7 @@ from .base import (
     ExportUtilities,
     StreamingDataProcessor,
 )
-from ..alignment.unified_reference import UnifiedVerse
+from ..parsers.translation_parser import TranslationVerse
 from ..annotations.models import Annotation
 from ..timeline.models import Event, TimePeriod
 from ..book_codes import BOOK_INFO
@@ -62,6 +62,26 @@ class JSONConfig(ExportConfig):
         from .base import ExportFormat
 
         self.format_type = ExportFormat.STATIC_JSON
+    
+    def validate(self) -> ValidationResult:
+        """Validate JSON-specific configuration settings."""
+        # Start with base validation
+        result = super().validate()
+        errors = list(result.errors)
+        warnings = list(result.warnings)
+        
+        # Add JSON-specific validations
+        if self.chunk_size <= 0:
+            errors.append("Chunk size must be positive")
+            
+        if self.large_book_threshold <= 0:
+            errors.append("Large book threshold must be positive")
+            
+        return ValidationResult(
+            is_valid=len(errors) == 0,
+            errors=errors,
+            warnings=warnings
+        )
 
 
 class StaticJSONExporter(DataExporter):
@@ -85,7 +105,7 @@ class StaticJSONExporter(DataExporter):
         self.book_data = defaultdict(lambda: defaultdict(list))
         self.book_metadata = {}
         self.all_topics = set()
-        self.search_index = defaultdict(set)
+        self.search_index = defaultdict(lambda: defaultdict(set))
         self.timeline_data = {"events": [], "periods": []}
 
     def validate_config(self) -> ValidationResult:
@@ -182,7 +202,7 @@ class StaticJSONExporter(DataExporter):
             chapters_dir = book_dir / "chapters"
             chapters_dir.mkdir(exist_ok=True)
 
-    async def _collect_verses(self, verses: Iterator[UnifiedVerse]):
+    async def _collect_verses(self, verses: Iterator[TranslationVerse]):
         """Collect and organize verses by book and chapter."""
         self.logger.info("Collecting verses for JSON export")
 
@@ -201,7 +221,7 @@ class StaticJSONExporter(DataExporter):
                 self.book_metadata[book_id] = {
                     "id": book_id,
                     "name": book_info.get("name", book_id),
-                    "testament": book_info.get("testament", "unknown"),
+                    "testament": book_info.get("testament", "unknown").value if hasattr(book_info.get("testament", "unknown"), "value") else book_info.get("testament", "unknown"),
                     "order": book_info.get("order", 999),
                     "chapters": set(),
                     "verse_count": 0,
@@ -212,7 +232,11 @@ class StaticJSONExporter(DataExporter):
             self.book_metadata[book_id]["chapters"].add(chapter)
             self.book_metadata[book_id]["verse_count"] += 1
 
-            if verse.translations:
+            # Handle different verse types
+            if hasattr(verse, 'text') and not hasattr(verse, 'translations'):
+                # Simple TranslationVerse
+                self.book_metadata[book_id]["translations"].add("default")
+            elif hasattr(verse, 'translations') and verse.translations:
                 self.book_metadata[book_id]["translations"].update(verse.translations.keys())
 
             # Build search index
@@ -240,13 +264,12 @@ class StaticJSONExporter(DataExporter):
         annotations_by_verse = defaultdict(list)
 
         for annotation in annotations:
-            verse_id = str(annotation.verse_id)
+            verse_id = str(annotation.start_verse)
             annotations_by_verse[verse_id].append(annotation)
 
             # Collect topics
-            if annotation.topics:
-                for topic in annotation.topics:
-                    self.all_topics.add(topic.id)
+            if annotation.topic_id:
+                self.all_topics.add(annotation.topic_id)
 
             annotation_count += 1
             if annotation_count % 1000 == 0:
@@ -318,7 +341,7 @@ class StaticJSONExporter(DataExporter):
 
         self.logger.info(f"Collected {period_count} timeline periods")
 
-    def _index_verse_for_search(self, verse: UnifiedVerse):
+    def _index_verse_for_search(self, verse: TranslationVerse):
         """Add verse to search index."""
         verse_id = str(verse.verse_id)
 
@@ -326,8 +349,15 @@ class StaticJSONExporter(DataExporter):
         self.search_index["books"][verse.verse_id.book].add(verse_id)
 
         # Index by text content
-        if verse.translations:
-            for translation_id, text in verse.translations.items():
+        verse_translations = None
+        if hasattr(verse, 'text') and not hasattr(verse, 'translations'):
+            # Simple TranslationVerse
+            verse_translations = {"default": verse.text}
+        elif hasattr(verse, 'translations'):
+            verse_translations = verse.translations
+            
+        if verse_translations:
+            for translation_id, text in verse_translations.items():
                 words = self._extract_search_words(text)
                 for word in words:
                     self.search_index["words"][word].add(verse_id)
@@ -500,7 +530,7 @@ class StaticJSONExporter(DataExporter):
 
         self.logger.info(f"Generated files for {len(self.book_data)} books")
 
-    async def _generate_chapter_files(self, book_id: str, chapter: int, verses: List[UnifiedVerse]):
+    async def _generate_chapter_files(self, book_id: str, chapter: int, verses: List[TranslationVerse]):
         """Generate files for a chapter."""
         chapter_dir = self.books_dir / book_id / "chapters" / str(chapter)
         chapter_dir.mkdir(parents=True, exist_ok=True)
@@ -511,7 +541,7 @@ class StaticJSONExporter(DataExporter):
         else:
             await self._generate_single_chapter_file(chapter_dir, verses)
 
-    async def _generate_single_chapter_file(self, chapter_dir: Path, verses: List[UnifiedVerse]):
+    async def _generate_single_chapter_file(self, chapter_dir: Path, verses: List[TranslationVerse]):
         """Generate single file for chapter."""
         chapter_data = {
             "verses": [self._serialize_verse(verse) for verse in verses],
@@ -521,7 +551,7 @@ class StaticJSONExporter(DataExporter):
 
         await self._write_json_file(chapter_dir / "verses.json", chapter_data)
 
-    async def _generate_chunked_chapter(self, chapter_dir: Path, verses: List[UnifiedVerse]):
+    async def _generate_chunked_chapter(self, chapter_dir: Path, verses: List[TranslationVerse]):
         """Generate chunked files for large chapter."""
         chunks = []
 
@@ -561,21 +591,30 @@ class StaticJSONExporter(DataExporter):
 
         await self._write_json_file(chapter_dir / "verses.json", chapter_index)
 
-    def _serialize_verse(self, verse: UnifiedVerse) -> Dict[str, Any]:
+    def _get_verse_translations(self, verse) -> Dict[str, str]:
+        """Get translations from verse object."""
+        if hasattr(verse, 'text') and not hasattr(verse, 'translations'):
+            # Simple TranslationVerse
+            return {"default": verse.text}
+        elif hasattr(verse, 'translations'):
+            return verse.translations or {}
+        return {}
+    
+    def _serialize_verse(self, verse: TranslationVerse) -> Dict[str, Any]:
         """Serialize verse to JSON-compatible format."""
         verse_data = {
             "verse_id": str(verse.verse_id),
             "book": verse.verse_id.book,
             "chapter": verse.verse_id.chapter,
             "verse": verse.verse_id.verse,
-            "translations": verse.translations or {},
+            "translations": self._get_verse_translations(verse),
         }
 
         # Add original language data
-        if verse.hebrew_tokens:
+        if hasattr(verse, 'hebrew_tokens') and verse.hebrew_tokens:
             verse_data["hebrew"] = verse.hebrew_tokens
 
-        if verse.greek_tokens:
+        if hasattr(verse, 'greek_tokens') and verse.greek_tokens:
             verse_data["greek"] = verse.greek_tokens
 
         # Add annotations if present
@@ -585,9 +624,9 @@ class StaticJSONExporter(DataExporter):
                     "id": ann.id,
                     "type": ann.annotation_type.value if ann.annotation_type else None,
                     "level": ann.level.value if ann.level else None,
-                    "confidence": ann.confidence,
-                    "topics": (
-                        [{"id": t.id, "name": t.name} for t in ann.topics] if ann.topics else []
+                    "confidence": ann.confidence.overall_score if ann.confidence else None,
+                    "topic": (
+                        {"id": ann.topic_id, "name": ann.topic_name} if ann.topic_id else None
                     ),
                 }
                 for ann in verse.annotations
@@ -605,7 +644,7 @@ class StaticJSONExporter(DataExporter):
             ]
 
         # Add metadata if present
-        if verse.metadata:
+        if hasattr(verse, 'metadata') and verse.metadata:
             verse_data["metadata"] = verse.metadata
 
         return verse_data

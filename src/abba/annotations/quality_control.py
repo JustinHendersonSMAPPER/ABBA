@@ -5,7 +5,7 @@ Provides validation, consistency checking, and quality scoring
 for both automatic and manual annotations.
 """
 
-from typing import List, Dict, Tuple, Optional, Set
+from typing import List, Dict, Tuple, Optional, Set, Any
 from dataclasses import dataclass
 from collections import Counter, defaultdict
 import numpy as np
@@ -268,7 +268,7 @@ class AnnotationQualityController:
             Comprehensive quality report
         """
         all_issues = []
-        statistics = {}
+        statistics = {"total_annotations": len(collection.annotations)}
 
         # 1. Validate individual annotations
         for annotation in collection.annotations:
@@ -322,7 +322,8 @@ class AnnotationQualityController:
 
         # Confidence distribution
         confidence_scores = [
-            ann.confidence.overall_score for ann in collection.annotations if ann.confidence
+            ann.confidence.overall_score for ann in collection.annotations 
+            if ann.confidence and 0 <= ann.confidence.overall_score <= 1
         ]
 
         return {
@@ -428,16 +429,19 @@ class AnnotationQualityController:
         score = 100.0
 
         # Deduct for issues
-        issue_penalties = {"error": 5.0, "warning": 2.0, "info": 0.5}
+        issue_penalties = {"error": 20.0, "warning": 5.0, "info": 1.0}
 
         for issue in issues:
             score -= issue_penalties.get(issue.severity, 0)
 
         # Factor in statistics
         if "avg_confidence" in statistics:
-            # Bonus for high average confidence
-            confidence_bonus = (statistics["avg_confidence"] - 0.5) * 20
-            score += max(0, confidence_bonus)
+            # Penalty for low/missing confidence
+            if statistics["avg_confidence"] == 0:
+                score -= 10  # No valid confidence scores
+            else:
+                confidence_bonus = (statistics["avg_confidence"] - 0.5) * 20
+                score += confidence_bonus
 
         if "avg_method_agreement" in statistics:
             # Bonus for method agreement
@@ -456,12 +460,12 @@ class AnnotationQualityController:
         # Check for common issues
         issue_categories = Counter(issue.category for issue in issues)
 
-        if issue_categories["confidence"] > 5:
+        if issue_categories["confidence"] > 0:
             recommendations.append(
                 "Review and update confidence scores for better reliability assessment"
             )
 
-        if issue_categories["overlap"] > 10:
+        if issue_categories["overlap"] > 0:
             recommendations.append("Consolidate overlapping annotations to reduce redundancy")
 
         # Check statistics
@@ -471,10 +475,20 @@ class AnnotationQualityController:
         if statistics.get("avg_method_agreement", 1) < 0.7:
             recommendations.append("Investigate disagreements between annotation methods")
 
+        total_annotations = statistics.get("total_annotations", 1)
         if statistics.get("low_confidence_count", 0) > total_annotations * 0.2:
             recommendations.append(
                 "High proportion of low-confidence annotations - consider retraining models"
             )
+
+        # Add recommendation if there are any errors
+        error_count = sum(1 for issue in issues if issue.severity == "error")
+        if error_count > 0:
+            recommendations.append(f"Fix {error_count} error(s) found in annotations")
+
+        # Ensure at least one recommendation if there are issues
+        if not recommendations and issues:
+            recommendations.append("Review annotations for quality improvements")
 
         return recommendations
 

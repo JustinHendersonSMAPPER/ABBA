@@ -6,6 +6,7 @@ for Hebrew and Greek biblical texts.
 """
 
 from .base import (
+    Language,
     Gender,
     MorphologyFeatures,
     Number,
@@ -19,10 +20,11 @@ from .base import (
 )
 from .hebrew_morphology import HebrewMorphologyParser, HebrewMorphology
 from .greek_morphology import GreekMorphologyParser, GreekMorphology
-from .unified_morphology import UnifiedMorphology, UnifiedMorphologyParser, Language
+from .unified_morphology import UnifiedMorphologyParser, UnifiedMorphology
 
 __all__ = [
     # Base classes and enums
+    "Language",
     "Gender",
     "MorphologyFeatures",
     "Number",
@@ -33,7 +35,6 @@ __all__ = [
     "Case",
     "State",
     "Stem",
-    "Language",
     # Hebrew morphology
     "HebrewMorphologyParser",
     "HebrewMorphology",
@@ -41,6 +42,6 @@ __all__ = [
     "GreekMorphologyParser",
     "GreekMorphology",
     # Unified morphology
-    "UnifiedMorphology",
     "UnifiedMorphologyParser",
+    "UnifiedMorphology",
 ]

@@ -23,9 +23,11 @@ from .models import (
     TimePeriod,
     ChronologyTrack,
     TimelineCollection,
+    Location,
+    EntityRef,
 )
 from .uncertainty import DateDistribution, UncertaintyCalculator, ConfidenceAggregator
-from .parser import ChronologyParser, BiblicalDateParser, ScholarlyNotationParser
+from .parser import ChronologyParser, BiblicalDateParser, ScholarlyNotationParser, ParsedDate
 from .graph import TemporalGraph, EventNode, RelationshipEdge, GraphTraverser, PathFinder
 from .query import TimelineQuery, QueryFilter, DateRangeQuery, EventPattern, PatternMatcher
 from .filter import (
@@ -58,6 +60,8 @@ __all__ = [
     "TimePeriod",
     "ChronologyTrack",
     "TimelineCollection",
+    "Location",
+    "EntityRef",
     # Uncertainty handling
     "DateDistribution",
     "UncertaintyCalculator",
@@ -66,6 +70,7 @@ __all__ = [
     "ChronologyParser",
     "BiblicalDateParser",
     "ScholarlyNotationParser",
+    "ParsedDate",
     # Graph system
     "TemporalGraph",
     "EventNode",

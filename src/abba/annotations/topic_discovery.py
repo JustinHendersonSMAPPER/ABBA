@@ -11,7 +11,10 @@ import numpy as np
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import PCA
 from sklearn.cluster import DBSCAN
-from umap import UMAP
+import warnings
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=ImportWarning)
+    from umap import UMAP
 from hdbscan import HDBSCAN
 from sentence_transformers import SentenceTransformer
 import pandas as pd

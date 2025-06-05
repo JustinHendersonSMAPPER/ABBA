@@ -18,6 +18,7 @@ from .models import (
     EventRelationship,
     CalendarSystem,
     CertaintyLevel,
+    create_bce_date,
     EventType,
     RelationType,
     Location,
@@ -127,7 +128,7 @@ class BiblicalDateParser:
             year = int(match.group(1))
             return ParsedDate(
                 time_point=TimePoint(
-                    exact_date=datetime(year=-year, month=1, day=1),
+                    exact_date=create_bce_date(year, 1, 1),
                     calendar_system=CalendarSystem.GREGORIAN,
                     confidence=0.9,
                 ),
@@ -136,9 +137,10 @@ class BiblicalDateParser:
 
         elif pattern_type == "ce":
             year = int(match.group(1))
+            # For CE dates, add 5000 to distinguish from BCE dates
             return ParsedDate(
                 time_point=TimePoint(
-                    exact_date=datetime(year=year, month=1, day=1),
+                    exact_date=datetime(year=year + 5000, month=1, day=1),
                     calendar_system=CalendarSystem.GREGORIAN,
                     confidence=0.9,
                 ),
@@ -154,8 +156,8 @@ class BiblicalDateParser:
 
             return ParsedDate(
                 time_point=TimePoint(
-                    earliest_date=datetime(year=-year1, month=1, day=1),
-                    latest_date=datetime(year=-year2, month=12, day=31),
+                    earliest_date=create_bce_date(year1, 1, 1),
+                    latest_date=create_bce_date(year2, 12, 31),
                     calendar_system=CalendarSystem.GREGORIAN,
                     confidence=0.8,
                 ),
@@ -165,10 +167,11 @@ class BiblicalDateParser:
         elif pattern_type == "circa_bce":
             year = int(match.group(1))
             # Add uncertainty of +/- 25 years for "circa"
+            # Note: BCE dates count backwards, so year + 25 is earlier
             return ParsedDate(
                 time_point=TimePoint(
-                    earliest_date=datetime(year=-(year + 25), month=1, day=1),
-                    latest_date=datetime(year=-(year - 25), month=12, day=31),
+                    earliest_date=create_bce_date(year + 25, 1, 1),  # Earlier date (larger BCE)
+                    latest_date=create_bce_date(year - 25, 12, 31),  # Later date (smaller BCE)
                     calendar_system=CalendarSystem.GREGORIAN,
                     confidence=0.7,
                     distribution_type="normal",
@@ -185,10 +188,10 @@ class BiblicalDateParser:
                 return ParsedDate(
                     time_range=TimeRange(
                         start=TimePoint(
-                            exact_date=datetime(year=-960, month=1, day=1), confidence=0.8
+                            exact_date=create_bce_date(960, 1, 1), confidence=0.8
                         ),
                         end=TimePoint(
-                            exact_date=datetime(year=-586, month=1, day=1), confidence=0.9
+                            exact_date=create_bce_date(586, 1, 1), confidence=0.9
                         ),
                     ),
                     confidence=0.85,
@@ -198,10 +201,10 @@ class BiblicalDateParser:
                 return ParsedDate(
                     time_range=TimeRange(
                         start=TimePoint(
-                            exact_date=datetime(year=-516, month=1, day=1), confidence=0.9
+                            exact_date=create_bce_date(516, 1, 1), confidence=0.9
                         ),
                         end=TimePoint(
-                            exact_date=datetime(year=70, month=1, day=1), confidence=0.95
+                            exact_date=datetime(year=70 + 5000, month=1, day=1), confidence=0.95
                         ),
                     ),
                     confidence=0.9,
@@ -224,9 +227,7 @@ class BiblicalDateParser:
             if start_year <= actual_year <= end_year:
                 return ParsedDate(
                     time_point=TimePoint(
-                        exact_date=datetime(
-                            year=-actual_year if actual_year > 0 else actual_year, month=1, day=1
-                        ),
+                        exact_date=create_bce_date(actual_year, 1, 1) if actual_year > 0 else datetime(year=actual_year + 5000, month=1, day=1),
                         calendar_system=CalendarSystem.REGNAL,
                         confidence=0.85,
                         chronology_source=f"Regnal year {year_num} of {ruler.title()}",
@@ -270,15 +271,11 @@ class BiblicalDateParser:
             return ParsedDate(
                 time_range=TimeRange(
                     start=TimePoint(
-                        exact_date=datetime(
-                            year=-start_year if start_year > 0 else start_year, month=1, day=1
-                        ),
+                        exact_date=create_bce_date(start_year, 1, 1) if start_year > 0 else datetime(year=start_year + 5000, month=1, day=1),
                         confidence=0.8,
                     ),
                     end=TimePoint(
-                        exact_date=datetime(
-                            year=-end_year if end_year > 0 else end_year, month=12, day=31
-                        ),
+                        exact_date=create_bce_date(end_year, 12, 31) if end_year > 0 else datetime(year=end_year + 5000, month=12, day=31),
                         confidence=0.8,
                     ),
                 ),
@@ -311,6 +308,29 @@ class ScholarlyNotationParser:
         # Remove extra whitespace
         notation = " ".join(notation.split())
 
+        # Parse plus/minus notation FIRST (before removing ± symbol)
+        pm_match = re.search(r"(\d+)\s*±\s*(\d+)", notation)
+        if pm_match:
+            center = int(pm_match.group(1))
+            margin = int(pm_match.group(2))
+
+            is_bce = "BCE" in notation or "BC" in notation
+            
+            # Get confidence from ± marker
+            confidence = self.uncertainty_markers.get("±", 0.8)
+
+            if is_bce:
+                return ParsedDate(
+                    time_point=TimePoint(
+                        earliest_date=create_bce_date(center + margin, 1, 1),
+                        latest_date=create_bce_date(center - margin, 12, 31),
+                        distribution_type="normal",
+                        distribution_params={"mean": -center, "std": margin / 2},
+                        confidence=confidence,
+                    ),
+                    confidence=confidence,
+                )
+
         # Check for uncertainty markers
         confidence = 1.0
         for marker, conf in self.uncertainty_markers.items():
@@ -329,34 +349,14 @@ class ScholarlyNotationParser:
 
                     return ParsedDate(
                         time_point=TimePoint(
-                            earliest_date=datetime(year=-max(year1, year2), month=1, day=1),
-                            latest_date=datetime(year=-min(year1, year2), month=12, day=31),
+                            earliest_date=create_bce_date(max(year1, year2), 1, 1),
+                            latest_date=create_bce_date(min(year1, year2), 12, 31),
                             confidence=confidence * 0.9,
                         ),
                         confidence=confidence * 0.9,
                     )
                 except:
                     pass
-
-        # Parse plus/minus notation
-        pm_match = re.search(r"(\d+)\s*±\s*(\d+)", notation)
-        if pm_match:
-            center = int(pm_match.group(1))
-            margin = int(pm_match.group(2))
-
-            is_bce = "BCE" in notation or "BC" in notation
-
-            if is_bce:
-                return ParsedDate(
-                    time_point=TimePoint(
-                        earliest_date=datetime(year=-(center + margin), month=1, day=1),
-                        latest_date=datetime(year=-(center - margin), month=12, day=31),
-                        distribution_type="normal",
-                        distribution_params={"mean": -center, "std": margin / 2},
-                        confidence=confidence * 0.85,
-                    ),
-                    confidence=confidence * 0.85,
-                )
 
         # Try standard biblical parser
         biblical_parser = BiblicalDateParser()
@@ -383,7 +383,12 @@ class ChronologyParser:
         if "id" not in data or "name" not in data:
             return None
 
-        event = Event(id=data["id"], name=data["name"], description=data.get("description", ""))
+        event = Event(
+            id=data["id"], 
+            name=data["name"], 
+            description=data.get("description", ""),
+            event_type=EventType.UNCERTAIN  # Default type, will be updated below if provided
+        )
 
         # Parse temporal data
         if "date" in data:

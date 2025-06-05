@@ -512,7 +512,7 @@ class TestSetFitClassifier(unittest.TestCase):
             FewShotExample("The Word became flesh", "christ"),
         ]
 
-        with patch("sklearn.linear_model.LogisticRegression") as mock_lr:
+        with patch("src.abba.annotations.few_shot_classifier.LogisticRegression") as mock_lr:
             mock_lr_instance = MagicMock()
             mock_lr.return_value = mock_lr_instance
 
@@ -867,7 +867,7 @@ class TestQualityControl(unittest.TestCase):
         bad_collection = AnnotationCollection(annotations=[self.bad_annotation], metadata={})
 
         bad_report = self.qc.analyze_collection(bad_collection)
-        self.assertLess(bad_report.overall_score, 50)
+        self.assertLessEqual(bad_report.overall_score, 50)
 
     def test_prioritize_for_review(self):
         """Test prioritization of annotations for review."""

@@ -2,7 +2,7 @@
 
 ## Overview
 
-ABBA supports multiple data formats optimized for different use cases, from static websites to distributed search clusters. Each format is generated from a canonical source and optimized for specific query patterns and deployment scenarios.
+ABBA (Annotated Bible and Background Analysis) is a comprehensive framework for biblical text analysis, supporting multiple data formats optimized for different use cases, from static websites to distributed search clusters. The system is production-ready with ~90%+ test coverage.
 
 ## Core Design Principles
 
@@ -11,6 +11,8 @@ ABBA supports multiple data formats optimized for different use cases, from stat
 3. **Progressive Enhancement**: Simple formats for basic needs, complex formats for advanced features
 4. **Interoperability**: Standard formats for maximum compatibility
 5. **Incremental Updates**: Support for efficient delta updates
+6. **Multi-Language Support**: Full Hebrew and Greek morphological analysis
+7. **Extensible Annotations**: ML-powered annotation system with multiple approaches
 
 ## Data Formats
 
@@ -537,6 +539,71 @@ pipeline:
 - Relationship property indices
 - Query result caching
 
+## Current Implementation Status
+
+### Core Modules (Production Ready)
+
+1. **Parsers** (`src/abba/parsers/`)
+   - Hebrew parser with full morphological support
+   - Greek parser with extensive grammatical analysis
+   - Translation parser for modern versions
+   - Lexicon parser for Strong's and other references
+
+2. **Alignment System** (`src/abba/alignment/`)
+   - Statistical aligner for cross-version mapping
+   - Modern aligner with ML support
+   - Bridge tables for complex verse mappings
+   - Unified reference system
+
+3. **Morphology** (`src/abba/morphology/`)
+   - Hebrew morphology with complete parsing
+   - Greek morphology including participle detection
+   - Unified morphology interface
+
+4. **Annotations** (`src/abba/annotations/`)
+   - Zero-shot classification using Hugging Face models
+   - Few-shot learning with example-based classification
+   - BERT adapter for contextual understanding
+   - Quality control and confidence scoring
+   - Topic discovery and taxonomy management
+
+5. **Timeline System** (`src/abba/timeline/`)
+   - BCE date handling with special encoding
+   - Event and period modeling
+   - Temporal graph construction
+   - Uncertainty modeling
+   - Visualization components
+
+6. **Export System** (`src/abba/export/`)
+   - SQLite exporter with FTS5 support
+   - JSON exporter with hierarchical structure
+   - OpenSearch exporter (fully async)
+   - Graph database exporters (Neo4j, ArangoDB)
+   - Pipeline orchestration
+   - Validation framework
+
+7. **Multi-Canon Support** (`src/abba/canon/`)
+   - Protestant, Catholic, Orthodox, Ethiopian canons
+   - Canon comparison and validation
+   - Versification system handling
+
+8. **Cross-References** (`src/abba/cross_references/`)
+   - Citation parser and tracker
+   - Confidence scoring
+   - Relationship classification
+
+9. **Interlinear Support** (`src/abba/interlinear/`)
+   - Token extraction and alignment
+   - Display generation
+   - Lexicon integration
+
+### Testing & Quality
+
+- **Test Coverage**: ~90%+ (867+ tests passing)
+- **Code Quality**: Enforced through black, isort, flake8, pylint, mypy
+- **Type Safety**: Full mypy type annotations
+- **Documentation**: Comprehensive docstrings and architectural docs
+
 ## Performance Benchmarks
 
 | Query Type | Static JSON | SQLite | OpenSearch | Graph DB |
@@ -548,6 +615,123 @@ pipeline:
 | Cross-ref traversal (3 hops) | N/A | ~100ms | ~50ms | <20ms |
 | Topic aggregation | ~100ms | ~30ms | <10ms | ~15ms |
 | Timeline range query | ~150ms | ~15ms | <10ms | ~25ms |
+
+## Deployment Architecture
+
+### Static Deployment (CDN/Edge)
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Browser   │────▶│     CDN     │────▶│  S3/GCS     │
+│    Cache    │     │   (Cache)   │     │  (Origin)   │
+└─────────────┘     └─────────────┘     └─────────────┘
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │ Edge Worker │ (Optional)
+                    │  (Search)   │
+                    └─────────────┘
+```
+
+### Database Deployment
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Client    │────▶│   API GW    │────▶│  Lambda/    │
+│     App     │     │  (Cache)    │     │  Container  │
+└─────────────┘     └─────────────┘     └─────────────┘
+                                               │
+                           ┌───────────────────┴───────────────┐
+                           ▼                                   ▼
+                    ┌─────────────┐                   ┌─────────────┐
+                    │   SQLite    │                   │ OpenSearch  │
+                    │   (Read)    │                   │  (Search)   │
+                    └─────────────┘                   └─────────────┘
+```
+
+### Graph Database Deployment
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  GraphQL    │────▶│   Apollo    │────▶│   Neo4j/    │
+│   Client    │     │   Server    │     │  ArangoDB   │
+└─────────────┘     └─────────────┘     └─────────────┘
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │    Redis    │
+                    │   (Cache)   │
+                    └─────────────┘
+```
+
+## Usage Examples
+
+### Basic Usage
+```python
+from abba.export.pipeline import ExportPipeline
+from abba.parsers.hebrew_parser import HebrewParser
+from abba.parsers.greek_parser import GreekParser
+
+# Create pipeline
+pipeline = ExportPipeline()
+
+# Add parsers
+pipeline.add_parser(HebrewParser())
+pipeline.add_parser(GreekParser())
+
+# Configure exports
+pipeline.add_exporter("sqlite", {"output_path": "bible.db"})
+pipeline.add_exporter("json", {"output_path": "./static"})
+
+# Run pipeline
+await pipeline.run()
+```
+
+### Advanced Annotation
+```python
+from abba.annotations.annotation_engine import AnnotationEngine
+from abba.verse_id import VerseID
+
+# Create annotation engine
+engine = AnnotationEngine()
+
+# Annotate verse
+verse_id = VerseID("JHN", 3, 16)
+text = "For God so loved the world..."
+
+annotations = await engine.annotate_verse(
+    verse_id=verse_id,
+    text=text,
+    annotation_types=[
+        AnnotationType.THEOLOGICAL_THEME,
+        AnnotationType.CROSS_REFERENCE,
+        AnnotationType.KEY_TERM
+    ]
+)
+```
+
+### Timeline Visualization
+```python
+from abba.timeline.models import Event, create_bce_date
+from abba.timeline.visualization import TimelineVisualizer
+
+# Create events
+events = [
+    Event(
+        id="exodus",
+        name="The Exodus",
+        description="Israel leaves Egypt",
+        time_point=TimePoint(
+            exact_date=create_bce_date(1446),
+            confidence=0.7
+        )
+    )
+]
+
+# Create visualizer
+visualizer = TimelineVisualizer()
+
+# Generate visualization
+viz_data = visualizer.create_timeline_visualization(events)
+svg = visualizer.export_svg(viz_data)
+```
 
 ## Selection Guide
 

@@ -27,16 +27,37 @@ from .models import (
 class ManuscriptWeight:
     """Weight factors for a manuscript."""
 
-    siglum: str
+    siglum: str = ""
+    
+    # Primary factors (can use old or new names)
     age_weight: float = 0.5
+    age_factor: Optional[float] = None  # Alias for age_weight
+    
     text_type_weight: float = 0.5
+    type_factor: Optional[float] = None  # Alias for text_type_weight
+    
     accuracy_weight: float = 0.5
     completeness_weight: float = 0.5
-
+    
     # Calculated weights
     family_weight: float = 0.5
+    family_factor: Optional[float] = None  # Alias for family_weight
+    
     geographic_weight: float = 0.5
+    independence_factor: Optional[float] = None  # Independence from Byzantine tradition
+    
     total_weight: float = 0.5
+    
+    def __post_init__(self):
+        """Handle aliases."""
+        if self.age_factor is not None:
+            self.age_weight = self.age_factor
+        if self.type_factor is not None:
+            self.text_type_weight = self.type_factor
+        if self.family_factor is not None:
+            self.family_weight = self.family_factor
+        if self.independence_factor is not None:
+            self.geographic_weight = self.independence_factor
 
     def calculate_total(self) -> float:
         """Calculate total weight."""

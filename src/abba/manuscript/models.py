@@ -69,6 +69,7 @@ class Manuscript:
     # Dating
     date: str  # Century or specific date
     date_numeric: Optional[int] = None  # Year (approximate)
+    date_range: Optional[Tuple[int, int]] = None  # Date range if uncertain
 
     # Content
     contents: List[str] = field(default_factory=list)  # Books contained
@@ -133,6 +134,10 @@ class Witness:
 
     type: WitnessType
     siglum: str  # Manuscript siglum or identifier
+    
+    # Additional identification
+    name: Optional[str] = None  # Full name
+    family: Optional[ManuscriptFamily] = None  # Manuscript family
 
     # Optional qualifiers
     certainty: float = 1.0  # 0.0-1.0 certainty of reading
@@ -170,6 +175,7 @@ class VariantReading:
     # Support
     witnesses: List[Witness] = field(default_factory=list)
     manuscript_count: int = 0  # Total manuscripts supporting
+    support_weight: float = 0.0  # Combined weight of supporting witnesses
 
     # Analysis
     variant_type: Optional[VariantType] = None
@@ -192,6 +198,8 @@ class VariantUnit:
 
     # Location
     word_positions: List[int]  # Affected word positions
+    start_word: int = 0  # Starting word position
+    end_word: int = 0  # Ending word position
     context: str = ""  # Surrounding text for context
 
     # Readings
@@ -303,6 +311,7 @@ class ApparatusEntry:
     # Editorial notes
     editor_note: Optional[str] = None
     certainty_rating: Optional[str] = None  # A, B, C, D rating
+    notes: Optional[str] = None  # Additional notes
 
 
 @dataclass

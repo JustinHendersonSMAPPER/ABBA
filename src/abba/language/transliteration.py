@@ -6,6 +6,7 @@ transliteration schemes and academic standards.
 """
 
 import re
+import unicodedata
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Set
 from dataclasses import dataclass
@@ -543,3 +544,109 @@ class SyriacTransliterator(TransliterationEngine):
         ]
 
         self.rules = rules
+
+
+class TransliterationValidator:
+    """Validator for transliteration quality."""
+    
+    def __init__(self):
+        """Initialize the validator."""
+        self.known_schemes = set(TransliterationScheme)
+        
+    def validate_scheme(self, scheme: TransliterationScheme) -> bool:
+        """Validate that scheme is supported.
+        
+        Args:
+            scheme: Transliteration scheme
+            
+        Returns:
+            True if valid scheme
+        """
+        return scheme in self.known_schemes
+        
+    def validate_transliteration(self, original: str, transliterated: str, scheme: TransliterationScheme) -> List[str]:
+        """Validate transliteration quality.
+        
+        Args:
+            original: Original text
+            transliterated: Transliterated text
+            scheme: Scheme used
+            
+        Returns:
+            List of validation errors
+        """
+        errors = []
+        
+        # Check for empty result
+        if original and not transliterated:
+            errors.append("Empty transliteration result")
+            
+        # Check for unconverted characters
+        if scheme == TransliterationScheme.SBL_HEBREW:
+            # Check for remaining Hebrew characters
+            if any('\u0590' <= c <= '\u05FF' for c in transliterated):
+                errors.append("Unconverted Hebrew characters remain")
+                
+        elif scheme == TransliterationScheme.SBL_GREEK:
+            # Check for remaining Greek characters
+            if any('\u0370' <= c <= '\u03FF' for c in transliterated):
+                errors.append("Unconverted Greek characters remain")
+                
+        # Check for invalid characters in output
+        if '\x00' in transliterated:
+            errors.append("Null characters in output")
+            
+        return errors
+        
+    def validate_reversibility(self, original: str, transliterated: str, reverse_engine: Optional['TransliterationEngine'] = None) -> bool:
+        """Check if transliteration is reversible.
+        
+        Args:
+            original: Original text
+            transliterated: Transliterated text
+            reverse_engine: Engine for reverse transliteration
+            
+        Returns:
+            True if reversible
+        """
+        if not reverse_engine:
+            return False
+            
+        reversed_text = reverse_engine.transliterate(transliterated)
+        
+        # Allow for some normalization differences
+        original_normalized = unicodedata.normalize('NFC', original)
+        reversed_normalized = unicodedata.normalize('NFC', reversed_text)
+        
+        return original_normalized == reversed_normalized
+
+
+def create_transliterator(language: str, scheme: Optional[TransliterationScheme] = None) -> TransliterationEngine:
+    """Create a transliterator for a language.
+    
+    Args:
+        language: Language code (hebrew, greek, arabic, syriac)
+        scheme: Optional specific scheme
+        
+    Returns:
+        Appropriate transliterator
+        
+    Raises:
+        ValueError: If language not supported
+    """
+    language = language.lower()
+    
+    if language == "hebrew":
+        scheme = scheme or TransliterationScheme.SBL_HEBREW
+        return HebrewTransliterator(scheme)
+    elif language == "greek":
+        scheme = scheme or TransliterationScheme.SBL_GREEK
+        return GreekTransliterator(scheme)
+    elif language == "arabic":
+        scheme = scheme or TransliterationScheme.ARABIC_DIN
+        return ArabicTransliterator(scheme)
+    elif language == "syriac":
+        scheme = scheme or TransliterationScheme.SBL_HEBREW  # Default scheme
+        return SyriacTransliterator(scheme)
+    else:
+        raise ValueError(f"Unsupported language: {language}")

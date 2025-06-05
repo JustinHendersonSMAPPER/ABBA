@@ -23,8 +23,8 @@ from abba.export.base import (
     CanonicalDataset,
     ValidationResult,
 )
-from abba.alignment.unified_reference import UnifiedVerse
-from abba.annotations.models import Annotation, AnnotationType, AnnotationLevel, Topic
+from abba.parsers.translation_parser import TranslationVerse
+from abba.annotations.models import Annotation, AnnotationType, AnnotationLevel, Topic, TopicCategory
 from abba.timeline.models import Event, TimePeriod, EventType, CertaintyLevel
 from abba.verse_id import VerseID
 
@@ -36,7 +36,11 @@ class TestJSONConfig:
         """Test basic configuration creation."""
         with tempfile.TemporaryDirectory() as temp_dir:
             config = JSONConfig(
-                output_path=temp_dir, chunk_size=50, gzip_output=True, minify_json=True
+                output_path=temp_dir,
+                format_type=ExportFormat.STATIC_JSON,
+                chunk_size=50,
+                gzip_output=True,
+                minify_json=True
             )
 
             assert config.output_path == temp_dir
@@ -49,6 +53,7 @@ class TestJSONConfig:
         """Test progressive loading configuration."""
         config = JSONConfig(
             output_path="/tmp/json",
+            format_type=ExportFormat.STATIC_JSON,
             enable_progressive_loading=True,
             manifest_version="2.0",
             create_search_indices=True,
@@ -61,17 +66,17 @@ class TestJSONConfig:
     def test_config_validation(self):
         """Test configuration validation."""
         # Valid config
-        config = JSONConfig(output_path="/tmp/test")
+        config = JSONConfig(output_path="/tmp/test", format_type=ExportFormat.STATIC_JSON)
         validation = config.validate()
         assert validation.is_valid
 
         # Invalid config - no output path
-        config = JSONConfig(output_path="")
+        config = JSONConfig(output_path="", format_type=ExportFormat.STATIC_JSON)
         validation = config.validate()
         assert not validation.is_valid
 
         # Invalid config - invalid chunk size
-        config = JSONConfig(output_path="/tmp/test", chunk_size=0)
+        config = JSONConfig(output_path="/tmp/test", format_type=ExportFormat.STATIC_JSON, chunk_size=0)
         validation = config.validate()
         assert not validation.is_valid
 
@@ -85,6 +90,7 @@ class TestStaticJSONExporter:
         with tempfile.TemporaryDirectory() as temp_dir:
             yield JSONConfig(
                 output_path=temp_dir,
+                format_type=ExportFormat.STATIC_JSON,
                 chunk_size=5,  # Small for testing
                 gzip_output=True,
                 minify_json=True,
@@ -108,13 +114,12 @@ class TestStaticJSONExporter:
             for chapter in range(1, 3):  # 2 chapters per book
                 for verse in range(1, 6):  # 5 verses per chapter
                     verse_id = VerseID(book, chapter, verse)
-                    verse_obj = UnifiedVerse(
+                    verse_obj = TranslationVerse(
                         verse_id=verse_id,
-                        translations={
-                            "ESV": f"This is {book} chapter {chapter} verse {verse} in ESV.",
-                            "NIV": f"This is {book} chapter {chapter} verse {verse} in NIV.",
-                        },
-                        metadata={"source": "test"},
+                        text=f"This is {book} chapter {chapter} verse {verse} in ESV.",
+                        original_book_name=book,
+                        original_chapter=chapter,
+                        original_verse=verse
                     )
                     verses.append(verse_obj)
 
@@ -127,11 +132,12 @@ class TestStaticJSONExporter:
         for i in range(10):
             annotation = Annotation(
                 id=f"ann_{i}",
-                verse_id=VerseID("GEN", 1, (i % 5) + 1),
-                annotation_type=AnnotationType.TOPIC,
+                start_verse=VerseID("GEN", 1, (i % 5) + 1),
+                annotation_type=AnnotationType.THEOLOGICAL_THEME,
                 level=AnnotationLevel.VERSE,
-                confidence=0.8,
-                topics=[Topic(id=f"topic_{i}", name=f"Topic {i}")],
+                topic_id=f"topic_{i}",
+                topic_name=f"Topic {i}",
+                content=f"Annotation content for verse {(i % 5) + 1}"
             )
             annotations.append(annotation)
         return annotations
@@ -154,7 +160,7 @@ class TestStaticJSONExporter:
     @pytest.fixture
     def sample_events(self):
         """Create sample timeline events."""
-        from abba.timeline.models import TimePoint, Location, Participant
+        from abba.timeline.models import TimePoint, create_bce_date
 
         events = []
         for i in range(3):
@@ -162,10 +168,10 @@ class TestStaticJSONExporter:
                 id=f"event_{i}",
                 name=f"Event {i}",
                 description=f"Description of event {i}",
-                event_type=EventType.HISTORICAL,
-                certainty_level=CertaintyLevel.HIGH,
+                event_type=EventType.POINT,  # Use POINT instead of HISTORICAL
+                certainty_level=CertaintyLevel.CERTAIN,  # Use CERTAIN instead of HIGH
                 categories=["biblical", "historical"],
-                time_point=TimePoint(year=-2000 + i * 100),
+                time_point=TimePoint(exact_date=create_bce_date(2000 - i * 100)),
                 verse_refs=[VerseID("GEN", 1, i + 1)],
             )
             events.append(event)
@@ -290,8 +296,12 @@ class TestStaticJSONExporter:
         large_verses = []
         for i in range(10):  # More than chunk_size (5)
             verse_id = VerseID("PSA", 119, i + 1)
-            verse = UnifiedVerse(
-                verse_id=verse_id, translations={"ESV": f"Large chapter verse {i + 1}"}
+            verse = TranslationVerse(
+                verse_id=verse_id,
+                text=f"Large chapter verse {i + 1}",
+                original_book_name="Psalms",
+                original_chapter=119,
+                original_verse=i + 1
             )
             large_verses.append(verse)
 
@@ -341,8 +351,8 @@ class TestStaticJSONExporter:
 
         # Check translations
         assert "translations" in verse
-        assert "ESV" in verse["translations"]
-        assert "NIV" in verse["translations"]
+        assert "default" in verse["translations"]
+        assert "This is GEN chapter 1 verse 1 in ESV." in verse["translations"]["default"]
 
         # Check annotations (should be attached)
         if "annotations" in verse:
@@ -350,7 +360,9 @@ class TestStaticJSONExporter:
             annotation = verse["annotations"][0]
             assert "id" in annotation
             assert "type" in annotation
-            assert "topics" in annotation
+            assert "topic" in annotation
+            assert annotation["topic"]["id"] == "topic_0"
+            assert annotation["topic"]["name"] == "Topic 0"
 
     @pytest.mark.asyncio
     async def test_search_index_generation(self, exporter, sample_dataset):
@@ -510,7 +522,13 @@ class TestStaticJSONExporter:
             # Create verses with many unique words
             unique_words = [f"word{j}" for j in range(i * 10, (i + 1) * 10)]
             text = " ".join(unique_words)
-            verse = UnifiedVerse(verse_id=verse_id, translations={"ESV": text})
+            verse = TranslationVerse(
+                verse_id=verse_id,
+                text=text,
+                original_book_name="Genesis",
+                original_chapter=1,
+                original_verse=i + 1
+            )
             large_verses.append(verse)
 
         large_dataset = CanonicalDataset(verses=iter(large_verses), metadata={"format": "test"})

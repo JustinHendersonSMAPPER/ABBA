@@ -25,7 +25,7 @@ from .base import (
     ExportUtilities,
     StreamingDataProcessor,
 )
-from ..alignment.unified_reference import UnifiedVerse
+from ..parsers.translation_parser import TranslationVerse
 from ..annotations.models import Annotation
 from ..timeline.models import Event, TimePeriod
 
@@ -185,13 +185,13 @@ class SQLiteExporter(DataExporter):
 
             conn.commit()
 
-    async def _export_verses(self, verses: Iterator[UnifiedVerse]):
+    async def _export_verses(self, verses: Iterator[TranslationVerse]):
         """Export verses to database."""
         self.logger.info("Exporting verses to SQLite")
 
         verse_count = 0
 
-        async def process_verse_batch(verse_batch: List[UnifiedVerse]):
+        async def process_verse_batch(verse_batch: List[TranslationVerse]):
             nonlocal verse_count
 
             with sqlite3.connect(self.db_path) as conn:
@@ -201,6 +201,21 @@ class SQLiteExporter(DataExporter):
                 translation_data = []
 
                 for verse in verse_batch:
+                    # Handle different verse types
+                    translations_json = None
+                    metadata_json = None
+                    
+                    # Check if it's a TranslationVerse (simple) or more complex type
+                    if hasattr(verse, 'text') and not hasattr(verse, 'translations'):
+                        # Simple TranslationVerse - create translations dict from text
+                        translations_json = json.dumps({"default": verse.text})
+                    elif hasattr(verse, 'translations'):
+                        # Complex verse with multiple translations
+                        translations_json = json.dumps(verse.translations) if verse.translations else None
+                    
+                    if hasattr(verse, 'metadata'):
+                        metadata_json = json.dumps(verse.metadata) if verse.metadata else None
+                    
                     # Main verse record
                     verse_data.append(
                         (
@@ -208,13 +223,13 @@ class SQLiteExporter(DataExporter):
                             verse.verse_id.book,
                             verse.verse_id.chapter,
                             verse.verse_id.verse,
-                            json.dumps(verse.translations) if verse.translations else None,
-                            json.dumps(verse.metadata) if verse.metadata else None,
+                            translations_json,
+                            metadata_json,
                         )
                     )
 
                     # Original language data
-                    if verse.hebrew_tokens:
+                    if hasattr(verse, 'hebrew_tokens') and verse.hebrew_tokens:
                         for token in verse.hebrew_tokens:
                             original_data.append(
                                 (
@@ -228,7 +243,7 @@ class SQLiteExporter(DataExporter):
                                 )
                             )
 
-                    if verse.greek_tokens:
+                    if hasattr(verse, 'greek_tokens') and verse.greek_tokens:
                         for token in verse.greek_tokens:
                             original_data.append(
                                 (
@@ -243,8 +258,15 @@ class SQLiteExporter(DataExporter):
                             )
 
                     # Translation data
-                    if verse.translations:
-                        for translation_id, text in verse.translations.items():
+                    verse_translations = None
+                    if hasattr(verse, 'text') and not hasattr(verse, 'translations'):
+                        # Simple TranslationVerse
+                        verse_translations = {"default": verse.text}
+                    elif hasattr(verse, 'translations'):
+                        verse_translations = verse.translations
+                    
+                    if verse_translations:
+                        for translation_id, text in verse_translations.items():
                             # Compress large text if enabled
                             if (
                                 self.config.compress_large_text
@@ -331,29 +353,28 @@ class SQLiteExporter(DataExporter):
                     annotation_data.append(
                         (
                             annotation.id,
-                            str(annotation.verse_id),
+                            str(annotation.start_verse),
                             (
                                 annotation.annotation_type.value
                                 if annotation.annotation_type
                                 else None
                             ),
                             annotation.level.value if annotation.level else None,
-                            annotation.confidence,
-                            json.dumps(annotation.metadata) if annotation.metadata else None,
+                            annotation.confidence.overall_score if annotation.confidence else 0.0,
+                            json.dumps({"source": annotation.source, "verified": annotation.verified}),
                         )
                     )
 
                     # Extract topics
-                    if annotation.topics:
-                        for topic in annotation.topics:
-                            topic_data.append(
-                                (
-                                    annotation.id,
-                                    topic.id,
-                                    topic.name,
-                                    topic.confidence if hasattr(topic, "confidence") else 1.0,
-                                )
+                    if annotation.topic_id:
+                        topic_data.append(
+                            (
+                                annotation.id,
+                                annotation.topic_id,
+                                annotation.topic_name or "",
+                                annotation.confidence.overall_score if annotation.confidence else 1.0,
                             )
+                        )
 
                 # Insert data
                 conn.executemany(
@@ -461,7 +482,7 @@ class SQLiteExporter(DataExporter):
                             json.dumps(event_dict.get("location")) if event.location else None,
                             json.dumps(event_dict.get("participants")),
                             json.dumps(event.categories),
-                            json.dumps(event.verse_refs) if event.verse_refs else None,
+                            json.dumps([str(v) for v in event.verse_refs]) if event.verse_refs else None,
                             json.dumps(event_dict),
                         )
                     )
@@ -585,11 +606,14 @@ class SQLiteExporter(DataExporter):
                 self.logger.info("Running ANALYZE for query optimization")
                 conn.execute("ANALYZE")
 
+            conn.commit()
+            
             if self.config.vacuum_on_completion:
                 self.logger.info("Running VACUUM for storage optimization")
+                # VACUUM must be run outside of a transaction
+                conn.isolation_level = None  # Auto-commit mode
                 conn.execute("VACUUM")
-
-            conn.commit()
+                conn.isolation_level = ''  # Restore default
 
         self.logger.info("SQLite database finalized")
 

@@ -81,6 +81,34 @@ class BookCode(str, Enum):
     JN3 = "3JN"  # 3 John
     JUD = "JUD"  # Jude
     REV = "REV"  # Revelation
+    
+    # Deuterocanonical Books (Catholic)
+    TOB = "TOB"  # Tobit
+    JDT = "JDT"  # Judith
+    ESG = "ESG"  # Esther Greek/Additions to Esther
+    WIS = "WIS"  # Wisdom of Solomon
+    SIR = "SIR"  # Sirach/Ecclesiasticus
+    BAR = "BAR"  # Baruch
+    LJE = "LJE"  # Letter of Jeremiah
+    DAG = "DAG"  # Daniel Greek/Additions to Daniel
+    MA1 = "1MA"  # 1 Maccabees
+    MA2 = "2MA"  # 2 Maccabees
+    
+    # Orthodox Additional Books  
+    ES1 = "1ES"  # 1 Esdras (3 Esdras in Vulgate)
+    ES2 = "2ES"  # 2 Esdras (4 Esdras in Vulgate)
+    MA3 = "3MA"  # 3 Maccabees
+    MA4 = "4MA"  # 4 Maccabees
+    MAN = "MAN"  # Prayer of Manasseh
+    PS2 = "PS2"  # Psalm 151
+    
+    # Ethiopian Orthodox Additional Books
+    ENO = "ENO"  # 1 Enoch
+    JUB = "JUB"  # Jubilees
+    BA4 = "4BA"  # 4 Baruch
+    MQ1 = "1MQ"  # 1 Meqabyan
+    MQ2 = "2MQ"  # 2 Meqabyan
+    MQ3 = "3MQ"  # 3 Meqabyan
 
 
 class Testament(Enum):
@@ -169,6 +197,34 @@ BOOK_INFO: Dict[str, Dict[str, Any]] = {
     "3JN": {"name": "3 John", "abbr": "3John", "chapters": 1, "testament": Testament.NEW},
     "JUD": {"name": "Jude", "abbr": "Jude", "chapters": 1, "testament": Testament.NEW},
     "REV": {"name": "Revelation", "abbr": "Rev", "chapters": 22, "testament": Testament.NEW},
+    
+    # Deuterocanonical Books (Catholic)
+    "TOB": {"name": "Tobit", "abbr": "Tob", "chapters": 14, "testament": Testament.OLD},
+    "JDT": {"name": "Judith", "abbr": "Jdt", "chapters": 16, "testament": Testament.OLD},
+    "ESG": {"name": "Esther (Greek)", "abbr": "EsthGr", "chapters": 16, "testament": Testament.OLD},
+    "WIS": {"name": "Wisdom of Solomon", "abbr": "Wis", "chapters": 19, "testament": Testament.OLD},
+    "SIR": {"name": "Sirach", "abbr": "Sir", "chapters": 51, "testament": Testament.OLD},
+    "BAR": {"name": "Baruch", "abbr": "Bar", "chapters": 6, "testament": Testament.OLD},
+    "LJE": {"name": "Letter of Jeremiah", "abbr": "LJer", "chapters": 1, "testament": Testament.OLD},
+    "DAG": {"name": "Daniel (Greek)", "abbr": "DanGr", "chapters": 14, "testament": Testament.OLD},
+    "1MA": {"name": "1 Maccabees", "abbr": "1Macc", "chapters": 16, "testament": Testament.OLD},
+    "2MA": {"name": "2 Maccabees", "abbr": "2Macc", "chapters": 15, "testament": Testament.OLD},
+    
+    # Orthodox Additional Books
+    "1ES": {"name": "1 Esdras", "abbr": "1Esd", "chapters": 9, "testament": Testament.OLD},
+    "2ES": {"name": "2 Esdras", "abbr": "2Esd", "chapters": 16, "testament": Testament.OLD},
+    "3MA": {"name": "3 Maccabees", "abbr": "3Macc", "chapters": 7, "testament": Testament.OLD},
+    "4MA": {"name": "4 Maccabees", "abbr": "4Macc", "chapters": 18, "testament": Testament.OLD},
+    "MAN": {"name": "Prayer of Manasseh", "abbr": "PrMan", "chapters": 1, "testament": Testament.OLD},
+    "PS2": {"name": "Psalm 151", "abbr": "Ps151", "chapters": 1, "testament": Testament.OLD},
+    
+    # Ethiopian Orthodox Additional Books
+    "ENO": {"name": "1 Enoch", "abbr": "1En", "chapters": 108, "testament": Testament.OLD},
+    "JUB": {"name": "Jubilees", "abbr": "Jub", "chapters": 50, "testament": Testament.OLD},
+    "4BA": {"name": "4 Baruch", "abbr": "4Bar", "chapters": 9, "testament": Testament.OLD},
+    "1MQ": {"name": "1 Meqabyan", "abbr": "1Meq", "chapters": 36, "testament": Testament.OLD},
+    "2MQ": {"name": "2 Meqabyan", "abbr": "2Meq", "chapters": 21, "testament": Testament.OLD},
+    "3MQ": {"name": "3 Meqabyan", "abbr": "3Meq", "chapters": 10, "testament": Testament.OLD},
 }
 
 
@@ -554,15 +610,140 @@ BOOK_ALIASES: Dict[str, str] = {
     "revelations": "REV",
     "apocalypse": "REV",
     "apoc": "REV",
+    
+    # Deuterocanonical Books (Catholic) variations
+    "tobit": "TOB",
+    "tob": "TOB",
+    "tb": "TOB",
+    "judith": "JDT",
+    "jdt": "JDT",
+    "jth": "JDT",
+    "esther greek": "ESG",
+    "greek esther": "ESG",
+    "additions to esther": "ESG",
+    "rest of esther": "ESG",
+    "esg": "ESG",
+    "wisdom": "WIS",
+    "wisdom of solomon": "WIS",
+    "wis": "WIS",
+    "ws": "WIS",
+    "sirach": "SIR",
+    "ecclesiasticus": "SIR",
+    "sir": "SIR",
+    "baruch": "BAR",
+    "bar": "BAR",
+    "letter of jeremiah": "LJE",
+    "epistle of jeremiah": "LJE",
+    "lje": "LJE",
+    "daniel greek": "DAG",
+    "greek daniel": "DAG",
+    "additions to daniel": "DAG",
+    "dag": "DAG",
+    "1 maccabees": "1MA",
+    "1maccabees": "1MA",
+    "1macc": "1MA",
+    "1ma": "1MA",
+    "1 macc": "1MA",
+    "i maccabees": "1MA",
+    "2 maccabees": "2MA",
+    "2maccabees": "2MA",
+    "2macc": "2MA",
+    "2ma": "2MA",
+    "2 macc": "2MA",
+    "ii maccabees": "2MA",
+    
+    # Orthodox Additional Books variations
+    "1 esdras": "1ES",
+    "1esdras": "1ES",
+    "1esd": "1ES",
+    "1es": "1ES",
+    "3 esdras": "1ES",  # Vulgate numbering
+    "2 esdras": "2ES",
+    "2esdras": "2ES",
+    "2esd": "2ES",
+    "2es": "2ES",
+    "4 esdras": "2ES",  # Vulgate numbering
+    "3 maccabees": "3MA",
+    "3maccabees": "3MA",
+    "3macc": "3MA",
+    "3ma": "3MA",
+    "iii maccabees": "3MA",
+    "4 maccabees": "4MA",
+    "4maccabees": "4MA",
+    "4macc": "4MA",
+    "4ma": "4MA",
+    "iv maccabees": "4MA",
+    "prayer of manasseh": "MAN",
+    "prayer of manasses": "MAN",
+    "manasseh": "MAN",
+    "man": "MAN",
+    "prman": "MAN",
+    "psalm 151": "PS2",
+    "ps151": "PS2",
+    "ps2": "PS2",
+    
+    # Ethiopian Orthodox Additional Books variations  
+    "1 enoch": "ENO",
+    "1enoch": "ENO",
+    "enoch": "ENO",
+    "eno": "ENO",
+    "1en": "ENO",
+    "jubilees": "JUB",
+    "jub": "JUB",
+    "4 baruch": "4BA",
+    "4baruch": "4BA",
+    "4bar": "4BA",
+    "4ba": "4BA",
+    "paraleipomena jeremiou": "4BA",
+    "1 meqabyan": "1MQ",
+    "1meqabyan": "1MQ",
+    "1meq": "1MQ",
+    "1mq": "1MQ",
+    "2 meqabyan": "2MQ",
+    "2meqabyan": "2MQ", 
+    "2meq": "2MQ",
+    "2mq": "2MQ",
+    "3 meqabyan": "3MQ",
+    "3meqabyan": "3MQ",
+    "3meq": "3MQ",
+    "3mq": "3MQ",
 }
 
 
+# Protestant canon books (66 books)
+PROTESTANT_BOOKS = {
+    # Old Testament (39 books)
+    "GEN", "EXO", "LEV", "NUM", "DEU", "JOS", "JDG", "RUT", "1SA", "2SA",
+    "1KI", "2KI", "1CH", "2CH", "EZR", "NEH", "EST", "JOB", "PSA", "PRO",
+    "ECC", "SNG", "ISA", "JER", "LAM", "EZK", "DAN", "HOS", "JOL", "AMO",
+    "OBA", "JON", "MIC", "NAM", "HAB", "ZEP", "HAG", "ZEC", "MAL",
+    # New Testament (27 books)
+    "MAT", "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO", "GAL", "EPH",
+    "PHP", "COL", "1TH", "2TH", "1TI", "2TI", "TIT", "PHM", "HEB", "JAS",
+    "1PE", "2PE", "1JN", "2JN", "3JN", "JUD", "REV",
+}
+
+# Catholic deuterocanonical books (in addition to Protestant)
+CATHOLIC_DEUTEROCANONICAL = {
+    "TOB", "JDT", "ESG", "WIS", "SIR", "BAR", "LJE", "DAG", "1MA", "2MA",
+}
+
+# Orthodox additional books (in addition to Catholic)
+ORTHODOX_ADDITIONAL = {
+    "1ES", "2ES", "3MA", "4MA", "MAN", "PS2",
+}
+
+# Ethiopian Orthodox additional books (in addition to Orthodox)
+ETHIOPIAN_ADDITIONAL = {
+    "ENO", "JUB", "4BA", "1MQ", "2MQ", "3MQ",
+}
+
 # Canon membership
 CANON_BOOKS: Dict[Canon, Set[str]] = {
-    Canon.PROTESTANT: set(BOOK_INFO.keys()),  # All 66 books
-    Canon.CATHOLIC: set(BOOK_INFO.keys()),  # TODO: Add deuterocanonical books
-    Canon.ORTHODOX: set(BOOK_INFO.keys()),  # TODO: Add additional Orthodox books
-    Canon.ETHIOPIAN: set(BOOK_INFO.keys()),  # TODO: Add Ethiopian canon books
+    Canon.PROTESTANT: PROTESTANT_BOOKS,
+    Canon.CATHOLIC: PROTESTANT_BOOKS | CATHOLIC_DEUTEROCANONICAL,
+    Canon.ORTHODOX: PROTESTANT_BOOKS | CATHOLIC_DEUTEROCANONICAL | ORTHODOX_ADDITIONAL,
+    Canon.ETHIOPIAN: PROTESTANT_BOOKS | CATHOLIC_DEUTEROCANONICAL | ORTHODOX_ADDITIONAL | ETHIOPIAN_ADDITIONAL,
 }
 
 

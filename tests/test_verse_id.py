@@ -408,15 +408,17 @@ class TestGetVerseParts:
 
     def test_basic_functionality(self):
         """Test basic verse parts retrieval."""
-        # Currently just returns the base verse
+        # ROM.3.23 has known parts a and b
         parts = get_verse_parts("ROM.3.23")
-        assert len(parts) == 1
+        assert len(parts) == 3  # Base verse plus parts a and b
         assert parts[0] == VerseID(book="ROM", chapter=3, verse=23)
+        assert parts[1] == VerseID(book="ROM", chapter=3, verse=23, part="a")
+        assert parts[2] == VerseID(book="ROM", chapter=3, verse=23, part="b")
 
-        verse = VerseID(book="ROM", chapter=3, verse=23)
-        parts = get_verse_parts(verse)
+        # Test with verse that has no parts
+        parts = get_verse_parts("GEN.1.1")
         assert len(parts) == 1
-        assert parts[0] == verse
+        assert parts[0] == VerseID(book="GEN", chapter=1, verse=1)
 
     def test_invalid_input(self):
         """Test with invalid input."""

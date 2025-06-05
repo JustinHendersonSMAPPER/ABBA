@@ -85,6 +85,19 @@ class IntegrityCheckResult:
     def set_expected_count(self, data_type: str, count: int):
         """Set expected count for data type."""
         self.expected_counts[data_type] = count
+        
+        # Check against actual if already set
+        if data_type in self.actual_counts:
+            actual = self.actual_counts[data_type]
+            if actual != count:
+                if actual == 0 and count > 0:
+                    self.add_error(f"No {data_type} found (expected {count})")
+                elif count > 0 and abs(actual - count) / count > 0.05:  # >5% difference
+                    self.add_error(f"{data_type} count mismatch: expected {count}, got {actual}")
+                elif actual != count:
+                    self.add_warning(
+                        f"{data_type} count slight difference: expected {count}, got {actual}"
+                    )
 
     def set_actual_count(self, data_type: str, count: int):
         """Set actual count for data type."""
@@ -94,11 +107,11 @@ class IntegrityCheckResult:
         if data_type in self.expected_counts:
             expected = self.expected_counts[data_type]
             if count != expected:
-                if count == 0:
+                if count == 0 and expected > 0:
                     self.add_error(f"No {data_type} found (expected {expected})")
-                elif abs(count - expected) / expected > 0.05:  # >5% difference
+                elif expected > 0 and abs(count - expected) / expected > 0.05:  # >5% difference
                     self.add_error(f"{data_type} count mismatch: expected {expected}, got {count}")
-                else:
+                elif count != expected:
                     self.add_warning(
                         f"{data_type} count slight difference: expected {expected}, got {count}"
                     )
@@ -122,14 +135,16 @@ class ExportValidator:
 
     async def validate_export(self, result: ExportResult) -> ValidationResult:
         """Validate export result comprehensively."""
-        self.logger.info(f"Validating {result.format_type.value} export")
+        # Handle both string and enum format types
+        format_str = result.format_type.value if hasattr(result.format_type, 'value') else str(result.format_type)
+        self.logger.info(f"Validating {format_str} export")
 
         validation = ValidationResult(is_valid=True)
 
         try:
             # Get format-specific validator
             if result.format_type not in self._validators:
-                validation.add_error(f"No validator available for {result.format_type.value}")
+                validation.add_error(f"No validator available for {format_str}")
                 return validation
 
             validator = self._validators[result.format_type]
@@ -217,11 +232,17 @@ class FormatValidator:
         """Validate export result."""
         validation = ValidationResult(is_valid=True)
 
-        # Basic validation
-        output_path = Path(result.output_path)
-        if not output_path.exists():
-            validation.add_error(f"Output path does not exist: {result.output_path}")
-            return validation
+        # Basic validation - check if it's a URL or file path
+        if not (result.output_path.startswith("http://") or 
+                result.output_path.startswith("https://") or
+                result.output_path.startswith("opensearch://") or
+                result.output_path.startswith("neo4j://") or
+                result.output_path.startswith("arangodb://")):
+            # It's a file path, check if it exists
+            output_path = Path(result.output_path)
+            if not output_path.exists():
+                validation.add_error(f"Output path does not exist: {result.output_path}")
+                return validation
 
         # Format-specific validation
         return await self._validate_format_specific(result, validation)
@@ -650,13 +671,18 @@ class IntegrityChecker:
                     counts = await format_validator.get_data_counts(export_result)
 
                     for data_type, count in counts.items():
+                        # Set actual count with format prefix
                         result.set_actual_count(
                             f"{export_result.format_type.value}_{data_type}", count
                         )
 
-                        # Check against expected
+                        # Also check against expected counts if they exist
                         if data_type in original_data_stats:
                             expected = original_data_stats[data_type]
+                            # Temporarily set this data type to trigger warning/error logic
+                            result.set_expected_count(data_type, expected)
+                            result.set_actual_count(data_type, count)
+                            
                             if count != expected:
                                 result.format_consistency[export_result.format_type.value] = False
                             else:

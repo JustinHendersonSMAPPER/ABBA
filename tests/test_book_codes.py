@@ -27,18 +27,19 @@ class TestBookCode:
         assert BookCode.JN3.value == "3JN"
 
     def test_book_code_count(self):
-        """Test that we have all 66 books."""
+        """Test that we have all books including deuterocanonical."""
         # Count unique values (some enum names differ from values)
         unique_codes = set(code.value for code in BookCode)
-        assert len(unique_codes) == 66
+        # 66 Protestant + 10 Catholic + 6 Orthodox + 6 Ethiopian = 88 total
+        assert len(unique_codes) == 88
 
 
 class TestBookInfo:
     """Test BOOK_INFO dictionary."""
 
     def test_all_books_present(self):
-        """Test that all 66 books are in BOOK_INFO."""
-        assert len(BOOK_INFO) == 66
+        """Test that all books including deuterocanonical are in BOOK_INFO."""
+        assert len(BOOK_INFO) == 88
 
     def test_book_info_structure(self):
         """Test that each book has required fields."""
@@ -54,7 +55,9 @@ class TestBookInfo:
         """Test correct number of OT and NT books."""
         ot_books = [b for b, info in BOOK_INFO.items() if info["testament"] == Testament.OLD]
         nt_books = [b for b, info in BOOK_INFO.items() if info["testament"] == Testament.NEW]
-        assert len(ot_books) == 39
+        # All deuterocanonical books are OT books
+        # Protestant: 39 OT + Deuterocanonical: 22 OT = 61 OT total
+        assert len(ot_books) == 61
         assert len(nt_books) == 27
 
 
@@ -105,8 +108,16 @@ class TestNormalizeBookName:
     def test_invalid_names(self):
         """Test that invalid names return None."""
         assert normalize_book_name("Invalid") is None
-        assert normalize_book_name("4 Maccabees") is None
+        assert normalize_book_name("5 Maccabees") is None  # Doesn't exist in any canon
         assert normalize_book_name("") is None
+        
+    def test_deuterocanonical_names(self):
+        """Test that deuterocanonical book names are recognized."""
+        assert normalize_book_name("4 Maccabees") == "4MA"
+        assert normalize_book_name("Tobit") == "TOB"
+        assert normalize_book_name("Wisdom") == "WIS"
+        assert normalize_book_name("Sirach") == "SIR"
+        assert normalize_book_name("1 Enoch") == "ENO"
 
 
 class TestGetBookInfo:
@@ -159,9 +170,10 @@ class TestGetBooksByTestament:
     def test_old_testament(self):
         """Test getting OT books."""
         ot_books = get_books_by_testament(Testament.OLD)
-        assert len(ot_books) == 39
+        assert len(ot_books) == 61  # 39 Protestant + 22 Deuterocanonical
         assert "GEN" in ot_books
         assert "MAL" in ot_books
+        assert "TOB" in ot_books  # Deuterocanonical
         assert "MAT" not in ot_books
 
     def test_new_testament(self):

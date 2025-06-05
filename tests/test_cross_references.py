@@ -194,8 +194,9 @@ class TestCrossReferenceParser(unittest.TestCase):
 
         for ref_string, expected_id in test_cases:
             with self.subTest(ref_string=ref_string):
-                parsed_id = self.parser.parse_reference_string(ref_string)
-                self.assertEqual(parsed_id, expected_id)
+                parsed_ids = self.parser.parse_reference_string(ref_string)
+                self.assertEqual(len(parsed_ids), 1)
+                self.assertEqual(parsed_ids[0], expected_id)
 
     def test_reference_range_parsing(self):
         """Test parsing of verse ranges."""

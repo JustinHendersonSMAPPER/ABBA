@@ -66,6 +66,8 @@ class ReferenceTypeClassifier:
             "light": ["light", "darkness", "lamp", "shine", "illuminate"],
             "water": ["water", "river", "fountain", "well", "spring", "stream"],
             "bread": ["bread", "food", "eat", "feast", "hunger", "feed"],
+            "love": ["love", "loved", "loving", "beloved", "charity"],
+            "neighbor": ["neighbor", "neighbour", "fellow", "brother", "sister"],
         }
 
     def _build_stop_words(self) -> Set[str]:
@@ -109,7 +111,34 @@ class ReferenceTypeClassifier:
             "my",
             "you",
             "your",
+            "do",
+            "unto",
+            "would",
         }
+    
+    def classify(
+        self,
+        source_text: str,
+        target_text: str,
+        source_verse: VerseID,
+        target_verse: VerseID
+    ) -> ReferenceType:
+        """
+        Simplified classify method for compatibility.
+        
+        Args:
+            source_text: Text of the source verse
+            target_text: Text of the target verse
+            source_verse: VerseID of source
+            target_verse: VerseID of target
+            
+        Returns:
+            ReferenceType classification
+        """
+        ref_type, _ = self.classify_reference(
+            source_text, target_text, source_verse, target_verse
+        )
+        return ref_type
 
     def classify_reference(
         self,
@@ -168,7 +197,7 @@ class ReferenceTypeClassifier:
 
         # Check for thematic parallels
         thematic_strength = self._calculate_thematic_similarity(source_text, target_text)
-        if thematic_strength > 0.6:
+        if thematic_strength > 0.4:
             return ReferenceType.THEMATIC_PARALLEL, ReferenceRelationship.PARALLELS
 
         # Check for structural parallels
@@ -209,8 +238,8 @@ class ReferenceTypeClassifier:
         text = text.lower()
 
         # Remove punctuation and extra whitespace
-        text = re.sub(r"[^\w\\s]", " ", text)
-        text = re.sub(r"\\s+", " ", text)
+        text = re.sub(r"[^\w\s]", " ", text)
+        text = re.sub(r"\s+", " ", text)
 
         return text.strip()
 

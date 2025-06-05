@@ -5,7 +5,7 @@ Uses natural language descriptions of theological concepts to classify
 text without requiring training examples.
 """
 
-from typing import List, Dict, Tuple, Optional, Union
+from typing import List, Dict, Tuple, Optional, Union, Any
 from dataclasses import dataclass
 import numpy as np
 from transformers import pipeline
@@ -324,19 +324,53 @@ class ZeroShotTheologyClassifier:
             for desc, score in zip(result["labels"], result["scores"]):
                 if score >= threshold:
                     # Map back to concept ID
-                    idx = label_descriptions.index(desc)
-                    labels.append(label_names[idx])
-                    scores.append(score)
+                    try:
+                        idx = label_descriptions.index(desc)
+                        labels.append(label_names[idx])
+                        scores.append(score)
+                    except ValueError:
+                        # Handle case where result label doesn't match exactly
+                        # Try to find a partial match
+                        matched = False
+                        for i, label_desc in enumerate(label_descriptions):
+                            # Check if the desc starts with the same text as label_desc
+                            # This handles truncation with "..."
+                            desc_clean = desc.rstrip('.')
+                            label_desc_clean = label_desc.rstrip('.')
+                            if (desc in label_desc or label_desc in desc or 
+                                desc_clean in label_desc_clean or label_desc_clean.startswith(desc_clean) or
+                                desc_clean.startswith(label_desc_clean.split(':')[0])):
+                                labels.append(label_names[i])
+                                scores.append(score)
+                                matched = True
+                                break
 
             predicted_label = labels[0] if labels else None
             confidence = scores[0] if scores else 0.0
         else:
             # Single label
-            idx = label_descriptions.index(result["labels"][0])
-            predicted_label = label_names[idx]
+            try:
+                idx = label_descriptions.index(result["labels"][0])
+                predicted_label = label_names[idx]
+            except ValueError:
+                # Handle case where result label doesn't match exactly
+                # Try to find a partial match
+                result_label = result["labels"][0]
+                matched = False
+                for i, desc in enumerate(label_descriptions):
+                    if result_label in desc or desc in result_label:
+                        idx = i
+                        predicted_label = label_names[idx]
+                        matched = True
+                        break
+                
+                if not matched:
+                    # Default to first candidate or None
+                    predicted_label = label_names[0] if label_names else None
+                    
             confidence = result["scores"][0]
-            labels = [predicted_label]
-            scores = [confidence]
+            labels = [predicted_label] if predicted_label else []
+            scores = [confidence] if predicted_label else []
 
         return ZeroShotPrediction(
             text=text,

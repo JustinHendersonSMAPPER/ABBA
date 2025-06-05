@@ -63,7 +63,20 @@ class CanonManager:
         canon_defs = {}
 
         # Protestant Canon (66 books)
-        protestant_books = [book.value for book in BookCode if hasattr(BookCode, book.name)]
+        # Define the standard Protestant canon books explicitly
+        protestant_books = [
+            # Old Testament (39 books)
+            "GEN", "EXO", "LEV", "NUM", "DEU", "JOS", "JDG", "RUT",
+            "1SA", "2SA", "1KI", "2KI", "1CH", "2CH", "EZR", "NEH",
+            "EST", "JOB", "PSA", "PRO", "ECC", "SNG", "ISA", "JER",
+            "LAM", "EZK", "DAN", "HOS", "JOL", "AMO", "OBA", "JON",
+            "MIC", "NAM", "HAB", "ZEP", "HAG", "ZEC", "MAL",
+            # New Testament (27 books)
+            "MAT", "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO",
+            "GAL", "EPH", "PHP", "COL", "1TH", "2TH", "1TI", "2TI",
+            "TIT", "PHM", "HEB", "JAS", "1PE", "2PE", "1JN", "2JN",
+            "3JN", "JUD", "REV"
+        ]
         canon_defs[Canon.PROTESTANT] = CanonInfo(
             canon=Canon.PROTESTANT,
             name="Protestant Canon",
@@ -419,22 +432,19 @@ class CanonManager:
         ot_books = []
         nt_books = []
 
+        # Define NT books explicitly
+        nt_book_codes = [
+            "MAT", "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO",
+            "GAL", "EPH", "PHP", "COL", "1TH", "2TH", "1TI", "2TI",
+            "TIT", "PHM", "HEB", "JAS", "1PE", "2PE", "1JN", "2JN",
+            "3JN", "JUD", "REV"
+        ]
+        
         for book_code in books:
-            try:
-                book_enum = BookCode(book_code)
-                # Simple classification - books after MAL are NT
-                if any(bc.value == book_code for bc in BookCode):
-                    # Get the order position to determine OT vs NT
-                    book_names = [bc.value for bc in BookCode]
-                    if book_code in book_names:
-                        idx = book_names.index(book_code)
-                        # First 39 books are typically OT in Protestant ordering
-                        if idx < 39:
-                            ot_books.append(book_code)
-                        else:
-                            nt_books.append(book_code)
-            except ValueError:
-                # Deuterocanonical or other books - treat as OT
+            if book_code in nt_book_codes:
+                nt_books.append(book_code)
+            else:
+                # Everything else is OT (including deuterocanonical)
                 ot_books.append(book_code)
 
         stats = {
@@ -502,22 +512,19 @@ class CanonManager:
         ot_books = []
         nt_books = []
 
+        # Define NT books explicitly
+        nt_book_codes = [
+            "MAT", "MRK", "LUK", "JHN", "ACT", "ROM", "1CO", "2CO",
+            "GAL", "EPH", "PHP", "COL", "1TH", "2TH", "1TI", "2TI",
+            "TIT", "PHM", "HEB", "JAS", "1PE", "2PE", "1JN", "2JN",
+            "3JN", "JUD", "REV"
+        ]
+        
         for book_code in books:
-            try:
-                # Get the order position to determine OT vs NT
-                book_names = [bc.value for bc in BookCode]
-                if book_code in book_names:
-                    idx = book_names.index(book_code)
-                    # First 39 books are typically OT in Protestant ordering
-                    if idx < 39:
-                        ot_books.append(book_code)
-                    else:
-                        nt_books.append(book_code)
-                else:
-                    # Deuterocanonical or other books - treat as OT
-                    ot_books.append(book_code)
-            except (ValueError, IndexError):
-                # Default to OT for unknown books
+            if book_code in nt_book_codes:
+                nt_books.append(book_code)
+            else:
+                # Everything else is OT (including deuterocanonical)
                 ot_books.append(book_code)
 
         return ot_books if testament == "ot" else nt_books

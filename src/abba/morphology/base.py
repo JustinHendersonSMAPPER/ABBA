@@ -10,6 +10,14 @@ from enum import Enum
 from typing import Dict, Optional, Any
 
 
+class Language(Enum):
+    """Biblical language."""
+    
+    HEBREW = "hebrew"
+    GREEK = "greek"
+    ARAMAIC = "aramaic"
+
+
 class Gender(Enum):
     """Grammatical gender."""
 

@@ -49,6 +49,38 @@ class PipelineConfig:
     pipeline_name: Optional[str] = None
     description: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+    
+    def validate(self) -> List[str]:
+        """Validate pipeline configuration."""
+        errors = []
+        
+        if not self.output_base_path:
+            errors.append("Output base path is required")
+            
+        if not self.formats:
+            errors.append("At least one export format must be specified")
+            
+        if self.max_parallel_exports < 1:
+            errors.append("Max parallel exports must be at least 1")
+            
+        return errors
+    
+    def get_output_path(self, format_type: ExportFormat) -> str:
+        """Get output path for a specific format."""
+        base_path = Path(self.output_base_path)
+        
+        # Create format-specific subdirectory
+        format_path = base_path / format_type.value
+        
+        # Add appropriate extension based on format
+        if format_type == ExportFormat.SQLITE:
+            return str(format_path / "abba.db")
+        elif format_type == ExportFormat.STATIC_JSON:
+            return str(format_path)
+        elif format_type in [ExportFormat.OPENSEARCH, ExportFormat.NEO4J, ExportFormat.ARANGODB]:
+            return str(format_path)  # These are server-based, path is for logs/metadata
+        else:
+            return str(format_path)
 
     @classmethod
     def from_file(cls, config_path: str) -> "PipelineConfig":
@@ -144,6 +176,11 @@ class PipelineResult:
             for fmt, result in self.export_results.items()
             if result.status == ExportStatus.FAILED
         ]
+
+    @property
+    def is_successful(self) -> bool:
+        """Check if pipeline execution was successful."""
+        return self.status == ExportStatus.COMPLETED and len(self.failed_exports) == 0
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""

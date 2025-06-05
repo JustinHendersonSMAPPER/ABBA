@@ -257,13 +257,23 @@ class ConfigManager:
         self.logger.info(f"Creating pipeline config from template: {template_name}")
 
         # Start with base settings
+        # Start with base pipeline config fields
         config_data = {
             "output_base_path": output_path,
             "formats": template.formats,
             "pipeline_name": f"ABBA Export - {template.name}",
             "description": template.description,
-            **template.base_settings,
         }
+        
+        # Only add known PipelineConfig fields from base_settings
+        known_pipeline_fields = {
+            "max_parallel_exports", "validate_all_outputs", "fail_fast",
+            "data_source_config"
+        }
+        
+        for field, value in template.base_settings.items():
+            if field in known_pipeline_fields:
+                config_data[field] = value
 
         # Add format-specific configurations
         format_configs = {}
@@ -280,9 +290,18 @@ class ConfigManager:
         # Apply user overrides
         if overrides:
             config_data = self._merge_configs(config_data, overrides)
+        
+        # Filter config_data to only include valid PipelineConfig fields
+        pipeline_fields = {
+            "output_base_path", "formats", "max_parallel_exports", 
+            "validate_all_outputs", "fail_fast", "format_configs",
+            "data_source_config", "pipeline_name", "description", "tags"
+        }
+        
+        filtered_config = {k: v for k, v in config_data.items() if k in pipeline_fields}
 
         # Create pipeline config
-        return PipelineConfig(**config_data)
+        return PipelineConfig(**filtered_config)
 
     def _apply_env_overrides(
         self, config: Dict[str, Any], format_type: ExportFormat
@@ -416,16 +435,23 @@ class ConfigManager:
 
     def create_format_config(self, format_type: ExportFormat, config_dict: Dict[str, Any]) -> Any:
         """Create format-specific configuration object."""
+        # Ensure required fields are present
+        config_with_type = {
+            "format_type": format_type,
+            "output_path": config_dict.get("output_path", "./output"),
+            **config_dict
+        }
+        
         if format_type == ExportFormat.SQLITE:
-            return SQLiteConfig(**config_dict)
+            return SQLiteConfig(**config_with_type)
         elif format_type == ExportFormat.STATIC_JSON:
-            return JSONConfig(**config_dict)
+            return JSONConfig(**config_with_type)
         elif format_type == ExportFormat.OPENSEARCH:
-            return OpenSearchConfig(**config_dict)
+            return OpenSearchConfig(**config_with_type)
         elif format_type == ExportFormat.NEO4J:
-            return Neo4jConfig(**config_dict)
+            return Neo4jConfig(**config_with_type)
         elif format_type == ExportFormat.ARANGODB:
-            return ArangoConfig(**config_dict)
+            return ArangoConfig(**config_with_type)
         else:
             raise ValueError(f"Unsupported format type: {format_type}")
 

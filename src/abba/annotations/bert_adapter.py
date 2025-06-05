@@ -90,6 +90,25 @@ class BiblicalBERTAdapter:
 
         processed = re.sub(r"(\d+):(\d+)", r"verse \1 \2", processed)
 
+        # Replace archaic words with modern equivalents
+        archaic_replacements = {
+            "thou": "you",
+            "thee": "you",
+            "thy": "your",
+            "thine": "your",
+            "ye": "you",
+            "hath": "has",
+            "doth": "does",
+            "shalt": "shall",
+            "art": "are",
+            "wilt": "will",
+            "saith": "says",
+            "sayeth": "says",
+        }
+        for archaic, modern in archaic_replacements.items():
+            # Use word boundaries to avoid partial replacements
+            processed = re.sub(r'\b' + archaic + r'\b', modern, processed)
+
         # Expand contractions
         contractions = {
             "n't": " not",

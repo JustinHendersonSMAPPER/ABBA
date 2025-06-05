@@ -475,3 +475,51 @@ class BidiAlgorithm:
                         result[i] = mirrors[result[i]]
 
         return "".join(result)
+
+
+@dataclass
+class BidiContext:
+    """Context for bidirectional text processing."""
+    
+    base_direction: TextDirection
+    embedding_level: int = 0
+    override_status: Optional[TextDirection] = None
+    isolate_count: int = 0
+    
+    def push_embedding(self, direction: TextDirection):
+        """Push a new embedding level."""
+        if direction == TextDirection.RTL:
+            self.embedding_level = self.embedding_level + 1 if self.embedding_level % 2 == 0 else self.embedding_level + 2
+        else:
+            self.embedding_level = self.embedding_level + 2 if self.embedding_level % 2 == 1 else self.embedding_level + 1
+            
+    def pop_embedding(self):
+        """Pop embedding level."""
+        if self.embedding_level > 0:
+            self.embedding_level -= 1
+            
+
+@dataclass
+class DirectionalSpan:
+    """A span of text with directional properties."""
+    
+    text: str
+    direction: TextDirection
+    start_index: int
+    end_index: int
+    embedding_level: int = 0
+    is_isolated: bool = False
+    
+    @property
+    def length(self) -> int:
+        """Get span length."""
+        return self.end_index - self.start_index + 1
+        
+    def to_html(self) -> str:
+        """Convert to HTML with dir attribute."""
+        if self.direction == TextDirection.RTL:
+            return f'<span dir="rtl">{self.text}</span>'
+        elif self.direction == TextDirection.LTR:
+            return f'<span dir="ltr">{self.text}</span>'
+        else:
+            return self.text

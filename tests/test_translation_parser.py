@@ -283,9 +283,14 @@ class TestTranslationParser:
             parser = TranslationParser()
             translation = parser.parse_file(temp_path)
 
-            # Should only include Genesis (known book)
-            assert len(translation.verses) == 1
-            assert translation.verses[0].verse_id.book == "GEN"
+            # Should include Genesis and Tobit (both are known books)
+            # UnknownBook should be skipped
+            assert len(translation.verses) == 2
+            
+            # Check that we have Genesis and Tobit
+            book_codes = {v.verse_id.book for v in translation.verses}
+            assert "GEN" in book_codes
+            assert "TOB" in book_codes  # Tobit is a valid deuterocanonical book
 
         finally:
             Path(temp_path).unlink()
@@ -423,7 +428,7 @@ class TestTranslationParser:
         assert mapping["Genesis"] == "GEN"
         assert mapping["1 Samuel"] == "1SA"
         assert mapping["Matthew"] == "MAT"
-        assert mapping["Tobit"] is None  # Not in Protestant canon
+        assert mapping["Tobit"] == "TOB"  # Valid deuterocanonical book
         assert mapping["Unknown"] is None
 
     def test_extract_verse_variations(self) -> None:

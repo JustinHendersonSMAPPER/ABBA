@@ -155,6 +155,7 @@ class TheologicalTaxonomy:
             description="Being freed from sin through Christ's sacrifice",
             importance_score=0.95,
             key_verses=[parse_verse_id("EPH.1.7"), parse_verse_id("COL.1.14")],
+            synonyms=["redeemed", "redeem", "redeemer"],
         )
 
         topics["original_sin"] = Topic(

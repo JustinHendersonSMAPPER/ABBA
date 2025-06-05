@@ -212,12 +212,25 @@ class HebrewNormalizer(UnicodeNormalizer):
             0x05B7,  # Patah
             0x05B8,  # Qamats
             0x05B9,  # Holam
+            0x05BA,  # Holam Haser for Vav
             0x05BB,  # Qubuts
             0x05C7,  # Qamats Qatan
         }
 
         # Hebrew accents (teamim)
         self.HEBREW_ACCENTS = set(range(0x0591, 0x05AF))
+
+        # Other Hebrew points (not vowels or accents)
+        self.HEBREW_OTHER_POINTS = {
+            0x05BC,  # Dagesh or Mapiq
+            0x05BD,  # Meteg
+            0x05BF,  # Rafe
+            0x05C1,  # Shin Dot
+            0x05C2,  # Sin Dot
+        }
+
+        # All Hebrew points (for complete stripping)
+        self.HEBREW_ALL_POINTS = self.HEBREW_VOWELS | self.HEBREW_ACCENTS | self.HEBREW_OTHER_POINTS
 
         # Special Hebrew characters
         self.MAQAF = "\u05BE"  # Hebrew hyphen
@@ -332,11 +345,19 @@ class HebrewNormalizer(UnicodeNormalizer):
         for char in text:
             cp = ord(char)
 
-            # Skip unwanted marks
-            if cp in self.HEBREW_VOWELS and not keep_vowels:
-                continue
-            if cp in self.HEBREW_ACCENTS and not keep_accents:
-                continue
+            # When stripping all points (default behavior)
+            if not keep_vowels and not keep_accents:
+                if cp in self.HEBREW_ALL_POINTS:
+                    continue
+            else:
+                # Skip unwanted marks based on parameters
+                if cp in self.HEBREW_VOWELS and not keep_vowels:
+                    continue
+                if cp in self.HEBREW_ACCENTS and not keep_accents:
+                    continue
+                # Always remove other points (dagesh, shin/sin dots, etc.)
+                if cp in self.HEBREW_OTHER_POINTS:
+                    continue
 
             result.append(char)
 
@@ -392,6 +413,9 @@ class GreekNormalizer(UnicodeNormalizer):
 
     def normalize_breathing_marks(self, text: str) -> str:
         """Normalize Greek breathing marks."""
+        # Check if input is NFC or NFD
+        is_nfc = text == unicodedata.normalize("NFC", text)
+        
         # Ensure breathing marks come before accents
         sequences = self.decompose_to_sequences(text)
 
@@ -413,7 +437,13 @@ class GreekNormalizer(UnicodeNormalizer):
             normalized_seq = seq.base + "".join(breathing + accents + other)
             normalized.append(normalized_seq)
 
-        return "".join(normalized)
+        result = "".join(normalized)
+        
+        # Return in same form as input
+        if is_nfc:
+            result = unicodedata.normalize("NFC", result)
+            
+        return result
 
     def normalize_greek_accents(self, text: str) -> str:
         """Normalize Greek accent marks."""
@@ -562,3 +592,201 @@ class CombiningCharacterHandler:
             fixed.append(normalized.to_string())
 
         return "".join(fixed)
+
+
+@dataclass
+class CharacterInfo:
+    """Information about a Unicode character."""
+    
+    char: str
+    name: str
+    category: str
+    codepoint: int
+    script: Optional[str] = None
+    block: Optional[str] = None
+    combining_class: int = 0
+    is_rtl: bool = False
+    
+
+class UnicodeValidator:
+    """Validator for Unicode text integrity."""
+    
+    def __init__(self):
+        """Initialize the validator."""
+        self.normalizer = UnicodeNormalizer()
+        
+    def validate_text(self, text: str) -> List[str]:
+        """Validate Unicode text for common issues.
+        
+        Args:
+            text: Text to validate
+            
+        Returns:
+            List of validation errors (empty if valid)
+        """
+        errors = []
+        
+        # Check for invalid characters
+        for i, char in enumerate(text):
+            try:
+                name = unicodedata.name(char)
+            except ValueError:
+                if ord(char) in range(0xD800, 0xE000):  # Surrogate pairs
+                    errors.append(f"Invalid surrogate at position {i}")
+                elif ord(char) > 0x10FFFF:
+                    errors.append(f"Invalid codepoint at position {i}")
+                elif unicodedata.category(char) == 'Cn':  # Unassigned
+                    errors.append(f"Unassigned character U+{ord(char):04X} at position {i}")
+        
+        # Check for mixed scripts that might be confusing
+        scripts = self.detect_scripts(text)
+        # For biblical texts, it's common to have Latin, Hebrew, and Greek together
+        # Only flag if there are more than 3 scripts or unexpected combinations
+        if len(scripts) > 3:
+            errors.append(f"Too many scripts detected: {', '.join(scripts)}")
+        elif 'Other' in scripts and len(scripts) > 2:
+            # Flag if there are unknown scripts mixed with known ones
+            errors.append(f"Mixed scripts with unknown script: {', '.join(scripts)}")
+            
+        # Check combining sequences
+        combining_handler = CombiningCharacterHandler()
+        combining_errors = combining_handler.validate_combining_sequences(text)
+        errors.extend(combining_errors)
+        
+        return errors
+        
+    def detect_scripts(self, text: str) -> Set[str]:
+        """Detect scripts used in text."""
+        scripts = set()
+        
+        for char in text:
+            # Skip common punctuation and spaces
+            if unicodedata.category(char)[0] in ['P', 'Z', 'C']:
+                continue
+                
+            # Detect script
+            cp = ord(char)
+            if 0x0590 <= cp <= 0x05FF:
+                scripts.add('Hebrew')
+            elif 0x0600 <= cp <= 0x06FF:
+                scripts.add('Arabic')
+            elif 0x0370 <= cp <= 0x03FF or 0x1F00 <= cp <= 0x1FFF:
+                scripts.add('Greek')
+            elif cp < 0x0080:
+                scripts.add('Latin')
+            else:
+                # Could use unicodedata for more scripts
+                scripts.add('Other')
+                
+        return scripts
+        
+    def has_valid_normalization(self, text: str) -> bool:
+        """Check if text is in valid normalized form."""
+        nfc = unicodedata.normalize('NFC', text)
+        nfd = unicodedata.normalize('NFD', text)
+        
+        # Text should be stable under normalization
+        return text == nfc or text == nfd
+        
+    def is_normalization_safe(self, text: str) -> bool:
+        """Check if normalization won't change text meaning."""
+        # For biblical texts, normalization is generally safe
+        # This is a simplified check
+        return self.has_valid_normalization(text)
+        
+
+def get_unicode_info(char: str) -> CharacterInfo:
+    """Get detailed Unicode information for a character.
+    
+    Args:
+        char: Single character
+        
+    Returns:
+        CharacterInfo object
+    """
+    if len(char) != 1:
+        raise ValueError("Expected single character")
+        
+    cp = ord(char)
+    
+    # Get character name
+    try:
+        name = unicodedata.name(char)
+    except ValueError:
+        name = f"U+{cp:04X}"
+        
+    # Get category
+    category = unicodedata.category(char)
+    
+    # Detect script
+    script = None
+    if 0x0590 <= cp <= 0x05FF:
+        script = 'Hebrew'
+    elif 0x0600 <= cp <= 0x06FF:
+        script = 'Arabic'
+    elif 0x0370 <= cp <= 0x03FF or 0x1F00 <= cp <= 0x1FFF:
+        script = 'Greek'
+    elif cp < 0x0080:
+        script = 'Latin'
+        
+    # Detect block (simplified)
+    block = None
+    if 0x0000 <= cp <= 0x007F:
+        block = 'Basic Latin'
+    elif 0x0080 <= cp <= 0x00FF:
+        block = 'Latin-1 Supplement'
+    elif 0x0590 <= cp <= 0x05FF:
+        block = 'Hebrew'
+    elif 0x0370 <= cp <= 0x03FF:
+        block = 'Greek and Coptic'
+        
+    # Get combining class
+    combining_class = unicodedata.combining(char)
+    
+    # Check RTL
+    is_rtl = unicodedata.bidirectional(char) in ['R', 'AL']
+    
+    return CharacterInfo(
+        char=char,
+        name=name,
+        category=category,
+        codepoint=cp,
+        script=script,
+        block=block,
+        combining_class=combining_class,
+        is_rtl=is_rtl
+    )
+
+
+def is_combining_mark(char: str) -> bool:
+    """Check if character is a combining mark.
+    
+    Args:
+        char: Character to check
+        
+    Returns:
+        True if combining mark
+    """
+    return unicodedata.combining(char) > 0
+
+
+def strip_accents(text: str) -> str:
+    """Strip accents from text.
+    
+    Args:
+        text: Text with possible accents
+        
+    Returns:
+        Text with accents removed
+    """
+    # Decompose to NFD
+    nfd = unicodedata.normalize('NFD', text)
+    
+    # Filter out combining characters
+    result = []
+    for char in nfd:
+        if not is_combining_mark(char):
+            result.append(char)
+            
+    # Recompose
+    return unicodedata.normalize('NFC', ''.join(result))

@@ -178,7 +178,6 @@ class SetFitClassifier:
 
         # Use LogisticRegression for few-shot scenarios
         self.classifier = LogisticRegression(
-            multi_class="multinomial",
             max_iter=1000,
             class_weight="balanced",  # Handle imbalanced classes
             random_state=42,
@@ -192,7 +191,6 @@ class SetFitClassifier:
             for C in [0.001, 0.01, 0.1, 1.0, 10.0]:
                 clf = LogisticRegression(
                     C=C,
-                    multi_class="multinomial",
                     max_iter=1000,
                     class_weight="balanced",
                     random_state=42,

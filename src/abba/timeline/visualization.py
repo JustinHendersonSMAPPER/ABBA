@@ -20,6 +20,7 @@ from .models import (
     EventType,
     CertaintyLevel,
     RelationType,
+    datetime_to_bce_year,
 )
 from .graph import TemporalGraph
 from .filter import UserPreferences
@@ -366,10 +367,11 @@ class TimelineVisualizer:
         for event in events:
             if event.time_point:
                 if event.time_point.exact_date:
-                    years.append(event.time_point.exact_date.year)
+                    years.append(datetime_to_bce_year(event.time_point.exact_date))
                 elif event.time_point.earliest_date and event.time_point.latest_date:
                     years.extend(
-                        [event.time_point.earliest_date.year, event.time_point.latest_date.year]
+                        [datetime_to_bce_year(event.time_point.earliest_date), 
+                         datetime_to_bce_year(event.time_point.latest_date)]
                     )
 
         if not years:
@@ -422,9 +424,9 @@ class TimelineVisualizer:
                     and event.time_point.latest_date
                 ):
                     # Show uncertainty as width
-                    early_year = event.time_point.earliest_date.year
-                    late_year = event.time_point.latest_date.year
-                    uncertainty_span = late_year - early_year
+                    early_year = datetime_to_bce_year(event.time_point.earliest_date)
+                    late_year = datetime_to_bce_year(event.time_point.latest_date)
+                    uncertainty_span = abs(late_year - early_year)
 
                     if uncertainty_span > 0:
                         uncertainty_ratio = uncertainty_span / (scale.end_year - scale.start_year)
@@ -476,14 +478,14 @@ class TimelineVisualizer:
         """Get the primary year for an event."""
         if event.time_point:
             if event.time_point.exact_date:
-                return event.time_point.exact_date.year
+                return datetime_to_bce_year(event.time_point.exact_date)
             elif event.time_point.earliest_date and event.time_point.latest_date:
                 # Use midpoint
-                early = event.time_point.earliest_date.year
-                late = event.time_point.latest_date.year
+                early = datetime_to_bce_year(event.time_point.earliest_date)
+                late = datetime_to_bce_year(event.time_point.latest_date)
                 return (early + late) // 2
             elif event.time_point.earliest_date:
-                return event.time_point.earliest_date.year
+                return datetime_to_bce_year(event.time_point.earliest_date)
         return None
 
     def _get_event_color(self, event: Event) -> str:

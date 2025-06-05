@@ -174,6 +174,13 @@ class VariantAnalyzer:
         elif variant.variant_type == VariantType.SUBSTITUTION:
             # Analyze what changed
             impact.affects_translation = True
+            
+            # Check for theological terms
+            for term in self.theological_terms:
+                if term in base_text or term in variant.text:
+                    impact.theological_significance = True
+                    impact.impact_description = f"Substitution involves theological term: {term}"
+                    break
 
             # Simple word comparison
             base_words = base_text.split()

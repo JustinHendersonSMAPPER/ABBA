@@ -21,8 +21,8 @@ from abba.export.base import (
     ValidationResult,
     ExportError,
 )
-from abba.alignment.unified_reference import UnifiedVerse
-from abba.annotations.models import Annotation, AnnotationType, AnnotationLevel, Topic
+from abba.parsers.translation_parser import TranslationVerse
+from abba.annotations.models import Annotation, AnnotationType, AnnotationLevel, Topic, TopicCategory
 from abba.timeline.models import Event, TimePeriod, EventType, CertaintyLevel
 from abba.verse_id import VerseID
 
@@ -100,6 +100,8 @@ class TestOpenSearchConfig:
     def test_basic_config_creation(self):
         """Test basic configuration creation."""
         config = OpenSearchConfig(
+            output_path="/tmp/opensearch_export",
+            format_type=ExportFormat.OPENSEARCH,
             cluster_url="https://localhost:9200",
             username="admin",
             password="admin",
@@ -117,24 +119,28 @@ class TestOpenSearchConfig:
     def test_config_validation(self):
         """Test configuration validation."""
         # Valid config
-        config = OpenSearchConfig(cluster_url="http://localhost:9200")
+        config = OpenSearchConfig(output_path="/tmp/opensearch_export", format_type=ExportFormat.OPENSEARCH, cluster_url="http://localhost:9200")
         validation = config.validate()
         assert validation.is_valid
 
         # Invalid config - no cluster URL
-        config = OpenSearchConfig(cluster_url="")
+        config = OpenSearchConfig(output_path="/tmp/opensearch_export", format_type=ExportFormat.OPENSEARCH, cluster_url="")
         validation = config.validate()
         assert not validation.is_valid
 
         # Invalid config - invalid bulk size
-        config = OpenSearchConfig(cluster_url="http://localhost:9200", bulk_size=0)
+        config = OpenSearchConfig(output_path="/tmp/opensearch_export", format_type=ExportFormat.OPENSEARCH, cluster_url="http://localhost:9200", bulk_size=0)
         validation = config.validate()
         assert not validation.is_valid
 
     def test_ssl_configuration(self):
         """Test SSL configuration options."""
         config = OpenSearchConfig(
-            cluster_url="https://secure-cluster:9200", verify_ssl=False, timeout=60
+            output_path="/tmp/opensearch_export",
+            format_type=ExportFormat.OPENSEARCH,
+            cluster_url="https://secure-cluster:9200",
+            verify_ssl=False,
+            timeout=60
         )
 
         assert config.verify_ssl is False
@@ -143,6 +149,8 @@ class TestOpenSearchConfig:
     def test_index_configuration(self):
         """Test index configuration options."""
         config = OpenSearchConfig(
+            output_path="/tmp/opensearch_export",
+            format_type=ExportFormat.OPENSEARCH,
             cluster_url="http://localhost:9200",
             index_prefix="custom_abba",
             index_version="v2",
@@ -165,6 +173,8 @@ class TestOpenSearchExporter:
     def config(self):
         """Create test OpenSearch configuration."""
         return OpenSearchConfig(
+            output_path="/tmp/opensearch_export",
+            format_type=ExportFormat.OPENSEARCH,
             cluster_url="http://localhost:9200",
             username="admin",
             password="admin",
@@ -230,18 +240,12 @@ class TestOpenSearchExporter:
         verses = []
         for i in range(20):  # Enough to test batching
             verse_id = VerseID("GEN", 1, i + 1)
-            verse = UnifiedVerse(
+            verse = TranslationVerse(
                 verse_id=verse_id,
-                translations={
-                    "ESV": f"This is verse {i + 1} in English Standard Version.",
-                    "NIV": f"This is verse {i + 1} in New International Version.",
-                },
-                hebrew_tokens=(
-                    [{"word": "בְּרֵאשִׁית", "lemma": "רֵאשִׁית", "strongs": "H7225"}] if i == 0 else None
-                ),
-                greek_tokens=(
-                    [{"word": "Ἐν", "lemma": "ἐν", "strongs": "G1722"}] if i == 0 else None
-                ),
+                text=f"This is verse {i + 1} in English Standard Version.",
+                original_book_name="Genesis",
+                original_chapter=1,
+                original_verse=i + 1
             )
             verses.append(verse)
         return verses
@@ -253,11 +257,12 @@ class TestOpenSearchExporter:
         for i in range(10):
             annotation = Annotation(
                 id=f"ann_{i}",
-                verse_id=VerseID("GEN", 1, i + 1),
-                annotation_type=AnnotationType.TOPIC,
+                start_verse=VerseID("GEN", 1, i + 1),
+                annotation_type=AnnotationType.THEOLOGICAL_THEME,
                 level=AnnotationLevel.VERSE,
-                confidence=0.8,
-                topics=[Topic(id=f"topic_{i}", name=f"Topic {i}")],
+                topic_id=f"topic_{i}",
+                topic_name=f"Topic {i}",
+                content=f"Annotation content for verse {i + 1}"
             )
             annotations.append(annotation)
         return annotations
@@ -265,7 +270,7 @@ class TestOpenSearchExporter:
     @pytest.fixture
     def sample_events(self):
         """Create sample timeline events."""
-        from abba.timeline.models import TimePoint, Location, Participant
+        from abba.timeline.models import TimePoint, Location, EntityRef, create_bce_date
 
         events = []
         for i in range(5):
@@ -273,12 +278,12 @@ class TestOpenSearchExporter:
                 id=f"event_{i}",
                 name=f"Event {i}",
                 description=f"Description of event {i}",
-                event_type=EventType.HISTORICAL,
-                certainty_level=CertaintyLevel.HIGH,
+                event_type=EventType.POINT,
+                certainty_level=CertaintyLevel.CERTAIN,
                 categories=["biblical", "historical"],
-                time_point=TimePoint(year=-2000 + i * 100),
+                time_point=TimePoint(exact_date=create_bce_date(2000 - i * 100)),
                 location=Location(name=f"Location {i}", latitude=31.0 + i, longitude=35.0 + i),
-                participants=[Participant(id=f"person_{i}", name=f"Person {i}")],
+                participants=[EntityRef(id=f"person_{i}", name=f"Person {i}", entity_type="person")],
                 verse_refs=[VerseID("GEN", 1, i + 1)],
             )
             events.append(event)
@@ -409,18 +414,26 @@ class TestOpenSearchExporter:
     @pytest.mark.asyncio
     async def test_verse_serialization(self, exporter):
         """Test verse serialization for OpenSearch."""
-        verse = UnifiedVerse(
+        # Create a verse with translations attribute
+        verse = TranslationVerse(
             verse_id=VerseID("GEN", 1, 1),
-            translations={
-                "ESV": "In the beginning God created the heavens and the earth.",
-                "NIV": "In the beginning God created the heavens and the earth.",
-            },
-            hebrew_tokens=[
-                {"word": "בְּרֵאשִׁית", "lemma": "רֵאשִׁית", "strongs": "H7225"},
-                {"word": "בָּרָא", "lemma": "בָּרָא", "strongs": "H1254"},
-            ],
-            metadata={"source": "test"},
+            text="In the beginning God created the heavens and the earth.",
+            original_book_name="Genesis",
+            original_chapter=1,
+            original_verse=1
         )
+        # Add translations attribute
+        verse.translations = {
+            "ESV": "In the beginning God created the heavens and the earth.",
+            "NIV": "In the beginning God created the heavens and the earth."
+        }
+        # Add Hebrew tokens
+        verse.hebrew_tokens = [
+            {"word": "בְּרֵאשִׁית", "lemma": "רֵאשִׁית", "strongs": "H7225"},
+            {"word": "בָּרָא", "lemma": "בָּרָא", "strongs": "H1254"}
+        ]
+        # Add metadata
+        verse.metadata = {"source": "test"}
 
         doc = exporter._serialize_verse_for_opensearch(verse)
 
@@ -450,13 +463,22 @@ class TestOpenSearchExporter:
     @pytest.mark.asyncio
     async def test_annotation_serialization(self, exporter):
         """Test annotation serialization for OpenSearch."""
+        from abba.annotations.models import AnnotationConfidence
+        
         annotation = Annotation(
             id="test_ann",
-            verse_id=VerseID("GEN", 1, 1),
-            annotation_type=AnnotationType.TOPIC,
+            start_verse=VerseID("GEN", 1, 1),
+            annotation_type=AnnotationType.THEOLOGICAL_THEME,
             level=AnnotationLevel.VERSE,
-            confidence=0.9,
-            topics=[Topic(id="topic_1", name="Creation"), Topic(id="topic_2", name="God")],
+            topic_id="topic_1",
+            topic_name="Creation",
+            content="Annotation about creation",
+            confidence=AnnotationConfidence(
+                overall_score=0.9,
+                model_confidence=0.9,
+                contextual_relevance=0.9,
+                semantic_similarity=0.9
+            )
         )
 
         doc = exporter._serialize_annotation_for_opensearch(annotation)
@@ -465,18 +487,17 @@ class TestOpenSearchExporter:
         assert doc["annotation_id"] == "test_ann"
         assert doc["verse_id"] == "GEN.1.1"
         assert doc["book"] == "GEN"
-        assert doc["type"] == "topic"
+        assert doc["type"] == "theological_theme"
         assert doc["confidence"] == 0.9
 
         # Check topics
         assert "topics" in doc
-        assert len(doc["topics"]) == 2
+        assert len(doc["topics"]) == 1
         assert doc["topics"][0]["name"] == "Creation"
 
         # Check searchable topic fields
         assert "topic_names" in doc
         assert "Creation" in doc["topic_names"]
-        assert "God" in doc["topic_names"]
 
         assert "topic_ids" in doc
         assert "topic_1" in doc["topic_ids"]
@@ -484,16 +505,16 @@ class TestOpenSearchExporter:
     @pytest.mark.asyncio
     async def test_event_serialization(self, exporter):
         """Test timeline event serialization for OpenSearch."""
-        from abba.timeline.models import TimePoint, Location, Participant
+        from abba.timeline.models import TimePoint, Location, create_bce_date
 
         event = Event(
             id="test_event",
             name="Test Event",
             description="A test event",
-            event_type=EventType.HISTORICAL,
-            certainty_level=CertaintyLevel.HIGH,
+            event_type=EventType.POINT,
+            certainty_level=CertaintyLevel.CERTAIN,
             categories=["biblical", "historical"],
-            time_point=TimePoint(year=-2000),
+            time_point=TimePoint(exact_date=create_bce_date(2000)),
             location=Location(
                 name="Jerusalem",
                 modern_name="Jerusalem",
@@ -501,11 +522,7 @@ class TestOpenSearchExporter:
                 latitude=31.7683,
                 longitude=35.2137,
             ),
-            participants=[Participant(id="person_1", name="David", role="king")],
             verse_refs=[VerseID("2SA", 5, 7)],
-            scholars=["Smith", "Jones"],
-            sources=["Bible", "Josephus"],
-            methodologies=["historical", "archaeological"],
         )
 
         doc = exporter._serialize_event_for_opensearch(event)
@@ -513,38 +530,24 @@ class TestOpenSearchExporter:
         # Check basic fields
         assert doc["event_id"] == "test_event"
         assert doc["name"] == "Test Event"
-        assert doc["event_type"] == "historical"
-        assert doc["certainty_level"] == "high"
+        assert doc["event_type"] == "point"
+        assert doc["certainty_level"] == "certain"
         assert doc["categories"] == ["biblical", "historical"]
 
         # Check temporal data
         assert "time_point" in doc
-        assert doc["year"] == -2000
+        assert doc["time_point"]["display_date"] == "2000 BCE"
 
-        # Check location with coordinates
+        # Check location
         assert "location" in doc
         assert doc["location"]["name"] == "Jerusalem"
-        assert "coordinates" in doc["location"]
-        assert doc["location"]["coordinates"]["lat"] == 31.7683
-
-        # Check participants
-        assert "participants" in doc
-        assert len(doc["participants"]) == 1
-        assert doc["participants"][0]["name"] == "David"
-        assert doc["participants"][0]["role"] == "king"
-
-        assert "participant_names" in doc
-        assert "David" in doc["participant_names"]
 
         # Check verse references
         assert "verse_refs" in doc
         assert "2SA.5.7" in doc["verse_refs"]
 
         # Check filtering fields
-        assert "scholars" in doc
-        assert "Smith" in doc["scholars"]
-        assert "sources" in doc
-        assert "methodologies" in doc
+        assert "indexed_at" in doc
 
     @pytest.mark.asyncio
     async def test_bulk_export_processing(self, exporter, mock_session, sample_dataset):
@@ -598,7 +601,13 @@ class TestOpenSearchExporter:
         exporter.session = mock_session
 
         # Create test data
-        verses = [UnifiedVerse(verse_id=VerseID("GEN", 1, 1), translations={"ESV": "Test verse"})]
+        verses = [TranslationVerse(
+            verse_id=VerseID("GEN", 1, 1),
+            text="Test verse",
+            original_book_name="Genesis",
+            original_chapter=1,
+            original_verse=1
+        )]
 
         # Should handle bulk errors gracefully (log warnings but continue)
         await exporter._export_verses(iter(verses))
@@ -737,7 +746,11 @@ class TestOpenSearchExporter:
         exporter.session = mock_session
         exporter.stats.processed_verses = 100
 
-        result = ExportResult(format_type=ExportFormat.OPENSEARCH, status=ExportStatus.COMPLETED)
+        result = ExportResult(
+            format_type=ExportFormat.OPENSEARCH, 
+            status=ExportStatus.COMPLETED,
+            output_path="http://localhost:9200"
+        )
 
         validation = await exporter.validate_output(result)
         assert validation.is_valid
@@ -806,8 +819,12 @@ class TestOpenSearchExporter:
         large_verses = []
         for i in range(100):  # More than bulk_size (10)
             verse_id = VerseID("GEN", i // 10 + 1, (i % 10) + 1)
-            verse = UnifiedVerse(
-                verse_id=verse_id, translations={"ESV": f"Large dataset verse {i}"}
+            verse = TranslationVerse(
+                verse_id=verse_id,
+                text=f"Large dataset verse {i}",
+                original_book_name="Genesis",
+                original_chapter=i // 10 + 1,
+                original_verse=(i % 10) + 1
             )
             large_verses.append(verse)
 

@@ -4,7 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ABBA (Annotated Bible and Background Analysis) is a data format specification project for biblical study. The project aims to create an extensible, structured data format for presenting biblical texts with comprehensive annotations, cross-references, and contextual information.
+ABBA (Annotated Bible and Background Analysis) is a comprehensive framework for biblical text analysis. The project provides advanced data processing capabilities including multi-language support, morphological analysis, timeline tracking, and multiple export formats. 
+
+**Current Status**: Version 1.0 - Production Ready with ~90%+ test coverage (867+ tests passing)
+
+### Key Features
+
+- **Multi-Canon Support**: Protestant, Catholic, Orthodox, Ethiopian, Syriac, Samaritan, and Hebrew Bible canons
+- **Original Language Processing**: Advanced Hebrew and Greek morphological analysis
+- **ML-Powered Annotations**: Zero-shot, few-shot, and BERT-based classification
+- **Timeline Management**: BCE date handling with uncertainty modeling
+- **Cross-Reference System**: Citation tracking with confidence scoring
+- **Multiple Export Formats**: SQLite, JSON, OpenSearch, and Graph DB support
+- **Interlinear Display**: Token extraction and alignment for original languages
+- **Unicode Support**: RTL handling, transliteration, and font detection
 
 ## Development Commands
 
@@ -102,11 +115,24 @@ The ABBA format is designed to support:
 
 ```
 abba/
-├── src/
-│   └── abba/         # Main package code
-├── tests/            # Test files
-├── docs/             # Documentation
-└── pyproject.toml    # Poetry configuration
+├── src/abba/              # Main package code
+│   ├── alignment/         # Text alignment systems
+│   ├── annotations/       # ML-powered annotation engines
+│   ├── canon/            # Biblical canon support
+│   ├── cross_references/ # Cross-reference management
+│   ├── export/           # Export format implementations
+│   ├── interlinear/      # Interlinear display generation
+│   ├── language/         # Unicode, RTL, transliteration
+│   ├── manuscript/       # Manuscript variant support
+│   ├── morphology/       # Hebrew/Greek morphological analysis
+│   ├── parsers/          # Text parsing systems
+│   ├── timeline/         # Historical timeline support
+│   └── schemas/          # JSON schema definitions
+├── tests/                 # Comprehensive test suite (867+ tests)
+├── docs/                  # Architecture and design documentation
+├── examples/              # Sample data and usage examples
+├── scripts/               # Utility and demonstration scripts
+└── pyproject.toml         # Poetry configuration
 ```
 
 ## Key Documentation
@@ -114,6 +140,31 @@ abba/
 - **[Architecture Documentation](docs/ARCHITECTURE.md)** - Comprehensive multi-format architecture supporting SQLite, OpenSearch, Graph DB, and static files
 - **[Canonical Format Specification](docs/CANONICAL_FORMAT.md)** - Detailed specification of the source data format
 - **[Example Data](examples/canonical_sample.json)** - Sample canonical format data
+- **[Automatic Annotations](docs/AUTOMATIC_ANNOTATIONS.md)** - ML-powered annotation generation
+- **[Search Methodology](docs/SEARCH_METHODOLOGY.md)** - Cross-language search strategies
+- **[Data Integrity](docs/DATA_INTEGRITY.md)** - Validation and quality assurance
+- **[Modern Alignment Stack](docs/MODERN_ALIGNMENT_STACK.md)** - Advanced text alignment system
+
+## Running Demonstrations
+
+The project includes several demonstration scripts to showcase functionality:
+
+```bash
+# Demonstrate working features across all modules
+python scripts/demonstrate_working_features.py
+
+# Validate the complete pipeline
+python scripts/validate_pipeline.py
+
+# Test modern alignment system
+python scripts/validate_modern_alignment.py
+
+# Train alignment models
+python scripts/train_modern_alignment.py
+
+# Check test status
+python scripts/test_status_check.py
+```
 
 ## Key Design Considerations
 
@@ -127,3 +178,90 @@ When implementing the ABBA format:
 - Consider performance implications for large-scale biblical text processing
 - Maintain type safety with mypy annotations throughout the codebase
 - Ensure comprehensive test coverage for all functionality
+
+## Key Implementation Notes
+
+### BCE Date Handling
+The timeline system uses an encoding convention for BCE dates to work around Python datetime limitations:
+```python
+from abba.timeline.models import create_bce_date
+
+# Create a BCE date (e.g., 1446 BCE)
+date = create_bce_date(1446)  # Internally encoded as year 3554
+```
+
+### Canon Support
+The system supports multiple canons with proper book ordering:
+```python
+from abba.canon.registry import CanonRegistry
+
+registry = CanonRegistry()
+catholic_canon = registry.get_canon("catholic")
+books = catholic_canon.get_books()  # Returns book codes in canonical order
+```
+
+### Morphology Analysis
+Both Hebrew and Greek morphological analysis are supported:
+```python
+from abba.morphology.hebrew_morphology import HebrewMorphology
+from abba.morphology.greek_morphology import GreekMorphology
+
+# Hebrew example
+hebrew = HebrewMorphology()
+morph_data = hebrew.parse_morph_code("Ncmpa")  # Noun, common, masculine, plural, absolute
+
+# Greek example  
+greek = GreekMorphology()
+is_participle = greek.is_participle("V-PAN")  # Returns True for participles
+```
+
+### Export Formats
+The system provides both full-featured and minimal exporters:
+```python
+# Full SQLite export with FTS5 support
+from abba.export.sqlite_exporter import SQLiteExporter, SQLiteConfig
+
+config = SQLiteConfig(output_path="bible.db", enable_fts5=True)
+exporter = SQLiteExporter(config)
+
+# Minimal SQLite for simple use cases
+from abba.export.minimal_sqlite import MinimalSQLiteExporter
+
+exporter = MinimalSQLiteExporter("verses.db")
+exporter.add_verse("GEN.1.1", "GEN", 1, 1, "In the beginning...")
+exporter.finalize()
+```
+
+## Common Tasks
+
+### Running Tests for Specific Modules
+```bash
+# Test morphology systems
+pytest tests/test_morphology.py -v
+
+# Test export functionality
+pytest tests/test_export_*.py -v
+
+# Test with coverage for a specific module
+pytest tests/test_interlinear.py --cov=abba.interlinear
+```
+
+### Checking Code Quality
+```bash
+# Run all quality checks
+make check
+
+# Run specific linters
+poetry run mypy src/abba/morphology
+poetry run flake8 src/abba/export
+```
+
+### Building Documentation
+```bash
+# Generate API documentation (when implemented)
+make docs
+
+# View test coverage report
+make test-coverage
+open htmlcov/index.html
+```

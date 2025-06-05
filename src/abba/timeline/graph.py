@@ -30,7 +30,14 @@ class EventNode:
     def get_date_distribution(self) -> DateDistribution:
         """Get the probability distribution for this event's date."""
         if self._date_distribution is None:
-            self._date_distribution = UncertaintyCalculator.from_time_point(self.event.time_point)
+            if self.event.time_point:
+                self._date_distribution = UncertaintyCalculator.from_time_point(self.event.time_point)
+            else:
+                # Create a default distribution for events without dates
+                self._date_distribution = DateDistribution(
+                    distribution_type="uniform",
+                    parameters={"low": -4999, "high": 2000}  # Wide range for unknown dates
+                )
         return self._date_distribution
 
     def get_related_events(

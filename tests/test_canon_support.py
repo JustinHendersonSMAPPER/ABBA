@@ -34,9 +34,9 @@ class TestCanonManager:
         books = manager.get_canon_books(Canon.PROTESTANT)
 
         assert len(books) == 66
-        assert BookCode.GEN in books  # OT book
-        assert BookCode.MAT in books  # NT book
-        assert BookCode.REV in books  # Last NT book
+        assert "GEN" in books  # OT book
+        assert "MAT" in books  # NT book
+        assert "REV" in books  # Last NT book
 
         # Should not contain deuterocanonical books (they don't exist in BookCode enum)
         # This is correct - Protestant canon only has 66 books
@@ -47,19 +47,20 @@ class TestCanonManager:
 
         books = manager.get_canon_books(Canon.CATHOLIC)
 
-        # Catholic canon includes deuterocanonical books, but since they're not in BookCode enum,
-        # we'll only have the 66 Protestant books plus any that are actually defined
-        assert len(books) >= 66  # At least Protestant books
+        # Catholic canon includes deuterocanonical books
+        assert len(books) == 71  # 66 Protestant + 5 deutero
 
         # Should contain all Protestant books
         protestant_books = manager.get_canon_books(Canon.PROTESTANT)
         for book in protestant_books:
             assert book in books
 
-        # Check for any additional books beyond Protestant (deuterocanonical books would be here
-        # if they were defined in the BookCode enum, but they're not currently)
-        extra_books = set(books) - set(protestant_books)
-        # This may be empty since deuterocanonical books aren't in BookCode enum
+        # Check for deuterocanonical books
+        assert "TOB" in books
+        assert "JDT" in books
+        assert "WIS" in books
+        assert "SIR" in books
+        assert "BAR" in books
 
     def test_orthodox_canon_books(self) -> None:
         """Test getting Orthodox canon books."""
@@ -67,15 +68,16 @@ class TestCanonManager:
 
         books = manager.get_canon_books(Canon.ORTHODOX)
 
-        assert len(books) >= 66  # At least Protestant books
+        assert len(books) == 73  # 66 Protestant + 5 Catholic deutero + 2 Orthodox (1ES, 2ES)
 
         # Should contain Catholic books
         catholic_books = manager.get_canon_books(Canon.CATHOLIC)
         for book in catholic_books:
             assert book in books
 
-        # Since deuterocanonical books aren't in BookCode enum,
-        # Orthodox will be same as Catholic in this implementation
+        # Check for Orthodox-specific books
+        assert "1ES" in books
+        assert "2ES" in books
 
     def test_ethiopian_canon_books(self) -> None:
         """Test getting Ethiopian canon books."""
@@ -86,17 +88,17 @@ class TestCanonManager:
         assert len(books) >= 66  # At least Protestant books
 
         # Should contain most standard books
-        assert BookCode.GEN in books
-        assert BookCode.REV in books
+        assert "GEN" in books
+        assert "REV" in books
 
     def test_check_book_in_canon_protestant(self) -> None:
         """Test checking if book is in Protestant canon."""
         manager = CanonManager()
 
         # Standard Protestant books
-        assert manager.is_book_in_canon(BookCode.GEN, Canon.PROTESTANT)
-        assert manager.is_book_in_canon(BookCode.MAT, Canon.PROTESTANT)
-        assert manager.is_book_in_canon(BookCode.REV, Canon.PROTESTANT)
+        assert manager.is_book_in_canon("GEN", Canon.PROTESTANT)
+        assert manager.is_book_in_canon("MAT", Canon.PROTESTANT)
+        assert manager.is_book_in_canon("REV", Canon.PROTESTANT)
 
         # Since deuterocanonical books aren't defined in BookCode, we can't test them
         # But we can test that Protestant books are properly included
@@ -106,8 +108,8 @@ class TestCanonManager:
         manager = CanonManager()
 
         # Protestant books should be in Catholic canon
-        assert manager.is_book_in_canon(BookCode.GEN, Canon.CATHOLIC)
-        assert manager.is_book_in_canon(BookCode.MAT, Canon.CATHOLIC)
+        assert manager.is_book_in_canon("GEN", Canon.CATHOLIC)
+        assert manager.is_book_in_canon("MAT", Canon.CATHOLIC)
 
         # Since deuterocanonical books aren't in BookCode enum,
         # Catholic canon will only contain Protestant books in this implementation
@@ -132,11 +134,11 @@ class TestCanonManager:
 
         stats = manager.get_canon_statistics(Canon.CATHOLIC)
 
-        # Since deuterocanonical books aren't in BookCode enum, Catholic will be same as Protestant
-        assert stats["total_books"] == 66
-        assert stats["ot_books"] == 39
+        # Catholic has Protestant books plus deuterocanonical
+        assert stats["total_books"] == 71  # 66 Protestant + 5 deutero (TOB, JDT, WIS, SIR, BAR)
+        assert stats["ot_books"] == 44  # 39 Protestant OT + 5 deutero
         assert stats["nt_books"] == 27
-        # Deuterocanonical count may be 0 since books aren't in enum
+        assert stats["includes_deuterocanonical"] is True
 
     def test_compare_canons(self) -> None:
         """Test comparing different canons."""
@@ -151,12 +153,12 @@ class TestCanonManager:
         assert "total_first" in comparison
         assert "total_second" in comparison
 
-        # Since deuterocanonical books aren't in BookCode, both will have same 66 books
+        # Protestant has 66, Catholic has 71 (66 + 5 deutero)
         assert len(comparison["common_books"]) == 66
 
-        # Both have same books since deuterocanonical aren't defined
+        # Protestant has no unique books, Catholic has 5 deuterocanonical
         assert len(comparison["unique_to_first"]) == 0
-        assert len(comparison["unique_to_second"]) == 0
+        assert len(comparison["unique_to_second"]) == 5  # TOB, JDT, WIS, SIR, BAR
 
     def test_compare_protestant_orthodox(self) -> None:
         """Test comparing Protestant and Orthodox canons."""
@@ -164,10 +166,10 @@ class TestCanonManager:
 
         comparison = manager.compare_canons(Canon.PROTESTANT, Canon.ORTHODOX)
 
-        # Since additional books aren't in BookCode, Orthodox will be same as Protestant
+        # Orthodox has Catholic books plus 1ES and 2ES
         assert len(comparison["common_books"]) == 66
         assert len(comparison["unique_to_first"]) == 0
-        assert len(comparison["unique_to_second"]) == 0
+        assert len(comparison["unique_to_second"]) == 7  # 5 Catholic deutero + 1ES + 2ES
 
     def test_get_supported_canons(self) -> None:
         """Test getting list of supported canons."""
@@ -191,10 +193,10 @@ class TestCanonManager:
         assert len(ot_books) == 39
         assert len(nt_books) == 27
 
-        assert BookCode.GEN in ot_books
-        assert BookCode.MAL in ot_books
-        assert BookCode.MAT in nt_books
-        assert BookCode.REV in nt_books
+        assert "GEN" in ot_books
+        assert "MAL" in ot_books
+        assert "MAT" in nt_books
+        assert "REV" in nt_books
 
         # No overlap between OT and NT
         assert len(set(ot_books) & set(nt_books)) == 0
@@ -206,10 +208,12 @@ class TestCanonManager:
         ot_books = manager.get_books_by_testament(Canon.CATHOLIC, "ot")
         nt_books = manager.get_books_by_testament(Canon.CATHOLIC, "nt")
 
-        assert len(ot_books) == 39  # Same as Protestant since no deuterocanonical in enum
+        assert len(ot_books) == 44  # 39 Protestant OT + 5 deuterocanonical
         assert len(nt_books) == 27  # Same as Protestant NT
 
-        # No deuterocanonical books available since they're not in BookCode enum
+        # Check deuterocanonical books are in OT
+        assert "TOB" in ot_books
+        assert "JDT" in ot_books
 
     def test_get_books_by_testament_invalid_testament(self) -> None:
         """Test getting books by testament with invalid testament."""
@@ -297,13 +301,14 @@ class TestCanonManager:
         protestant_books = set(manager.get_canon_books(Canon.PROTESTANT))
         catholic_books = set(manager.get_canon_books(Canon.CATHOLIC))
 
-        # Since deuterocanonical books aren't in BookCode enum, both sets will be identical
+        # Protestant and Catholic share the 66 core books
         intersection = protestant_books & catholic_books
         assert len(intersection) == 66
 
-        # No Catholic-only books since deuterocanonical aren't in enum
+        # Catholic has 5 deuterocanonical books
         catholic_only = catholic_books - protestant_books
-        assert len(catholic_only) == 0
+        assert len(catholic_only) == 5
+        assert catholic_only == {"TOB", "JDT", "WIS", "SIR", "BAR"}
 
     def test_get_canon_description(self) -> None:
         """Test getting canon descriptions."""

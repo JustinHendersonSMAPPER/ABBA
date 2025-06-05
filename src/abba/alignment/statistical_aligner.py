@@ -201,9 +201,76 @@ class StatisticalAligner:
         translation_verses: List[TranslationVerse],
     ) -> None:
         """Identify common phrase patterns for multi-word alignments."""
-        # Hebrew construct chains, Greek participial phrases, etc.
-        # This would require syntactic parsing
-        pass
+        # Common Hebrew and Greek phrase patterns
+        phrase_patterns = {
+            # Hebrew construct chains (noun + noun in genitive relationship)
+            "construct_chain": {
+                "pattern": r"N[^-]+-[^-]+ N[^-]+-[^-]+",  # Two nouns in sequence
+                "translation_patterns": ["X of Y", "Y's X", "X Y"],
+            },
+            # Hebrew infinitive construct
+            "infinitive_construct": {
+                "pattern": r"V[^-]+-Qc",  # Qal infinitive construct
+                "translation_patterns": ["to X", "X-ing", "when X"],
+            },
+            # Greek articular infinitive
+            "articular_infinitive": {
+                "pattern": r"T-[^-]+ V--AN",  # Article + infinitive
+                "translation_patterns": ["to X", "the X-ing", "in order to X"],
+            },
+            # Greek genitive absolute
+            "genitive_absolute": {
+                "pattern": r"[^-]+-GSM V-AAPGSM",  # Genitive participle construction
+                "translation_patterns": ["when X", "after X", "while X"],
+            },
+            # Hebrew waw-consecutive
+            "waw_consecutive": {
+                "pattern": r"C V[^-]+-[^-]+w",  # Conjunction + verb with waw
+                "translation_patterns": ["and X", "then X", "so X"],
+            },
+        }
+        
+        # Build phrase pattern database from corpus
+        verse_map = {str(tv.verse_id): tv for tv in translation_verses}
+        
+        for orig_verse in original_verses:
+            verse_key = str(orig_verse.verse_id)
+            if verse_key not in verse_map:
+                continue
+                
+            trans_verse = verse_map[verse_key]
+            
+            # Extract morphological sequences
+            morph_sequence = []
+            for word in orig_verse.words:
+                if hasattr(word, 'morph') and word.morph:
+                    morph_sequence.append((word.morph, word.text))
+            
+            # Check for known patterns
+            for pattern_name, pattern_info in phrase_patterns.items():
+                # This is simplified - in practice, use proper morphological parsing
+                # For now, just store potential phrase boundaries
+                if len(morph_sequence) >= 2:
+                    # Store bigrams and trigrams as potential phrases
+                    for i in range(len(morph_sequence) - 1):
+                        bigram = (morph_sequence[i][1], morph_sequence[i+1][1])
+                        bigram_key = " ".join(bigram)
+                        
+                        if bigram_key not in self.phrase_patterns:
+                            self.phrase_patterns[bigram_key] = []
+                        
+                        # Add potential translation patterns
+                        self.phrase_patterns[bigram_key].append(trans_verse.text)
+                        
+                    # Trigrams for longer phrases
+                    for i in range(len(morph_sequence) - 2):
+                        trigram = (morph_sequence[i][1], morph_sequence[i+1][1], morph_sequence[i+2][1])
+                        trigram_key = " ".join(trigram)
+                        
+                        if trigram_key not in self.phrase_patterns:
+                            self.phrase_patterns[trigram_key] = []
+                            
+                        self.phrase_patterns[trigram_key].append(trans_verse.text)
 
     def _build_semantic_loss_database(self) -> None:
         """Build database of known semantic losses."""

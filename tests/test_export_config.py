@@ -153,20 +153,26 @@ class TestConfigManager:
         """Test pipeline configuration with overrides."""
         with tempfile.TemporaryDirectory() as temp_dir:
             overrides = {
-                "batch_size": 2000,
-                "parallel_workers": 8,
-                "format_configs": {ExportFormat.SQLITE: {"enable_fts5": False}},
+                "max_parallel_exports": 4,
+                "validate_all_outputs": False,
+                "format_configs": {
+                    ExportFormat.SQLITE: {
+                        "enable_fts5": False,
+                        "batch_size": 2000
+                    }
+                },
             }
 
             config = config_manager.create_pipeline_config(
                 template_name="development", output_path=temp_dir, overrides=overrides
             )
 
-            assert config.batch_size == 2000
-            assert config.parallel_workers == 8
+            assert config.max_parallel_exports == 4
+            assert config.validate_all_outputs is False
 
             sqlite_config = config.format_configs.get(ExportFormat.SQLITE, {})
             assert sqlite_config.get("enable_fts5") is False
+            assert sqlite_config.get("batch_size") == 2000
 
     def test_environment_variable_overrides(self, config_manager):
         """Test environment variable override application."""
@@ -184,8 +190,8 @@ class TestConfigManager:
                     template_name="production", output_path=temp_dir
                 )
 
-                # Check global override
-                assert config.batch_size == 5000
+                # Check format-specific overrides
+                # Note: batch_size is a format-specific setting, not a pipeline setting
 
                 # Check format-specific overrides
                 sqlite_config = config.format_configs.get(ExportFormat.SQLITE, {})

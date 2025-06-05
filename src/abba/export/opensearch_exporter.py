@@ -25,7 +25,7 @@ from .base import (
     ExportUtilities,
     StreamingDataProcessor,
 )
-from ..alignment.unified_reference import UnifiedVerse
+from ..parsers.translation_parser import TranslationVerse
 from ..annotations.models import Annotation
 from ..timeline.models import Event, TimePeriod
 
@@ -65,10 +65,29 @@ class OpenSearchConfig(ExportConfig):
         from .base import ExportFormat
 
         self.format_type = ExportFormat.OPENSEARCH
-
-        # Validate URL
+    
+    def validate(self) -> ValidationResult:
+        """Validate OpenSearch-specific configuration settings."""
+        # Start with base validation
+        result = super().validate()
+        errors = list(result.errors)
+        warnings = list(result.warnings)
+        
+        # Add OpenSearch-specific validations
         if not self.cluster_url:
-            raise ValueError("OpenSearch cluster URL is required")
+            errors.append("OpenSearch cluster URL is required")
+            
+        if self.bulk_size <= 0:
+            errors.append("Bulk size must be positive")
+            
+        if self.number_of_shards <= 0:
+            errors.append("Number of shards must be positive")
+            
+        return ValidationResult(
+            is_valid=len(errors) == 0,
+            errors=errors,
+            warnings=warnings
+        )
 
 
 class OpenSearchExporter(DataExporter):
@@ -90,9 +109,9 @@ class OpenSearchExporter(DataExporter):
         self.session: Optional[aiohttp.ClientSession] = None
 
         # Mappings and settings
+        self._analyzers = self._get_custom_analyzers()
         self._mappings = self._get_index_mappings()
         self._settings = self._get_index_settings()
-        self._analyzers = self._get_custom_analyzers()
 
     def validate_config(self) -> ValidationResult:
         """Validate OpenSearch exporter configuration."""
@@ -286,13 +305,13 @@ class OpenSearchExporter(DataExporter):
             else:
                 self.logger.info("Created index aliases")
 
-    async def _export_verses(self, verses: Iterator[UnifiedVerse]):
+    async def _export_verses(self, verses: Iterator[TranslationVerse]):
         """Export verses to OpenSearch."""
         self.logger.info("Exporting verses to OpenSearch")
 
         verse_count = 0
 
-        async def process_verse_batch(verse_batch: List[UnifiedVerse]):
+        async def process_verse_batch(verse_batch: List[TranslationVerse]):
             nonlocal verse_count
 
             # Prepare bulk request
@@ -479,7 +498,7 @@ class OpenSearchExporter(DataExporter):
 
         raise ExportError("Bulk request failed after all retries", stage="bulk_import")
 
-    def _serialize_verse_for_opensearch(self, verse: UnifiedVerse) -> Dict[str, Any]:
+    def _serialize_verse_for_opensearch(self, verse: TranslationVerse) -> Dict[str, Any]:
         """Serialize verse for OpenSearch indexing."""
         doc = {
             "verse_id": str(verse.verse_id),
@@ -491,19 +510,26 @@ class OpenSearchExporter(DataExporter):
         }
 
         # Add translations
-        if verse.translations:
-            doc["translations"] = verse.translations
+        translations = {}
+        if hasattr(verse, 'translations') and verse.translations:
+            translations = verse.translations
+        elif hasattr(verse, 'text'):
+            # For simple TranslationVerse, create a basic translation entry
+            translations = {"default": verse.text}
+            
+        if translations:
+            doc["translations"] = translations
 
             # Create combined text for search
-            all_text = " ".join(verse.translations.values())
+            all_text = " ".join(translations.values())
             doc["all_text"] = all_text
 
             # Add individual translation fields for faceting
-            for trans_id, text in verse.translations.items():
+            for trans_id, text in translations.items():
                 doc[f"text_{trans_id}"] = text
 
         # Add original language data
-        if verse.hebrew_tokens:
+        if hasattr(verse, 'hebrew_tokens') and verse.hebrew_tokens:
             doc["hebrew"] = {
                 "tokens": verse.hebrew_tokens,
                 "words": [token.get("word", "") for token in verse.hebrew_tokens],
@@ -515,7 +541,7 @@ class OpenSearchExporter(DataExporter):
                 ],
             }
 
-        if verse.greek_tokens:
+        if hasattr(verse, 'greek_tokens') and verse.greek_tokens:
             doc["greek"] = {
                 "tokens": verse.greek_tokens,
                 "words": [token.get("word", "") for token in verse.greek_tokens],
@@ -526,7 +552,7 @@ class OpenSearchExporter(DataExporter):
             }
 
         # Add metadata
-        if verse.metadata:
+        if hasattr(verse, 'metadata') and verse.metadata:
             doc["metadata"] = verse.metadata
 
         return doc
@@ -535,34 +561,36 @@ class OpenSearchExporter(DataExporter):
         """Serialize annotation for OpenSearch indexing."""
         doc = {
             "annotation_id": annotation.id,
-            "verse_id": str(annotation.verse_id),
-            "book": annotation.verse_id.book,
-            "chapter": annotation.verse_id.chapter,
-            "verse": annotation.verse_id.verse,
+            "verse_id": str(annotation.start_verse),
+            "book": annotation.start_verse.book,
+            "chapter": annotation.start_verse.chapter,
+            "verse": annotation.start_verse.verse,
             "type": annotation.annotation_type.value if annotation.annotation_type else None,
             "level": annotation.level.value if annotation.level else None,
-            "confidence": annotation.confidence,
+            "confidence": annotation.confidence.overall_score if annotation.confidence else 0.0,
             "indexed_at": datetime.utcnow().isoformat(),
         }
 
         # Add topics
-        if annotation.topics:
+        if annotation.topic_id:
             doc["topics"] = [
                 {
-                    "id": topic.id,
-                    "name": topic.name,
-                    "category": topic.category.value if hasattr(topic, "category") else None,
+                    "id": annotation.topic_id,
+                    "name": annotation.topic_name or "",
+                    "category": None,  # Not available in simple annotation
                 }
-                for topic in annotation.topics
             ]
 
             # Create searchable topic fields
-            doc["topic_names"] = [topic.name for topic in annotation.topics]
-            doc["topic_ids"] = [topic.id for topic in annotation.topics]
+            doc["topic_names"] = [annotation.topic_name] if annotation.topic_name else []
+            doc["topic_ids"] = [annotation.topic_id]
 
         # Add metadata
-        if annotation.metadata:
-            doc["metadata"] = annotation.metadata
+        doc["metadata"] = {
+            "source": annotation.source,
+            "verified": annotation.verified,
+            "created_date": annotation.created_date.isoformat() if annotation.created_date else None,
+        }
 
         return doc
 
@@ -660,9 +688,10 @@ class OpenSearchExporter(DataExporter):
 
     def _get_book_order(self, book_id: str) -> int:
         """Get canonical order for book (for sorting)."""
-        from ..book_codes import BOOK_INFO
+        from ..book_codes import get_book_order
 
-        return BOOK_INFO.get(book_id, {}).get("order", 999)
+        order = get_book_order(book_id)
+        return order if order is not None else 999
 
     async def _finalize_export(self, metadata: Dict[str, Any]):
         """Finalize OpenSearch export."""

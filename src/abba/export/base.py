@@ -16,7 +16,6 @@ import logging
 
 from ..verse_id import VerseID
 from ..parsers.translation_parser import TranslationVerse
-from ..alignment.unified_reference import UnifiedVerse
 from ..annotations.models import Annotation
 from ..timeline.models import Event, TimePeriod
 
@@ -78,6 +77,37 @@ class ExportConfig:
     description: Optional[str] = None
     tags: List[str] = field(default_factory=list)
 
+    def validate(self) -> 'ValidationResult':
+        """Validate configuration settings."""
+        errors = []
+        warnings = []
+        
+        # Validate output path
+        if not self.output_path:
+            errors.append("Output path is required")
+            
+        # Validate batch size
+        if self.batch_size <= 0:
+            errors.append("Batch size must be positive")
+            
+        # Validate parallel workers
+        if self.parallel_workers <= 0:
+            errors.append("Parallel workers must be positive")
+            
+        # Validate memory limit
+        if self.memory_limit_mb <= 0:
+            errors.append("Memory limit must be positive")
+            
+        # Check for conflicting optimization settings
+        if self.optimize_for_size and self.optimize_for_speed:
+            warnings.append("Both size and speed optimization enabled; speed will take precedence")
+            
+        return ValidationResult(
+            is_valid=len(errors) == 0,
+            errors=errors,
+            warnings=warnings
+        )
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
@@ -210,7 +240,7 @@ class CanonicalDataset:
     """Container for all canonical data to be exported."""
 
     # Core biblical data
-    verses: Iterator[UnifiedVerse]
+    verses: Iterator[TranslationVerse]
 
     # Enrichment data
     annotations: Optional[Iterator[Annotation]] = None

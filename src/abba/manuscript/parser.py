@@ -267,6 +267,16 @@ class CriticalApparatusParser:
             entries.append(entry)
 
         return entries
+    
+    def parse_apparatus(self, apparatus_text: str, verse_id: Optional[VerseID] = None) -> ApparatusEntry:
+        """Alias for parse_na28_apparatus for backward compatibility."""
+        if verse_id:
+            # Single entry parsing
+            return self.parse_apparatus_entry(apparatus_text, verse_id)
+        else:
+            # Full apparatus parsing
+            entries = self.parse_na28_apparatus(apparatus_text)
+            return entries[0] if entries else ApparatusEntry(verse_id=VerseID("UNK", 1, 1), location="", lemma="")
 
     def _tokenize_notation(self, notation: str) -> List[str]:
         """Tokenize apparatus notation into parts."""
@@ -359,6 +369,10 @@ class CriticalApparatusParser:
 
         return witness
 
+    def _identify_variant_type(self, base_text: str, variant_text: str) -> VariantType:
+        """Alias for identify_variant_type (private method name)."""
+        return self.identify_variant_type(base_text, variant_text)
+    
     def identify_variant_type(self, base_text: str, variant_text: str) -> VariantType:
         """Identify the type of variant."""
         if variant_text == "om" or not variant_text:

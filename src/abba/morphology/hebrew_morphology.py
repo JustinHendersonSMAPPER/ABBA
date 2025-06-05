@@ -87,6 +87,7 @@ class HebrewMorphologyParser:
 
     STEM_MAP = {
         "q": Stem.QAL,
+        "Q": Stem.QAL,
         "N": Stem.NIPHAL,
         "p": Stem.PIEL,
         "P": Stem.PUAL,
@@ -97,8 +98,10 @@ class HebrewMorphologyParser:
 
     TENSE_MAP = {
         "p": Tense.PERFECT,
+        "P": Tense.PERFECT,  # Also handle uppercase
         "q": Tense.PERFECT,  # Qatal
         "i": Tense.IMPERFECT,
+        "I": Tense.IMPERFECT,  # Also handle uppercase
         "w": Tense.WAYYIQTOL,
         "c": Tense.IMPERFECT,  # Cohortative
         "j": Tense.IMPERFECT,  # Jussive
@@ -122,15 +125,19 @@ class HebrewMorphologyParser:
 
     GENDER_MAP = {
         "m": Gender.MASCULINE,
+        "M": Gender.MASCULINE,
         "f": Gender.FEMININE,
+        "F": Gender.FEMININE,
         "b": Gender.COMMON,  # Both
         "c": Gender.COMMON,
     }
 
     NUMBER_MAP = {
         "s": Number.SINGULAR,
+        "S": Number.SINGULAR,
         "d": Number.DUAL,
         "p": Number.PLURAL,
+        "P": Number.PLURAL,
     }
 
     STATE_MAP = {
