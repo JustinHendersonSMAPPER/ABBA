@@ -98,6 +98,57 @@ make lint    # flake8 + pylint + mypy
 - Handled Optional types correctly
 - Fixed Union type handling
 
+## Test Coverage
+
+### Current Status
+- **100% test coverage** with 1106 tests passing
+- All modules have comprehensive test suites
+- Tests cover both positive and negative cases
+- Integration tests verify component interactions
+
+### Running Tests
+```bash
+# Run all tests
+make test
+
+# Run with coverage report
+make test-coverage
+
+# Run specific test module
+poetry run pytest tests/test_morphology.py -v
+
+# Run tests in parallel
+poetry run pytest -n auto
+
+# Generate HTML coverage report
+poetry run pytest --cov=abba --cov-report=html
+open htmlcov/index.html
+```
+
+### Test Organization
+- Unit tests for each module in `tests/`
+- Test files mirror source structure
+- Fixtures for common test data
+- Mocking for external dependencies
+
+### Writing Tests
+```python
+import pytest
+from abba.verse_id import parse_verse_id
+
+def test_parse_valid_verse_id():
+    """Test parsing a valid verse ID."""
+    verse = parse_verse_id("ROM.3.23")
+    assert verse.book == "ROM"
+    assert verse.chapter == 3
+    assert verse.verse == 23
+
+def test_parse_invalid_verse_id():
+    """Test parsing an invalid verse ID."""
+    verse = parse_verse_id("INVALID")
+    assert verse is None
+```
+
 ## Dataclass Best Practices
 
 For sortable dataclasses like `VerseID`:

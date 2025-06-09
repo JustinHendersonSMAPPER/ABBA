@@ -23,6 +23,99 @@ class MinimalVerse:
     translation: str = "KJV"
 
 
+class MinimalSQLiteExporter:
+    """Simple SQLite exporter for verse data."""
+    
+    def __init__(self, output_path: str):
+        """Initialize exporter with output path."""
+        self.output_path = Path(output_path)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Create connection and initialize database
+        self.conn = sqlite3.connect(str(self.output_path))
+        self._create_tables()
+        self.verse_count = 0
+    
+    def _create_tables(self) -> None:
+        """Create database tables."""
+        # Set pragmas for performance
+        self.conn.execute("PRAGMA page_size = 4096")
+        self.conn.execute("PRAGMA journal_mode = WAL")
+        
+        # Create verses table
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS verses (
+                id INTEGER PRIMARY KEY,
+                verse_id TEXT UNIQUE NOT NULL,
+                book TEXT NOT NULL,
+                chapter INTEGER NOT NULL,
+                verse INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                translation TEXT DEFAULT 'KJV'
+            )
+        """)
+        
+        # Create indices
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_book_chapter_verse 
+            ON verses(book, chapter, verse)
+        """)
+        
+        self.conn.commit()
+    
+    def add_verse(self, verse_id: str, book: str, chapter: int, 
+                  verse: int, text: str, translation: str = "KJV") -> None:
+        """Add a verse to the database."""
+        self.conn.execute("""
+            INSERT OR REPLACE INTO verses 
+            (verse_id, book, chapter, verse, text, translation)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (verse_id, book, chapter, verse, text, translation))
+        self.verse_count += 1
+        
+        # Commit every 1000 verses for performance
+        if self.verse_count % 1000 == 0:
+            self.conn.commit()
+    
+    def finalize(self) -> None:
+        """Finalize the export and close database."""
+        # Final commit
+        self.conn.commit()
+        
+        # Create full-text search table
+        self.conn.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS verses_fts USING fts5(
+                verse_id, book, chapter, verse, text,
+                content='verses',
+                content_rowid='id'
+            )
+        """)
+        
+        # Populate FTS table
+        self.conn.execute("""
+            INSERT INTO verses_fts(verse_id, book, chapter, verse, text)
+            SELECT verse_id, book, chapter, verse, text FROM verses
+        """)
+        
+        # Commit and close
+        self.conn.commit()
+        self.conn.close()
+        
+        # VACUUM must be done with a new connection outside of any transaction
+        vacuum_conn = sqlite3.connect(str(self.output_path))
+        vacuum_conn.execute("VACUUM")
+        vacuum_conn.close()
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        if self.conn:
+            self.finalize()
+
+
 def create_sqlite_database(
     verses: List[MinimalVerse], output_path: str, enable_fts: bool = True
 ) -> None:

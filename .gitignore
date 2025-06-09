@@ -178,3 +178,5 @@ processing/
 
 # Data folder as it may contain large files
 data/
+models/
+*.db

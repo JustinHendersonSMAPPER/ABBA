@@ -1,0 +1,19 @@
+Translation Coverage Analysis Report
+==================================================
+Generated: 2025-06-08 23:22:36
+Translations analyzed: 5
+Aligner: EnsembleAligner
+
+Summary Statistics
+------------------------------
+Average overall coverage: 7.6%
+Average Hebrew coverage: 9.3% (3 translations with OT)
+Average Greek coverage: 6.9% (5 translations with NT)
+
+Top 10 Translations by Coverage
+------------------------------
+eng_web              - Overall:  24.5% (Hebrew:  27.8%, Greek:  17.6%)
+jic_wbt              - Overall:   6.9% (Hebrew:   N/A, Greek:   6.9%)
+uvl_wbt              - Overall:   5.5% (Hebrew:   0.0%, Greek:   6.3%)
+gun_wbt              - Overall:   1.2% (Hebrew:   0.0%, Greek:   3.8%)
+dso_twf              - Overall:   0.0% (Hebrew:   N/A, Greek:   0.0%)

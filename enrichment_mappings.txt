@@ -1,0 +1,279 @@
+Hebrew Book Mappings:
+----------------------------------------
+book_files = {
+    '1CH': '1Chr.xml', '1Chr': '1Chr.xml',
+    '1KI': '1Kgs.xml', '1Kgs': '1Kgs.xml',
+    '1SA': '1Sam.xml', '1Sam': '1Sam.xml',
+    '2CH': '2Chr.xml', '2Chr': '2Chr.xml',
+    '2KI': '2Kgs.xml', '2Kgs': '2Kgs.xml',
+    '2SA': '2Sam.xml', '2Sam': '2Sam.xml',
+    'AMO': 'Amos.xml', 'Amos': 'Amos.xml',
+    'DAN': 'Dan.xml', 'Dan': 'Dan.xml',
+    'DEU': 'Deut.xml', 'Deut': 'Deut.xml',
+    'ECC': 'Eccl.xml', 'Eccl': 'Eccl.xml',
+    'EST': 'Esth.xml', 'Esth': 'Esth.xml',
+    'EXO': 'Exod.xml', 'Exod': 'Exod.xml',
+    'EZK': 'Ezek.xml', 'Ezek': 'Ezek.xml',
+    'EZR': 'Ezra.xml', 'Ezra': 'Ezra.xml',
+    'GEN': 'Gen.xml', 'Gen': 'Gen.xml',
+    'HAB': 'Hab.xml', 'Hab': 'Hab.xml',
+    'HAG': 'Hag.xml', 'Hag': 'Hag.xml',
+    'HOS': 'Hos.xml', 'Hos': 'Hos.xml',
+    'ISA': 'Isa.xml', 'Isa': 'Isa.xml',
+    'JER': 'Jer.xml', 'Jer': 'Jer.xml',
+    'JOB': 'Job.xml', 'Job': 'Job.xml',
+    'JOL': 'Joel.xml', 'Joel': 'Joel.xml',
+    'JON': 'Jonah.xml', 'Jonah': 'Jonah.xml',
+    'JOS': 'Josh.xml', 'Josh': 'Josh.xml',
+    'JDG': 'Judg.xml', 'Judg': 'Judg.xml',
+    'LAM': 'Lam.xml', 'Lam': 'Lam.xml',
+    'LEV': 'Lev.xml', 'Lev': 'Lev.xml',
+    'MAL': 'Mal.xml', 'Mal': 'Mal.xml',
+    'MIC': 'Mic.xml', 'Mic': 'Mic.xml',
+    'NAH': 'Nah.xml', 'Nah': 'Nah.xml',
+    'NEH': 'Neh.xml', 'Neh': 'Neh.xml',
+    'NUM': 'Num.xml', 'Num': 'Num.xml',
+    'OBA': 'Obad.xml', 'Obad': 'Obad.xml',
+    'PRO': 'Prov.xml', 'Prov': 'Prov.xml',
+    'PSA': 'Ps.xml', 'Ps': 'Ps.xml',
+    'RUT': 'Ruth.xml', 'Ruth': 'Ruth.xml',
+    'SNG': 'Song.xml', 'Song': 'Song.xml',
+    'ZEC': 'Zech.xml', 'Zech': 'Zech.xml',
+    'ZEP': 'Zeph.xml', 'Zeph': 'Zeph.xml',
+}
+
+
+Greek Book Mappings:
+----------------------------------------
+book_files = {
+    '1CO': '1CO.xml', '1Cor': '1CO.xml',
+    '1JO': '1JO.xml', '1John': '1JO.xml',
+    '1PE': '1PE.xml', '1Pet': '1PE.xml',
+    '1TH': '1TH.xml', '1Thess': '1TH.xml',
+    '1TI': '1TI.xml', '1Tim': '1TI.xml',
+    '2CO': '2CO.xml', '2Cor': '2CO.xml',
+    '2JO': '2JO.xml', '2John': '2JO.xml',
+    '2PE': '2PE.xml', '2Pet': '2PE.xml',
+    '2TH': '2TH.xml', '2Thess': '2TH.xml',
+    '2TI': '2TI.xml', '2Tim': '2TI.xml',
+    '3JO': '3JO.xml', '3John': '3JO.xml',
+    'ACT': 'ACT.xml', 'Acts': 'ACT.xml',
+    'COL': 'COL.xml', 'Col': 'COL.xml',
+    'EPH': 'EPH.xml', 'Eph': 'EPH.xml',
+    'GAL': 'GAL.xml', 'Gal': 'GAL.xml',
+    'HEB': 'HEB.xml', 'Heb': 'HEB.xml',
+    'JAM': 'JAM.xml', 'Jas': 'JAM.xml',
+    'JHN': 'JOH.xml', 'John': 'JOH.xml',
+    'JUD': 'JUD.xml', 'Jude': 'JUD.xml',
+    'LUK': 'LUK.xml', 'Luke': 'LUK.xml',
+    'MRK': 'MAR.xml', 'Mark': 'MAR.xml',
+    'MAT': 'MAT.xml', 'Matt': 'MAT.xml',
+    'PHM': 'PHM.xml', 'Phlm': 'PHM.xml',
+    'PHP': 'PHP.xml', 'Phil': 'PHP.xml',
+    'REV': 'REV.xml', 'Rev': 'REV.xml',
+    'ROM': 'ROM.xml', 'Rom': 'ROM.xml',
+    'TIT': 'TIT.xml', 'Titus': 'TIT.xml',
+}
+
+
+Sample Timeline Data (timeline_events.json):
+----------------------------------------
+{
+  "format_version": "1.0",
+  "description": "Biblical timeline events database",
+  "events": [
+    {
+      "id": "creation",
+      "name": "Creation",
+      "description": "The creation of the world according to Genesis",
+      "event_type": "point",
+      "date_bce": 4004,
+      "confidence": 0.3,
+      "verse_refs": [
+        "GEN.1.1"
+      ],
+      "categories": [
+        "theological",
+        "cosmological"
+      ],
+      "notes": "Traditional date based on Ussher chronology"
+    },
+    {
+      "id": "flood",
+      "name": "The Great Flood",
+      "description": "The flood of Noah",
+      "event_type": "point",
+      "date_bce": 2349,
+      "confidence": 0.3,
+      "verse_refs": [
+        "GEN.7.11",
+        "GEN.8.4"
+      ],
+      "categories": [
+        "judgment",
+        "covenant"
+      ]
+    },
+    {
+      "id": "abraham_call",
+      "name": "Call of Abraham",
+      "description": "God calls Abraham to leave Ur",
+      "event_type": "point",
+      "date_bce": 2091,
+      "confidence": 0.5,
+      "verse_refs": [
+        "GEN.12.1"
+      ],
+      "categories": [
+        "covenant",
+        "patriarchal"
+      ]
+    },
+    {
+      "id": "exodus",
+      "name": "The Exodus",
+      "description": "Israel leaves Egypt under Moses",
+      "event_type": "point",
+      "date_bce": 1446,
+      "confidence": 0.7,
+      "verse_refs": [
+        "EXO.12.31",
+        "EXO.12.41"
+      ],
+      "categories": [
+        "historical",
+        "foundational",
+        "redemption"
+      ]
+    },
+    {
+      "id": "david_king",
+      "name": "David Becomes King",
+      "description": "David becomes king over all Israel",
+      "event_type": "point",
+      "date_bce": 1010,
+      "confidence": 0.8,
+      "verse_refs": [
+        "2SA.5.3"
+      ],
+      "categories": [
+        "monarchy",
+        "davidic_covenant"
+      ]
+    },
+    {
+      "id": "temple_built",
+      "name": "Solomon's Temple Built",
+      "description": "Completion of the First Temple",
+      "event_type": "point",
+      "date_bce": 959,
+      "confidence": 0.8,
+      "verse_refs": [
+        "1KI.6.38"
+      ],
+      "categories": [
+        "temple",
+        "worship"
+      ]
+    },
+    {
+      "id": "exile_babylon",
+      "name": "Babylonian Exile",
+      "description": "Judah taken into captivity by Babylon",
+      "event_type": "point",
+      "date_bce": 586,
+      "confidence": 0.9,
+      "verse_refs": [
+        "2KI.25.8",
+        "JER.52.12"
+      ],
+      "categories": [
+        "judgment",
+        "exile"
+      ]
+    },
+    {
+      "id": "return_exile",
+      "name": "Return from Exile",
+      "description": "First return under Zerubbabel",
+      "event_type": "point",
+      "date_bce": 538,
+      "confidence": 0.9,
+      "verse_refs": [
+        "EZR.1.1"
+      ],
+      "categories": [
+        "restoration",
+        "prophecy_fulfillment"
+      ]
+    },
+    {
+      "id": "jesus_birth",
+      "name": "Birth of Jesus",
+      "description": "The birth of Jesus Christ in Bethlehem",
+      "event_type": "point",
+      "date_bce": 4,
+      "confidence": 0.7,
+      "verse_refs": [
+        "MAT.2.1",
+        "LUK.2.7"
+      ],
+      "categories": [
+        "incarnation",
+        "messianic"
+      ]
+    },
+    {
+      "id": "crucifixion",
+      "name": "Crucifixion of Jesus",
+      "description": "The death of Jesus on the cross",
+      "event_type": "point",
+      "date_ce": 30,
+      "confidence": 0.8,
+      "verse_refs": [
+        "MAT.27.35",
+        "MRK.15.24",
+        "LUK.23.33",
+        "JHN.19.18"
+      ],
+      "categories": [
+        "redemption",
+        "atonement",
+        "prophecy_fulfillment"
+      ]
+    },
+    {
+      "id": "resurrection",
+      "name": "Resurrection of Jesus",
+      "description": "Jesus rises from the dead",
+      "event_type": "point",
+      "date_ce": 30,
+      "confidence": 0.8,
+      "verse_refs": [
+        "MAT.28.6",
+        "MRK.16.6",
+        "LUK.24.6",
+        "JHN.20.1"
+      ],
+      "categories": [
+        "resurrection",
+        "victory"
+      ]
+    },
+    {
+      "id": "pentecost",
+      "name": "Day of Pentecost",
+      "description": "The Holy Spirit comes upon the disciples",
+      "event_type": "point",
+      "date_ce": 30,
+      "confidence": 0.8,
+      "verse_refs": [
+        "ACT.2.1"
+      ],
+      "categories": [
+        "church",
+        "holy_spirit"
+      ]
+    }
+  ]
+}

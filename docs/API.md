@@ -540,3 +540,165 @@ module = MyModule(MyConfig(
     option2=20
 ))
 ```
+
+## Utility Functions
+
+### Verse ID Management
+
+```python
+from abba.verse_id import parse_verse_id, parse_verse_range, format_verse_id, get_verse_parts
+
+# Parse verse references
+verse = parse_verse_id("ROM.3.23")  # Returns VerseID object
+verse_range = parse_verse_range("ROM.3.23-25")  # Returns VerseRange object
+
+# Format verse ID
+formatted = format_verse_id(verse)  # Returns "ROM.3.23"
+
+# Get verse parts (for split verses)
+parts = get_verse_parts("ROM.3.23")  # Returns [ROM.3.23, ROM.3.23a, ROM.3.23b]
+```
+
+### Book Code Utilities
+
+```python
+from abba.book_codes import normalize_book_name, get_book_name, is_valid_book_code
+
+# Normalize book names
+code = normalize_book_name("Genesis")  # Returns "GEN"
+code = normalize_book_name("1 Corinthians")  # Returns "1CO"
+
+# Get book names
+name = get_book_name("GEN")  # Returns "Genesis"
+name = get_book_name("GEN", form="abbr")  # Returns "Gen"
+
+# Validate book codes
+is_valid = is_valid_book_code("GEN")  # Returns True
+is_valid = is_valid_book_code("XXX")  # Returns False
+```
+
+### Unicode Utilities
+
+```python
+from abba.language.unicode_utils import UnicodeNormalizer, HebrewNormalizer, GreekNormalizer
+
+# General normalization
+normalizer = UnicodeNormalizer()
+clean_text = normalizer.clean_text("Text with  extra   spaces")
+normalized = normalizer.normalize_nfc("é")  # Composed form
+
+# Hebrew specific
+hebrew = HebrewNormalizer()
+stripped = hebrew.strip_hebrew_points("בְּרֵאשִׁית")  # Returns "בראשית"
+normalized = hebrew.normalize_final_forms("אבגדך")  # Normalizes final letters
+
+# Greek specific
+greek = GreekNormalizer()
+stripped = greek.strip_greek_accents("λόγος")  # Returns "λογος"
+normalized = greek.normalize_final_sigma("ΛΟΓΟΣ")  # Handles final sigma
+```
+
+## Best Practices
+
+### 1. Error Handling
+
+Always handle potential errors appropriately:
+
+```python
+from abba.exceptions import ABBAError, ValidationError
+
+try:
+    result = parse_verse_id("invalid reference")
+except ValidationError as e:
+    # Handle invalid input
+    logger.error(f"Invalid verse reference: {e}")
+    return None
+```
+
+### 2. Resource Management
+
+Use context managers for resources:
+
+```python
+from abba.export.sqlite_exporter import SQLiteExporter
+
+# Automatic cleanup
+with SQLiteExporter(config) as exporter:
+    exporter.export_verses(verses)
+# Connection automatically closed
+```
+
+### 3. Async Best Practices
+
+Use async for I/O operations:
+
+```python
+import asyncio
+from abba.annotations.annotation_engine import AnnotationEngine
+
+async def annotate_batch(verses):
+    engine = AnnotationEngine()
+    
+    # Process in batches for memory efficiency
+    batch_size = 100
+    results = []
+    
+    for i in range(0, len(verses), batch_size):
+        batch = verses[i:i+batch_size]
+        batch_results = await asyncio.gather(*[
+            engine.annotate_verse(v.id, v.text) 
+            for v in batch
+        ])
+        results.extend(batch_results)
+    
+    return results
+```
+
+### 4. Configuration Management
+
+Use environment variables for sensitive data:
+
+```python
+import os
+from abba.export.opensearch_exporter import OpenSearchConfig
+
+config = OpenSearchConfig(
+    cluster_url=os.getenv("OPENSEARCH_URL", "http://localhost:9200"),
+    username=os.getenv("OPENSEARCH_USER"),
+    password=os.getenv("OPENSEARCH_PASS"),
+    index_name="bible-verses"
+)
+```
+
+### 5. Performance Optimization
+
+Cache expensive operations:
+
+```python
+from functools import lru_cache
+from abba.morphology.hebrew_morphology import HebrewMorphology
+
+@lru_cache(maxsize=1000)
+def parse_cached_morph(morph_code: str):
+    morph = HebrewMorphology()
+    return morph.parse_morph_code(morph_code)
+```
+
+## Version Compatibility
+
+ABBA supports Python 3.11, 3.12, and 3.13. Some features require additional dependencies:
+
+- ML features: `pip install abba[ml]`
+- OpenSearch: `pip install abba[opensearch]`
+- Graph export: `pip install abba[graph]`
+- All features: `pip install abba[all]`
+
+## API Versioning
+
+The ABBA API follows semantic versioning:
+
+- Major version: Breaking changes
+- Minor version: New features, backward compatible
+- Patch version: Bug fixes
+
+Current stable API version: 1.0.0

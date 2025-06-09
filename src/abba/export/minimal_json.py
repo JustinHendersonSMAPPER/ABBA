@@ -189,3 +189,56 @@ def create_verse_lookup(verses: List[MinimalVerse]) -> Dict[str, MinimalVerse]:
         key = f"{verse.book}_{verse.chapter}_{verse.verse}"
         lookup[key] = verse
     return lookup
+
+
+class MinimalJSONExporter:
+    """Simple JSON exporter for verse data."""
+    
+    def __init__(self, output_path: str):
+        """Initialize exporter with output path."""
+        self.output_path = Path(output_path)
+        self.verses: List[Dict[str, any]] = []
+    
+    def add_verse(self, verse_id: str, book: str, chapter: int, 
+                  verse: int, text: str, translation: str = "KJV") -> None:
+        """Add a verse to the export."""
+        self.verses.append({
+            "verse_id": verse_id,
+            "book": book,
+            "chapter": chapter,
+            "verse": verse,
+            "text": text,
+            "translation": translation
+        })
+    
+    def finalize(self) -> None:
+        """Write verses to JSON file."""
+        # Ensure output directory exists
+        if self.output_path.suffix not in ['.json', '.JSON']:
+            # If output_path is a directory, create verses.json inside it
+            self.output_path.mkdir(parents=True, exist_ok=True)
+            output_file = self.output_path / "verses.json"
+        else:
+            # If output_path is a file, ensure parent directory exists
+            self.output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_file = self.output_path
+        
+        # Write JSON data
+        data = {
+            "metadata": {
+                "verse_count": len(self.verses),
+                "format_version": "1.0"
+            },
+            "verses": self.verses
+        }
+        
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.finalize()

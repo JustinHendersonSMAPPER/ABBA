@@ -14,7 +14,7 @@ The Annotated Bible and Background Analysis (ABBA) project makes the Bible more 
 
 **Version 1.0 - Production Ready**
 
-All major features have been implemented and tested with ~90%+ test coverage. The system successfully handles:
+All major features have been implemented and tested with 100% test coverage (1106 tests passing). The system successfully handles:
 
 - ✅ Multi-version Bible alignment
 - ✅ Hebrew/Greek morphological analysis  
@@ -24,14 +24,47 @@ All major features have been implemented and tested with ~90%+ test coverage. Th
 - ✅ Multiple export formats (SQLite, JSON, OpenSearch, Graph DBs)
 - ✅ Support for Protestant, Catholic, Orthodox, and Ethiopian canons
 
+## 🔄 Data Processing Overview
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Source    │────▶│   Parsers   │────▶│  Alignment  │────▶│ Annotation  │
+│   Texts     │     │ HEB/GRK/EN │     │  & Morph.   │     │  ML Engine  │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+                                                                      │
+                    ┌─────────────┐     ┌─────────────┐              ▼
+                    │   Export    │◀────│   Canon &   │◀────┌─────────────┐
+                    │  Pipeline   │     │  Timeline   │     │ Cross-Refs  │
+                    └─────────────┘     └─────────────┘     └─────────────┘
+                           │
+         ┌─────────────────┼─────────────────┬─────────────────┐
+         ▼                 ▼                 ▼                 ▼
+    ┌─────────┐      ┌─────────┐      ┌─────────┐      ┌─────────┐
+    │ SQLite  │      │  JSON   │      │  Open   │      │  Graph  │
+    │   DB    │      │  Files  │      │ Search  │      │   DB    │
+    └─────────┘      └─────────┘      └─────────┘      └─────────┘
+```
+
 ## 📚 Documentation
 
+### Essential Guides
+- **[Quick Start Guide](docs/QUICK_START.md)** - Get started in 5 minutes
+- **[User Guide](docs/USER_GUIDE.md)** - Complete guide with examples and customization options
+- **[Data Flow & Algorithms](docs/DATA_FLOW_AND_ALGORITHMS.md)** - Detailed explanation of processing pipeline and algorithms
+
+### Core Documentation
 - **[Architecture Overview](docs/ARCHITECTURE.md)** - Comprehensive guide to ABBA's multi-format architecture
+- **[API Reference](docs/API.md)** - Complete API documentation
+
+### Technical Specifications
 - **[Canonical Format Specification](docs/CANONICAL_FORMAT.md)** - Detailed specification of the source data format
 - **[Automatic Annotations](docs/AUTOMATIC_ANNOTATIONS.md)** - ML-powered annotation generation
 - **[Search Methodology](docs/SEARCH_METHODOLOGY.md)** - Cross-language search strategies
 - **[Data Integrity](docs/DATA_INTEGRITY.md)** - Validation and quality assurance
-- **[Development Guide](docs/DEVELOPMENT.md)** - Contributing and development setup
+
+### Development
+- **[Code Quality](docs/CODE_QUALITY.md)** - Testing and quality standards
+- **[Modern Alignment Stack](docs/MODERN_ALIGNMENT_STACK.md)** - Advanced alignment system documentation
 
 ## 🛠️ Installation
 
@@ -50,6 +83,24 @@ make test
 # See all available commands
 make help
 ```
+
+## 🚀 Quick Start
+
+```bash
+# Export complete KJV Bible to JSON with all enrichments
+python -m abba --output kjv_bible --format json --translations ENG_KJV
+
+# Export multiple translations
+python -m abba --output bibles --format json --translations ENG_KJV ENG_ASV ENG_WEB
+
+# Export to SQLite database
+python -m abba --output bible.db --format sqlite --translations ENG_KJV
+
+# Query the exported data
+sqlite3 bible.db "SELECT COUNT(*) FROM verses;"  # Returns: 31102
+```
+
+See [Quick Start Guide](docs/QUICK_START.md) for more examples.
 
 ## 🎯 Key Features
 
@@ -185,7 +236,7 @@ ABBA uses a modular architecture supporting multiple backends:
 
 ## 🧪 Testing
 
-The project maintains ~90%+ test coverage:
+The project maintains 100% test coverage with 1106 tests:
 
 ```bash
 # Run all tests
@@ -199,6 +250,9 @@ pytest tests/test_morphology.py
 
 # Run with verbose output
 pytest -v tests/
+
+# Run tests in parallel
+pytest -n auto tests/
 ```
 
 ## 🔧 Development
