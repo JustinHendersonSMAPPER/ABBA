@@ -178,6 +178,7 @@ When implementing the ABBA format:
 - Consider performance implications for large-scale biblical text processing
 - Maintain type safety with mypy annotations throughout the codebase
 - Ensure comprehensive test coverage for all functionality
+- Place any test files specific to Claude testing in claude_scripts and any files saved from these should go to claude_output
 
 ## Key Implementation Notes
 

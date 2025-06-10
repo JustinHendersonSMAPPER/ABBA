@@ -180,3 +180,5 @@ processing/
 data/
 models/
 *.db
+claude_output/*
+claude_scripts/*

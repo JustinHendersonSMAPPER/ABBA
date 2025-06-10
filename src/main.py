@@ -7,6 +7,8 @@ Main orchestration script
 import logging
 import sys
 import subprocess
+import argparse
+import os
 from pathlib import Path
 import json
 
@@ -19,7 +21,13 @@ from abba_coverage_analyzer import ABBACoverageAnalyzer
 from abba.alignment.position_aligner import PositionAligner
 from abba.alignment.morphological_aligner import MorphologicalAligner
 from abba.alignment.statistical_aligner import StatisticalAligner
-from abba.alignment.ensemble_aligner import EnsembleAligner
+from abba.alignment.neural_aligner import NeuralAligner
+from abba.alignment.morphological_lexicon_aligner import MorphologicalLexiconAligner
+from abba.alignment.modern_semantic_aligner import ModernSemanticAligner
+from abba.alignment.embedding_aligner import CrossLingualEmbeddingAligner, HybridSemanticAligner
+from abba.alignment.morphology_aware_aligner import MorphologyAwareAligner
+from abba.alignment.improved_biblical_ensemble import ImprovedBiblicalEnsemble
+# JSON exporter will be imported conditionally to avoid dependency issues
 
 # Configure logging
 logging.basicConfig(
@@ -37,88 +45,6 @@ def print_header(title: str):
     print("=" * 80 + "\n")
 
 
-def demo_alignments(aligner, aligner_name="Position-based"):
-    """Demonstrate alignment with sample verses."""
-    logger.info(f"\nDemonstrating {aligner_name} alignment:")
-    
-    # Load sample data
-    try:
-        # Load Genesis 1:1 in Hebrew
-        hebrew_path = Path('data/sources/morphology/hebrew/Gen.json')
-        if hebrew_path.exists():
-            with open(hebrew_path, 'r', encoding='utf-8') as f:
-                hebrew_data = json.load(f)
-                hebrew_verse = hebrew_data['verses'][0]
-                hebrew_words = [w['text'] for w in hebrew_verse['words']]
-        else:
-            # Fallback if morphology not available
-            hebrew_words = ["בְּרֵאשִׁית", "בָּרָא", "אֱלֹהִים", "אֵת", "הַשָּׁמַיִם", "וְאֵת", "הָאָרֶץ"]
-        
-        # Load English translation
-        kjv_path = Path('data/sources/translations/eng_kjv.json')
-        if kjv_path.exists():
-            with open(kjv_path, 'r', encoding='utf-8') as f:
-                kjv_data = json.load(f)
-                # Find Genesis 1:1
-                english_text = None
-                if 'books' in kjv_data and 'Gen' in kjv_data['books']:
-                    gen_data = kjv_data['books']['Gen']
-                    if 'chapters' in gen_data and len(gen_data['chapters']) > 0:
-                        chapter1 = gen_data['chapters'][0]
-                        if 'verses' in chapter1 and len(chapter1['verses']) > 0:
-                            english_text = chapter1['verses'][0].get('text', '')
-                
-                if english_text:
-                    # Simple word splitting - remove punctuation
-                    english_words = english_text.strip().replace('.', '').replace(',', '').split()
-                else:
-                    english_words = ["In", "the", "beginning", "God", "created", "the", "heaven", "and", "the", "earth"]
-        else:
-            english_words = ["In", "the", "beginning", "God", "created", "the", "heaven", "and", "the", "earth"]
-        
-        # Perform alignment
-        # Check if aligner supports morphological features
-        if hasattr(aligner, 'align_verse') and 'book_code' in aligner.align_verse.__code__.co_varnames:
-            # Morphological aligner - pass verse reference
-            alignments = aligner.align_verse(
-                hebrew_words, english_words, 'hebrew', 'english',
-                book_code='Gen', chapter=1, verse=1
-            )
-        else:
-            # Position aligner
-            alignments = aligner.align_verse(hebrew_words, english_words, 'hebrew', 'english')
-        
-        # Display results
-        print(f"\n  Genesis 1:1 Alignment (Hebrew → English) - {aligner_name}:")
-        print("  " + "-" * 70)
-        print(f"  Hebrew words: {len(hebrew_words)}")
-        print(f"  English words: {len(english_words)}")
-        print("\n  Alignments:")
-        for align in alignments[:5]:  # Show first 5 alignments
-            features_str = ""
-            if 'features' in align and align['features']:
-                pos = align['features'].get('pos', '')
-                if pos:
-                    features_str = f" [{pos}]"
-            print(f"    {align['source_word']} → {align['target_word']} (confidence: {align['confidence']}){features_str}")
-        if len(alignments) > 5:
-            print(f"    ... and {len(alignments) - 5} more alignments")
-        
-    except Exception as e:
-        logger.warning(f"Could not load sample data: {e}")
-        
-        # Use fallback demo
-        hebrew_words = ["בְּרֵאשִׁית", "בָּרָא", "אֱלֹהִים"]
-        english_words = ["In", "the", "beginning", "God", "created"]
-        
-        alignments = aligner.align_verse(hebrew_words, english_words)
-        
-        print("\n  Sample Alignment (Hebrew → English):")
-        print("  " + "-" * 70)
-        for align in alignments:
-            print(f"    {align['source_word']} → {align['target_word']} (confidence: {align['confidence']})")
-    
-    print()
 
 
 def ensure_parallel_corpus():
@@ -187,8 +113,53 @@ def ensure_parallel_corpus():
 
 def main():
     """Main orchestration function."""
+    parser = argparse.ArgumentParser(description='ABBA Alignment System')
+    parser.add_argument('--test-mode', action='store_true',
+                       help='Run in test mode with smaller datasets for faster execution')
+    parser.add_argument('--max-translations', type=int,
+                       help='Maximum number of translations to analyze')
+    parser.add_argument('--translation', type=str,
+                       help='Test with a specific translation (e.g., "eng_asv", "eng_kjv")')
+    parser.add_argument('--enable-neural', action='store_true',
+                       help='Enable neural aligner (slower but more accurate)')
+    parser.add_argument('--confidence-threshold', type=float,
+                       help='Minimum confidence threshold for alignments (default: from env or 0.3)')
+    parser.add_argument('--output-format', choices=['json'],
+                       help='Output format for alignment results')
+    parser.add_argument('--output-dir', type=str, default='aligned_output',
+                       help='Output directory for alignment files (default: aligned_output)')
+    parser.add_argument('--fast-mode', action='store_true',
+                       help='Use mock embeddings for faster testing (disable real models)')
+    parser.add_argument('--verbose', action='store_true',
+                       help='Enable verbose logging output')
+    
+    args = parser.parse_args()
+    
+    # Configure logging verbosity
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger('ABBA').setLevel(logging.DEBUG)
+    else:
+        # Reduce verbosity for cleaner output
+        logging.getLogger().setLevel(logging.WARNING)
+        logging.getLogger('ABBA.Main').setLevel(logging.INFO)
+        logging.getLogger('ABBA.ABBADataDownloader').setLevel(logging.INFO)
+        logging.getLogger('ABBA.ABBACoverageAnalyzer').setLevel(logging.INFO)
+        # Suppress alignment step-by-step logging
+        logging.getLogger('ABBA.ModernSemanticAligner').setLevel(logging.WARNING)
+        logging.getLogger('ABBA.EmbeddingAligner').setLevel(logging.WARNING)
+        logging.getLogger('ABBA.MorphologyAwareAligner').setLevel(logging.WARNING)
+        logging.getLogger('ABBA.ImprovedBiblicalEnsemble').setLevel(logging.WARNING)
+        logging.getLogger('ABBA.StatisticalAligner').setLevel(logging.WARNING)
+    
+    # Configure confidence threshold: CLI > Environment > Default
+    confidence_threshold = args.confidence_threshold
+    if confidence_threshold is None:
+        confidence_threshold = float(os.getenv('ABBA_CONFIDENCE_THRESHOLD', 0.3))
+    
     print_header("ABBA - Annotated Bible and Background Analysis")
-    print("Version 1.0 - Production Pipeline\n")
+    mode = "Test Mode" if args.test_mode else "Production Pipeline"
+    print(f"Version 1.0 - {mode}\n")
     
     # Step 1: Download and prepare source data
     print_header("Step 1: Source Data Preparation")
@@ -218,85 +189,192 @@ def main():
         logger.error("Failed to prepare parallel corpus. Exiting.")
         return 1
     
-    # Step 2: Position-based alignment
-    print_header("Step 2: Alignment System")
+    # Step 2: Initialize Modern Alignment System
+    print_header("Step 2: Initialize Modern Alignment System")
     logger.info("✓ Strong's concordance removed")
-    logger.info("Initializing position-based aligner...")
+    logger.info("✓ Using modern lexicons (BDB, HALOT, BDAG principles)")
+    logger.info("✓ Using cross-lingual embeddings")
     
-    # Create position aligner
-    position_aligner = PositionAligner(base_confidence=0.4)
+    # Create morphological lexicon aligner (primary method using OSHB/MorphGNT lemmas)
+    logger.info("Initializing morphological lexicon aligner...")
+    lexicon_aligner = MorphologicalLexiconAligner()
     
-    # Demo position alignment
-    demo_alignments(position_aligner, "Position-based")
+    # Create morphology-aware aligner (uses OSHB/MorphGNT data)
+    logger.info("Initializing morphology-aware aligner...")
+    morphology_aligner = MorphologyAwareAligner()
     
-    # Create morphological aligner
-    logger.info("\nInitializing morphological aligner...")
-    morph_aligner = MorphologicalAligner(base_confidence=0.6)
+    # Create modern semantic aligner (secondary method)
+    logger.info("Initializing modern semantic aligner...")
+    modern_aligner = ModernSemanticAligner()
     
-    # Demo morphological alignment
-    demo_alignments(morph_aligner, "Morphological")
+    # Create cross-lingual embedding aligner (tertiary method)
+    logger.info("Initializing cross-lingual embedding aligner...")
+    if args.fast_mode:
+        logger.info("  Fast mode: Using mock embeddings")
+        embedding_aligner = CrossLingualEmbeddingAligner("mock")
+    else:
+        logger.info("  Production mode: Using real sentence transformers")
+        embedding_aligner = CrossLingualEmbeddingAligner()
     
-    # Create statistical aligner
-    logger.info("\nInitializing statistical aligner...")
-    stat_aligner = StatisticalAligner(base_confidence=0.8)
+    # Keep statistical aligner as fallback
+    logger.info("Initializing statistical aligner (fallback)...")
+    stat_aligner = StatisticalAligner(base_confidence=0.5)
     
-    # Demo statistical alignment
-    demo_alignments(stat_aligner, "Statistical")
+    # Create neural aligner if enabled
+    neural_aligner = None
+    if args.enable_neural:
+        logger.info("Initializing neural aligner...")
+        try:
+            neural_aligner = NeuralAligner(base_confidence=0.8)
+        except ImportError as e:
+            logger.error(f"Neural aligner unavailable: {e}")
+            logger.info("Continuing without neural aligner...")
     
-    # Create ensemble aligner
-    logger.info("\nCreating ensemble aligner...")
-    ensemble_aligner = EnsembleAligner([
-        (stat_aligner, 0.5),     # Highest weight for statistical
-        (morph_aligner, 0.3),    # Medium weight for morphological
-        (position_aligner, 0.2)  # Lower weight for position
-    ])
+    # Create lexicon-driven ensemble aligner
+    logger.info("Creating lexicon-driven ensemble aligner...")
+    aligners_list = [
+        (lexicon_aligner, 0.50),       # Lexicon-driven - primary (uses real definitions)
+        (morphology_aligner, 0.25),    # Morphology-aware - secondary
+        (modern_aligner, 0.15),        # Modern semantic - tertiary  
+        (embedding_aligner, 0.05),     # Cross-lingual embeddings - minimal
+        (stat_aligner, 0.05)           # Statistical fallback - minimal weight
+    ]
     
-    # Demo ensemble alignment
-    demo_alignments(ensemble_aligner, "Ensemble")
+    if neural_aligner:
+        # Adjust weights to include neural
+        aligners_list = [
+            (lexicon_aligner, 0.45),       # Lexicon-driven - primary
+            (morphology_aligner, 0.20),    # Morphology-aware
+            (modern_aligner, 0.15),        # Modern semantic
+            (neural_aligner, 0.10),        # Neural
+            (embedding_aligner, 0.05),     # Embeddings
+            (stat_aligner, 0.05)           # Statistical fallback
+        ]
+        logger.info("✓ Neural aligner included in lexicon-driven ensemble")
     
-    # Step 3: Coverage analysis with ensemble aligner
-    print_header("Step 3: Translation Coverage Analysis")
-    logger.info("Analyzing coverage with ensemble aligner...")
+    ensemble_aligner = ImprovedBiblicalEnsemble(aligners_list)
+    logger.info("✓ Morphological lexicon ensemble aligner ready for production analysis")
+    
+    # Step 3: Full corpus alignment analysis
+    print_header("Step 3: Full Corpus Alignment Analysis")
+    logger.info(f"Starting full corpus analysis with lexicon-driven ensemble aligner (confidence threshold: {confidence_threshold})...")
     
     # Create coverage analyzer with the ensemble aligner
-    analyzer = ABBACoverageAnalyzer(aligner=ensemble_aligner)
+    production_mode = not args.test_mode
+    collect_alignments = args.output_format == 'json'  # Collect detailed alignments for JSON export
+    analyzer = ABBACoverageAnalyzer(
+        aligner=ensemble_aligner, 
+        production_mode=production_mode,
+        confidence_threshold=confidence_threshold,
+        collect_alignments=collect_alignments
+    )
     
-    # Analyze a sample of translations
-    results = analyzer.analyze_all_translations(sample_size=5)
+    # Analyze translations according to mode
+    results = analyzer.analyze_all_translations(
+        max_translations=args.max_translations,
+        translation_filter=args.translation
+    )
     
     # Generate and display report
     if results:
         report = analyzer.generate_coverage_report(results)
         print(report)
         
-        # Save report
+        # Save text report
         report_path = Path('coverage_report_ensemble.txt')
         with open(report_path, 'w', encoding='utf-8') as f:
             f.write(report)
         logger.info(f"Coverage report saved to {report_path}")
+        
+        # Export JSON if requested
+        if args.output_format == 'json':
+            print_header("Step 4: JSON Export")
+            logger.info(f"Exporting alignments to JSON format in {args.output_dir}...")
+            
+            # Import JSON exporter directly to avoid dependency issues
+            try:
+                # Import directly from the file to avoid module dependency conflicts
+                import importlib.util
+                spec = importlib.util.spec_from_file_location(
+                    "json_alignment_exporter", 
+                    Path(__file__).parent / "abba" / "export" / "json_alignment_exporter.py"
+                )
+                json_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(json_module)
+                JSONAlignmentExporter = json_module.JSONAlignmentExporter
+                json_exporter = JSONAlignmentExporter(output_dir=args.output_dir)
+                logger.info("✓ JSON exporter loaded successfully")
+            except Exception as e:
+                logger.error(f"Failed to load JSON exporter: {e}")
+                logger.info("Continuing without JSON export...")
+                json_exporter = None
+            
+            # Create metadata about the alignment process
+            metadata = {
+                "aligner_type": ensemble_aligner.__class__.__name__,
+                "aligner_components": [
+                    {"type": aligner.__class__.__name__, "weight": weight}
+                    for aligner, weight in aligners_list
+                ],
+                "confidence_threshold": confidence_threshold,
+                "production_mode": production_mode,
+                "neural_enabled": neural_aligner is not None,
+                "command_line_args": {
+                    "test_mode": args.test_mode,
+                    "max_translations": args.max_translations,
+                    "translation_filter": args.translation,
+                    "enable_neural": args.enable_neural
+                }
+            }
+            
+            if json_exporter:
+                # Export batch results - now returns report + individual files
+                report_file, alignment_files = json_exporter.export_batch_alignments(results, metadata)
+                
+                # Validate the report file
+                validation_result = json_exporter.validate_json_file(report_file)
+                if validation_result["valid_json"]:
+                    logger.info(f"✓ Report file validated: {report_file}")
+                    logger.info(f"  Report size: {validation_result['file_size_mb']:.2f} MB")
+                else:
+                    logger.warning(f"Report validation issues: {validation_result}")
+                
+                # Validate alignment files
+                total_size = 0
+                for alignment_file in alignment_files:
+                    file_validation = json_exporter.validate_json_file(alignment_file)
+                    if file_validation["valid_json"]:
+                        total_size += file_validation['file_size_mb']
+                    else:
+                        logger.warning(f"Alignment file validation issues: {alignment_file}")
+                
+                logger.info(f"✓ Exported {len(alignment_files)} alignment files")
+                logger.info(f"  Total alignment data size: {total_size:.2f} MB")
+            
     else:
         logger.warning("No coverage results generated")
     
     # Summary
-    print_header("Pipeline Summary")
+    print_header("Analysis Complete")
     
     # Count translations
     translations_dir = Path('data/sources/translations')
     translation_count = len(list(translations_dir.glob('*.json')))
     
     print(f"✓ Translations available: {translation_count}")
-    print(f"✓ Hebrew texts ready for alignment")
-    print(f"✓ Greek texts ready for alignment")
-    print(f"✓ Strong's concordance removed successfully")
-    print(f"✓ Position-based aligner operational")
-    print(f"✓ Morphological aligner operational")
-    print(f"✓ Statistical aligner operational")
-    print(f"✓ Ensemble aligner combining all three methods")
+    print(f"✓ Morphological lexicon aligner operational (using OSHB/MorphGNT lemmas)")
+    print(f"✓ No Strong's concordance bias - uses actual morphological data")
     if results:
         avg_coverage = sum(r['overall_coverage'] for r in results) / len(results)
-        print(f"✓ Average alignment coverage (ensemble): {avg_coverage:.1f}%")
+        avg_confidence = sum(r.get('hebrew_stats', {}).get('confidence_stats', {}).get('avg_confidence', 0) for r in results) / len(results)
+        print(f"✓ Average alignment coverage: {avg_coverage:.1f}%")
+        print(f"✓ Average confidence score: {avg_confidence:.3f}")
+        
+        # Count total verses processed
+        total_verses = sum(r.get('verse_count', 0) for r in results)
+        print(f"✓ Total verses analyzed: {total_verses:,}")
     
-    print("\nPipeline complete! 🎉")
+    print("\nFull corpus analysis complete!")
     
     return 0
 

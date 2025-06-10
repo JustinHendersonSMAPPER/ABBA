@@ -413,6 +413,436 @@ def convert_oshb_to_json() -> None:
     print(f"  Converted {converted_count} Hebrew morphology files to JSON")
 
 
+def download_bdb_lexicon() -> None:
+    """Download BDB Hebrew Lexicon data (public domain)."""
+    print("Downloading BDB Hebrew Lexicon...")
+    
+    # BDB (Brown-Driver-Briggs) is public domain (published 1906)
+    # Try multiple sources for comprehensive Hebrew lexicon data
+    sources = [
+        {
+            "url": "https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/BDB_Lexicon.xml",
+            "filename": "bdb_lexicon.xml",
+            "description": "BDB from OpenScriptures"
+        },
+        {
+            "url": "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Lexicons/Hebrew/BDB.xml", 
+            "filename": "bdb_step_lexicon.xml",
+            "description": "BDB from STEPBible"
+        },
+        {
+            "url": "https://raw.githubusercontent.com/morphgnt/morphological-lexicon/master/data/bdb-hebrew.json",
+            "filename": "bdb_morphological.json", 
+            "description": "BDB morphological data"
+        }
+    ]
+    
+    downloaded_any = False
+    for source in sources:
+        try:
+            target_path = f"data/lexicons/{source['filename']}"
+            urllib.request.urlretrieve(source["url"], target_path)
+            print(f"  ✓ Downloaded {source['description']}")
+            downloaded_any = True
+        except Exception as e:
+            print(f"  ⚠ Could not download {source['description']}: {e}")
+    
+    if not downloaded_any:
+        print("  ⚠ No BDB sources available, creating enhanced Hebrew lexicon...")
+        create_enhanced_hebrew_lexicon()
+    else:
+        print("  ✓ BDB Hebrew lexicon data available for comprehensive analysis")
+
+
+def create_enhanced_hebrew_lexicon() -> None:
+    """Create an enhanced Hebrew lexicon from available OSHB morphological data."""
+    print("  Creating enhanced Hebrew lexicon from OSHB morphological data...")
+    
+    # Try to extract comprehensive lexicon from existing morphological data
+    morph_dir = Path("data/sources/morphology/hebrew")
+    lemma_entries = {}
+    
+    if morph_dir.exists():
+        for json_file in morph_dir.glob("*.json"):
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    for verse in data.get('verses', []):
+                        for word in verse.get('words', []):
+                            lemma = word.get('lemma', '').strip()
+                            text = word.get('text', '').strip()
+                            pos = word.get('POS', word.get('pos', '')).strip()
+                            
+                            if lemma and text:
+                                clean_lemma = lemma.replace('/', '').strip()
+                                if clean_lemma not in lemma_entries:
+                                    lemma_entries[clean_lemma] = {
+                                        "hebrew": clean_lemma,
+                                        "pos": pos,
+                                        "forms": set(),
+                                        "frequency": 0
+                                    }
+                                lemma_entries[clean_lemma]["forms"].add(text)
+                                lemma_entries[clean_lemma]["frequency"] += 1
+            except Exception as e:
+                print(f"    Warning: Error processing {json_file.name}: {e}")
+    
+    # Add basic meanings for common words
+    basic_meanings = {
+        "אלהים": ["God", "god", "gods", "divine being"],
+        "ארץ": ["earth", "land", "ground", "country"],
+        "שמים": ["heaven", "heavens", "sky"],
+        "ברא": ["create", "make", "form"],
+        "ראשית": ["beginning", "first", "start"],
+        "היה": ["be", "was", "were", "become"],
+        "יהוה": ["LORD", "Yahweh"],
+        "מים": ["water", "waters"],
+        "רוח": ["spirit", "wind", "breath"],
+        "אור": ["light"],
+        "טוב": ["good"],
+        "יום": ["day"],
+        "לילה": ["night"],
+        "את": [],  # Object marker
+        "ו": ["and"],
+        "ה": ["the"],
+        "ב": ["in", "on", "with"],
+        "ל": ["to", "for"],
+        "מ": ["from", "of"],
+    }
+    
+    # Combine morphological data with basic meanings
+    enhanced_lexicon = {
+        "metadata": {
+            "name": "Enhanced Hebrew Lexicon", 
+            "source": "OSHB morphological data + public domain references",
+            "license": "Public Domain",
+            "created": datetime.now(UTC).isoformat(),
+            "entries_count": len(lemma_entries)
+        },
+        "entries": {}
+    }
+    
+    for lemma, entry in lemma_entries.items():
+        enhanced_entry = {
+            "hebrew": lemma,
+            "pos": entry["pos"],
+            "frequency": entry["frequency"],
+            "forms": list(entry["forms"]),
+            "meanings": basic_meanings.get(lemma, [])
+        }
+        enhanced_lexicon["entries"][lemma] = enhanced_entry
+    
+    with open("data/lexicons/enhanced_hebrew_lexicon.json", "w", encoding="utf-8") as f:
+        json.dump(enhanced_lexicon, f, indent=2, ensure_ascii=False)
+    
+    print(f"  ✓ Created enhanced Hebrew lexicon with {len(lemma_entries)} lemmas")
+
+
+def create_basic_hebrew_lexicon() -> None:
+    """Create a basic Hebrew lexicon from public domain sources."""
+    # Fallback to basic lexicon if enhanced creation fails
+    create_enhanced_hebrew_lexicon()
+
+
+def download_greek_lexicon() -> None:
+    """Download comprehensive Greek lexicon data (public domain sources)."""
+    print("Downloading Greek Lexicon...")
+    
+    # Thayer's Greek-English Lexicon is public domain (published 1889)
+    # BDAG is copyrighted, but Thayer's provides comprehensive NT Greek coverage
+    sources = [
+        {
+            "url": "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Lexicons/Greek/Thayers.xml",
+            "filename": "thayers_lexicon.xml", 
+            "description": "Thayer's Greek-English Lexicon from STEPBible"
+        },
+        {
+            "url": "https://raw.githubusercontent.com/openscriptures/GreekLexicon/master/Thayers_Lexicon.xml",
+            "filename": "thayers_openscriptures.xml",
+            "description": "Thayer's from OpenScriptures"
+        },
+        {
+            "url": "https://raw.githubusercontent.com/morphgnt/morphological-lexicon/master/data/thayers-greek.json",
+            "filename": "thayers_morphological.json",
+            "description": "Thayer's morphological data"
+        },
+        {
+            "url": "https://raw.githubusercontent.com/biblicalhumanities/strongs/master/greek.json",
+            "filename": "strongs_greek.json",
+            "description": "Strong's Greek dictionary"
+        }
+    ]
+    
+    downloaded_any = False
+    for source in sources:
+        try:
+            target_path = f"data/lexicons/{source['filename']}"
+            urllib.request.urlretrieve(source["url"], target_path)
+            print(f"  ✓ Downloaded {source['description']}")
+            downloaded_any = True
+        except Exception as e:
+            print(f"  ⚠ Could not download {source['description']}: {e}")
+    
+    if not downloaded_any:
+        print("  ⚠ No comprehensive Greek sources available, creating enhanced Greek lexicon...")
+        create_enhanced_greek_lexicon()
+    else:
+        print("  ✓ Comprehensive Greek lexicon data available (Thayer's + Strong's)")
+
+
+def create_enhanced_greek_lexicon() -> None:
+    """Create an enhanced Greek lexicon from available MorphGNT morphological data."""
+    print("  Creating enhanced Greek lexicon from MorphGNT morphological data...")
+    
+    # Try to extract comprehensive lexicon from existing morphological data
+    morph_dir = Path("data/sources/morphology/greek") 
+    lemma_entries = {}
+    
+    if morph_dir.exists():
+        for json_file in morph_dir.glob("*.json"):
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    for verse in data.get('verses', []):
+                        for word in verse.get('words', []):
+                            lemma = word.get('lemma', '').strip()
+                            text = word.get('text', '').strip()
+                            normalized = word.get('normalized', '').strip()
+                            pos = word.get('pos', '').strip()
+                            
+                            if lemma and text:
+                                if lemma not in lemma_entries:
+                                    lemma_entries[lemma] = {
+                                        "greek": lemma,
+                                        "pos": pos,
+                                        "forms": set(),
+                                        "frequency": 0
+                                    }
+                                lemma_entries[lemma]["forms"].add(text)
+                                if normalized:
+                                    lemma_entries[lemma]["forms"].add(normalized)
+                                lemma_entries[lemma]["frequency"] += 1
+            except Exception as e:
+                print(f"    Warning: Error processing {json_file.name}: {e}")
+    
+    # Add basic meanings for common words  
+    basic_meanings = {
+        "θεός": ["God", "god", "divine", "deity"],
+        "κόσμος": ["world", "universe", "cosmos"],
+        "λόγος": ["word", "message", "speech", "reason"],
+        "ἀρχή": ["beginning", "origin", "rule"],
+        "εἰμί": ["am", "is", "are", "was", "were", "be"],
+        "γίνομαι": ["become", "came", "was", "happen"],
+        "ἔρχομαι": ["come", "came", "go"],
+        "λέγω": ["say", "said", "speak", "tell"],
+        "ἄνθρωπος": ["man", "human", "person", "people"],
+        "φῶς": ["light"],
+        "σκοτία": ["darkness"],
+        "ζωή": ["life"],
+        "ἀλήθεια": ["truth"],
+        "χάρις": ["grace"],
+        "δόξα": ["glory"],
+        "ὁ": ["the"],
+        "καί": ["and", "also", "even"],
+        "ἐν": ["in", "on", "among"],
+        "εἰς": ["into", "to", "for"],
+        "ἐκ": ["from", "out of"],
+        "πρός": ["with", "to", "toward"],
+        "διά": ["through", "because of"],
+        "μετά": ["with", "after"],
+        "ὅτι": ["that", "because"],
+    }
+    
+    # Combine morphological data with basic meanings
+    enhanced_lexicon = {
+        "metadata": {
+            "name": "Enhanced Greek Lexicon",
+            "source": "MorphGNT morphological data + public domain references", 
+            "license": "Public Domain",
+            "created": datetime.now(UTC).isoformat(),
+            "entries_count": len(lemma_entries)
+        },
+        "entries": {}
+    }
+    
+    for lemma, entry in lemma_entries.items():
+        enhanced_entry = {
+            "greek": lemma,
+            "pos": entry["pos"],
+            "frequency": entry["frequency"],
+            "forms": list(entry["forms"]),
+            "meanings": basic_meanings.get(lemma, [])
+        }
+        enhanced_lexicon["entries"][lemma] = enhanced_entry
+    
+    with open("data/lexicons/enhanced_greek_lexicon.json", "w", encoding="utf-8") as f:
+        json.dump(enhanced_lexicon, f, indent=2, ensure_ascii=False)
+    
+    print(f"  ✓ Created enhanced Greek lexicon with {len(lemma_entries)} lemmas")
+
+
+def create_basic_greek_lexicon() -> None:
+    """Create a basic Greek lexicon from public domain sources."""
+    # Fallback to basic lexicon if enhanced creation fails
+    create_enhanced_greek_lexicon()
+
+
+def download_modern_parallel_corpora() -> None:
+    """Download modern parallel biblical corpora for training."""
+    print("Downloading modern parallel corpora...")
+    
+    try:
+        # Download Berean Study Bible (Public Domain)
+        print("  Downloading Berean Study Bible...")
+        berean_url = "https://berean.bible/downloads/bsb.json"
+        
+        try:
+            urllib.request.urlretrieve(berean_url, "data/parallel_corpora/berean_study_bible.json")
+            print("    ✓ Downloaded Berean Study Bible")
+        except:
+            print("    ⚠ Berean Study Bible not available from direct link")
+        
+        # Create a sample parallel corpus for demonstration
+        create_sample_parallel_corpus()
+        
+    except Exception as e:
+        print(f"  ⚠ Could not download parallel corpora: {e}")
+        create_sample_parallel_corpus()
+
+
+def create_sample_parallel_corpus() -> None:
+    """Create sample parallel corpus for alignment training."""
+    sample_corpus = {
+        "metadata": {
+            "name": "Sample Biblical Parallel Corpus",
+            "description": "Sample alignments for training biblical alignment models",
+            "license": "Public Domain",
+            "created": datetime.now(UTC).isoformat()
+        },
+        "alignments": [
+            {
+                "reference": "Gen.1.1",
+                "hebrew": ["בראשית", "ברא", "אלהים", "את", "השמים", "ואת", "הארץ"],
+                "english": ["In", "the", "beginning", "God", "created", "the", "heavens", "and", "the", "earth"],
+                "manual_alignments": [
+                    {"hebrew_index": 0, "english_indices": [0, 1, 2], "confidence": 0.95, "type": "phrase"},
+                    {"hebrew_index": 1, "english_indices": [4], "confidence": 0.9, "type": "word"},
+                    {"hebrew_index": 2, "english_indices": [3], "confidence": 0.95, "type": "word"},
+                    {"hebrew_index": 3, "english_indices": [], "confidence": 1.0, "type": "null"},
+                    {"hebrew_index": 4, "english_indices": [5, 6], "confidence": 0.9, "type": "phrase"},
+                    {"hebrew_index": 5, "english_indices": [7], "confidence": 0.95, "type": "word"},
+                    {"hebrew_index": 6, "english_indices": [8, 9], "confidence": 0.9, "type": "phrase"}
+                ]
+            },
+            {
+                "reference": "John.1.1", 
+                "greek": ["Ἐν", "ἀρχῇ", "ἦν", "ὁ", "λόγος", "καὶ", "ὁ", "λόγος", "ἦν", "πρὸς", "τὸν", "θεόν", "καὶ", "θεὸς", "ἦν", "ὁ", "λόγος"],
+                "english": ["In", "the", "beginning", "was", "the", "Word", "and", "the", "Word", "was", "with", "God", "and", "the", "Word", "was", "God"],
+                "manual_alignments": [
+                    {"greek_index": 0, "english_indices": [0], "confidence": 0.95, "type": "word"},
+                    {"greek_index": 1, "english_indices": [1, 2], "confidence": 0.9, "type": "phrase"},
+                    {"greek_index": 2, "english_indices": [3], "confidence": 0.9, "type": "word"},
+                    {"greek_index": 3, "english_indices": [4], "confidence": 0.95, "type": "word"},
+                    {"greek_index": 4, "english_indices": [5], "confidence": 0.95, "type": "word"}
+                ]
+            }
+        ]
+    }
+    
+    with open("data/parallel_corpora/sample_alignments.json", "w", encoding="utf-8") as f:
+        json.dump(sample_corpus, f, indent=2, ensure_ascii=False)
+    
+    print("  ✓ Created sample parallel corpus")
+
+
+def download_strongs_concordance() -> None:
+    """Download Strong's Concordance data (public domain)."""
+    print("Downloading Strong's Concordance...")
+    
+    # Strong's Concordance is public domain and provides structured lemma-to-definition mappings
+    sources = [
+        {
+            "url": "https://raw.githubusercontent.com/biblicalhumanities/strongs/master/hebrew.json",
+            "filename": "strongs_hebrew.json",
+            "description": "Strong's Hebrew dictionary"
+        },
+        {
+            "url": "https://raw.githubusercontent.com/biblicalhumanities/strongs/master/greek.json", 
+            "filename": "strongs_greek.json",
+            "description": "Strong's Greek dictionary"
+        },
+        {
+            "url": "https://raw.githubusercontent.com/openscriptures/strongs/master/strongshebrewdictionary.xml",
+            "filename": "strongs_hebrew.xml",
+            "description": "Strong's Hebrew XML from OpenScriptures"
+        },
+        {
+            "url": "https://raw.githubusercontent.com/openscriptures/strongs/master/strongsgreekdictionary.xml",
+            "filename": "strongs_greek.xml", 
+            "description": "Strong's Greek XML from OpenScriptures"
+        }
+    ]
+    
+    downloaded_any = False
+    for source in sources:
+        try:
+            target_path = f"data/lexicons/{source['filename']}"
+            urllib.request.urlretrieve(source["url"], target_path)
+            print(f"  ✓ Downloaded {source['description']}")
+            downloaded_any = True
+        except Exception as e:
+            print(f"  ⚠ Could not download {source['description']}: {e}")
+    
+    if downloaded_any:
+        print("  ✓ Strong's Concordance data available for lemma-to-definition mapping")
+    else:
+        print("  ⚠ No Strong's sources available")
+
+
+def download_embedding_metadata() -> None:
+    """Download information about available multilingual embeddings."""
+    print("Setting up embedding model information...")
+    
+    embedding_info = {
+        "metadata": {
+            "description": "Multilingual embedding models for biblical alignment",
+            "updated": datetime.now(UTC).isoformat()
+        },
+        "models": {
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
+                "description": "Multilingual sentence embedding model",
+                "languages": 50,
+                "size": "420MB",
+                "license": "Apache 2.0",
+                "recommended": True,
+                "download_command": "pip install sentence-transformers"
+            },
+            "sentence-transformers/LaBSE": {
+                "description": "Language-agnostic BERT Sentence Embedding",
+                "languages": 109, 
+                "size": "1.88GB",
+                "license": "Apache 2.0",
+                "recommended": True,
+                "download_command": "pip install sentence-transformers"
+            },
+            "microsoft/Multilingual-MiniLM-L12-H384": {
+                "description": "Microsoft multilingual model",
+                "languages": 100,
+                "size": "134MB", 
+                "license": "MIT",
+                "recommended": False,
+                "download_command": "pip install transformers"
+            }
+        },
+        "usage_note": "These models will be downloaded automatically when first used. No manual download required."
+    }
+    
+    with open("data/embeddings/models_info.json", "w", encoding="utf-8") as f:
+        json.dump(embedding_info, f, indent=2, ensure_ascii=False)
+    
+    print("  ✓ Created embedding model information")
+
+
 def main() -> None:
     """Main download process."""
     os.makedirs("data/sources/hebrew", exist_ok=True)
@@ -420,6 +850,9 @@ def main() -> None:
     os.makedirs("data/sources/translations", exist_ok=True)
     os.makedirs("data/sources/morphology/hebrew", exist_ok=True)
     os.makedirs("data/sources/morphology/greek", exist_ok=True)
+    os.makedirs("data/lexicons", exist_ok=True)
+    os.makedirs("data/embeddings", exist_ok=True)
+    os.makedirs("data/parallel_corpora", exist_ok=True)
 
     download_and_extract_hebrew()
     download_and_extract_greek()
@@ -430,6 +863,22 @@ def main() -> None:
     # Convert morphological data to JSON
     convert_oshb_to_json()
     convert_morphgnt_to_json()
+    
+    # Download comprehensive lexicon resources
+    print("\n" + "="*60)
+    print("DOWNLOADING COMPREHENSIVE LEXICON RESOURCES")
+    print("="*60)
+    print("Note: BDAG and HALOT are copyrighted, downloading public domain alternatives:")
+    print("  - BDB Hebrew Lexicon (Brown-Driver-Briggs, 1906)")
+    print("  - Thayer's Greek-English Lexicon (1889)")
+    print("  - Strong's Concordance (public domain)")
+    print("  - Enhanced lexicons from OSHB/MorphGNT morphological data")
+    
+    download_bdb_lexicon()
+    download_greek_lexicon()
+    download_strongs_concordance()
+    download_modern_parallel_corpora()
+    download_embedding_metadata()
 
     # Import and use abba_data_downloader for translations
     try:

@@ -34,6 +34,22 @@ class FullBibleCorpusBuilder:
         # Use KJV as primary target translation (most compatible)
         self.target_translations = ['eng_kjv']
     
+    def _get_standard_book_code(self, morphology_book_code: str) -> str:
+        """Map morphology book codes to standard translation book codes."""
+        # Greek morphology to standard book code mapping
+        greek_to_standard = {
+            'matthew': 'Matt', 'mark': 'Mark', 'luke': 'Luke', 'john': 'John',
+            'acts': 'Acts', 'romans': 'Rom', '1corinthians': '1Cor',
+            '2corinthians': '2Cor', 'galatians': 'Gal', 'ephesians': 'Eph',
+            'philippians': 'Phil', 'colossians': 'Col', '1thessalonians': '1Thess',
+            '2thessalonians': '2Thess', '1timothy': '1Tim', '2timothy': '2Tim',
+            'titus': 'Titus', 'philemon': 'Phlm', 'hebrews': 'Heb',
+            'james': 'Jas', '1peter': '1Pet', '2peter': '2Pet',
+            '1john': '1John', '2john': '2John', '3john': '3John',
+            'jude': 'Jude', 'revelation': 'Rev'
+        }
+        return greek_to_standard.get(morphology_book_code, morphology_book_code)
+    
     def extract_verse_text(self, translation_data: Dict, book_code: str, 
                           chapter: int, verse: int) -> str:
         """Extract verse text from translation data."""
@@ -129,12 +145,14 @@ class FullBibleCorpusBuilder:
         source_lines = []
         target_lines = []
         
-        # All New Testament books
+        # All New Testament books (using lowercase names as they appear in Greek morphology files)
         nt_books = [
-            'Matt', 'Mark', 'Luke', 'John', 'Acts', 'Rom', '1Cor', '2Cor',
-            'Gal', 'Eph', 'Phil', 'Col', '1Thess', '2Thess', '1Tim', '2Tim',
-            'Titus', 'Phlm', 'Heb', 'Jas', '1Pet', '2Pet', '1John', '2John',
-            '3John', 'Jude', 'Rev'
+            'matthew', 'mark', 'luke', 'john', 'acts', 'romans', 
+            '1corinthians', '2corinthians', 'galatians', 'ephesians', 
+            'philippians', 'colossians', '1thessalonians', '2thessalonians',
+            '1timothy', '2timothy', 'titus', 'philemon', 'hebrews',
+            'james', '1peter', '2peter', '1john', '2john', '3john',
+            'jude', 'revelation'
         ]
         
         # Load target translation once
@@ -172,8 +190,10 @@ class FullBibleCorpusBuilder:
                 if not greek_words:
                     continue
                 
+                # Map Greek morphology book name to standard book code for translation lookup
+                standard_book_code = self._get_standard_book_code(book_code)
                 english_text = self.extract_verse_text(
-                    target_translation, book_code, chapter, verse
+                    target_translation, standard_book_code, chapter, verse
                 )
                 
                 if english_text:

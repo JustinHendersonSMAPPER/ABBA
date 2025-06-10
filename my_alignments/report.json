@@ -1,0 +1,82 @@
+{
+  "export_timestamp": "2025-06-10T16:11:09.492881",
+  "format_version": "1.0",
+  "export_type": "multi_file",
+  "translations_count": 1,
+  "batch_summary": {
+    "average_coverage": 15.927011444144126,
+    "translations_with_hebrew": 1,
+    "translations_with_greek": 1,
+    "total_verses": 31102,
+    "total_books": 66
+  },
+  "metadata": {
+    "aligner_type": "ImprovedBiblicalEnsemble",
+    "aligner_components": [
+      {
+        "type": "MorphologicalLexiconAligner",
+        "weight": 0.5
+      },
+      {
+        "type": "MorphologyAwareAligner",
+        "weight": 0.25
+      },
+      {
+        "type": "ModernSemanticAligner",
+        "weight": 0.15
+      },
+      {
+        "type": "CrossLingualEmbeddingAligner",
+        "weight": 0.05
+      },
+      {
+        "type": "StatisticalAligner",
+        "weight": 0.05
+      }
+    ],
+    "confidence_threshold": 0.8,
+    "production_mode": true,
+    "neural_enabled": false,
+    "command_line_args": {
+      "test_mode": false,
+      "max_translations": null,
+      "translation_filter": "eng_asv",
+      "enable_neural": false
+    }
+  },
+  "morphological_analysis_file": "abba_morphological_analysis.json",
+  "translations": [
+    {
+      "translation_id": "eng_asv",
+      "alignment_file": "abba_eng_asv.json",
+      "overall_coverage": 15.927011444144126,
+      "hebrew_coverage": 19.927201294199214,
+      "greek_coverage": 6.747250642682989,
+      "book_count": 66,
+      "verse_count": 31102,
+      "has_hebrew": true,
+      "has_greek": true,
+      "confidence_statistics": {
+        "hebrew_stats": {
+          "avg_confidence": 0.6543007675295954,
+          "median_confidence": 0.5,
+          "high_confidence_pct": 35.44946012748797,
+          "medium_confidence_pct": 64.55053987251203,
+          "low_confidence_pct": 0.0,
+          "total_alignments": 15374
+        },
+        "greek_stats": {
+          "avg_confidence": 0.5864847756410256,
+          "median_confidence": 0.5,
+          "high_confidence_pct": 21.314102564102562,
+          "medium_confidence_pct": 78.68589743589743,
+          "low_confidence_pct": 0.0,
+          "total_alignments": 9984
+        }
+      }
+    }
+  ],
+  "alignment_files": [
+    "abba_eng_asv.json"
+  ]
+}

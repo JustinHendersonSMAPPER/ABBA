@@ -141,26 +141,54 @@ class EnsembleAligner:
                     best_score = score
                     best_tgt_idx = tgt_idx
             
-            if best_tgt_idx >= 0 and best_score > 0.1:  # Minimum threshold
+            if best_tgt_idx >= 0 and best_score > 0.05:  # Minimum threshold (lowered for better coverage)
                 used_targets.add(best_tgt_idx)
                 
-                # Calculate agreement between methods
+                # Enhanced confidence calculation with multi-method agreement
                 pair_features = features.get((src_idx, best_tgt_idx), {})
                 method_scores = [v for k, v in pair_features.items() if k.startswith('method_')]
+                method_names = [k.replace('method_', '') for k in pair_features.keys() if k.startswith('method_')]
+                
+                # Base confidence from weighted average
+                confidence = best_score
                 
                 if len(method_scores) > 1:
-                    # Agreement bonus when multiple methods align the same pair
-                    agreement = 1.0 - (max(method_scores) - min(method_scores))
-                    best_score *= (1.0 + 0.2 * agreement)
+                    # Multi-method agreement bonus
+                    score_range = max(method_scores) - min(method_scores)
+                    agreement_factor = 1.0 - score_range  # Higher when scores are similar
+                    
+                    # Consensus bonus: exponential increase with more agreeing methods
+                    consensus_bonus = 0.15 * (len(method_scores) - 1) * agreement_factor
+                    confidence *= (1.0 + consensus_bonus)
+                    
+                    # Additional bonuses for specific method combinations
+                    if 'StatisticalAligner' in method_names and 'MorphologicalAligner' in method_names:
+                        # Statistical + Morphological agreement is very reliable
+                        confidence *= 1.1
+                    
+                    if len(method_scores) >= 3:
+                        # All three methods agree - highest confidence boost
+                        confidence *= 1.15
+                
+                # Confidence capping and method-specific adjustments
+                if 'StatisticalAligner' in method_names:
+                    # Statistical alignments tend to be more reliable
+                    confidence *= 1.05
+                
+                # Final confidence normalization
+                confidence = min(confidence, 1.0)
                 
                 alignment = {
                     'source_index': src_idx,
                     'target_index': best_tgt_idx,
                     'source_word': source_words[src_idx],
                     'target_word': target_words[best_tgt_idx],
-                    'confidence': round(min(best_score, 1.0), 3),
+                    'confidence': round(confidence, 3),
                     'method': 'ensemble',
-                    'num_methods': len(method_scores)
+                    'num_methods': len(method_scores),
+                    'contributing_methods': method_names,
+                    'method_agreement': round(1.0 - score_range, 3) if len(method_scores) > 1 else 1.0,
+                    'base_score': round(best_score, 3)
                 }
                 
                 # Include morphological features if available
