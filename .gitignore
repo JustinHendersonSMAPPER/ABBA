@@ -1,3 +1,11 @@
+# Created by https://www.toptal.com/developers/gitignore/api/python
+# Edit at https://www.toptal.com/developers/gitignore?templates=python
+logs/*
+claude_scripts/*
+bible_data/*
+.vscode/*
+
+### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -5,6 +13,16 @@ __pycache__/
 
 # C extensions
 *.so
+
+# Ignore sensitive files
+tools/*.json
+*.key
+*.crt
+
+
+# Confiuration files
+.env
+samples/*
 
 # Distribution / packaging
 .Python
@@ -44,12 +62,12 @@ htmlcov/
 .coverage.*
 .cache
 nosetests.xml
-coverage.xml
 *.cover
 *.py,cover
 .hypothesis/
 .pytest_cache/
 cover/
+super-linter.env
 
 # Translations
 *.mo
@@ -94,12 +112,6 @@ ipython_config.py
 #   install all needed dependencies.
 #Pipfile.lock
 
-# UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#uv.lock
-
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
@@ -112,10 +124,8 @@ ipython_config.py
 #pdm.lock
 #   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
 #   in version control.
-#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
+#   https://pdm.fming.dev/#use-with-ide
 .pdm.toml
-.pdm-python
-.pdm-build/
 
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
 __pypackages__/
@@ -128,6 +138,8 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+.continue
+.continue/*
 .env
 .venv
 env/
@@ -167,18 +179,14 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# Ruff stuff:
+### Python Patch ###
+# Poetry local configuration file - https://python-poetry.org/docs/configuration/#local-configuration
+poetry.toml
+
+# ruff
 .ruff_cache/
 
-# PyPI configuration file
-.pypirc
+# LSP config files
+pyrightconfig.json
 
-# Processing folder with large files
-processing/
-
-# Data folder as it may contain large files
-data/
-models/
-*.db
-claude_output/*
-claude_scripts/*
+# End of https://www.toptal.com/developers/gitignore/api/python

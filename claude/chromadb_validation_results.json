@@ -1,0 +1,246 @@
+{
+  "verses": {
+    "source_verses": 31086,
+    "embedded_verses": 31086,
+    "missing_verses": [],
+    "metadata_issues": [],
+    "sample_data": [
+      {
+        "id": "BSB:001:001:001",
+        "found": true,
+        "book_name": "Book1",
+        "text_match": true
+      },
+      {
+        "id": "BSB:001:001:002",
+        "found": true,
+        "book_name": "Book1",
+        "text_match": true
+      },
+      {
+        "id": "BSB:001:001:003",
+        "found": true,
+        "book_name": "Book1",
+        "text_match": true
+      },
+      {
+        "id": "BSB:001:001:004",
+        "found": true,
+        "book_name": "Book1",
+        "text_match": true
+      },
+      {
+        "id": "BSB:001:001:005",
+        "found": true,
+        "book_name": "Book1",
+        "text_match": true
+      }
+    ]
+  },
+  "words": {
+    "source_words": 70965,
+    "embedded_words": 70965,
+    "metadata_completeness": {
+      "strongs": "100/100 (100.0%)",
+      "word": "100/100 (100.0%)",
+      "transliteration": "100/100 (100.0%)",
+      "language": "100/100 (100.0%)"
+    },
+    "sample_data": [
+      {
+        "id": "H7225G:HR/Ncfsa",
+        "found": true,
+        "word": "\u05de\u05b5\u05bd\u05e8\u05b5\u05d0\u05e9\u05c1\u05b4\u05d9\u05ea",
+        "metadata_strongs": "H7225G",
+        "expected_strongs": "H7225G"
+      },
+      {
+        "id": "H1254A:HVqp3ms",
+        "found": true,
+        "word": "\u05d1\u05bc\u05b8\u05e8\u05b8\u05a8\u05d0",
+        "metadata_strongs": "H1254A",
+        "expected_strongs": "H1254A"
+      },
+      {
+        "id": "H0430G:HNcmpa",
+        "found": true,
+        "word": "\u05d0\u05b1\u05dc\u05b9\u05d4\u05b4\u05d9\u05dd\u0592",
+        "metadata_strongs": "H0430G",
+        "expected_strongs": "H0430G"
+      },
+      {
+        "id": "H0853:HTo",
+        "found": true,
+        "word": "\u05d0\u05b6\u05ea",
+        "metadata_strongs": "H0853",
+        "expected_strongs": "H0853"
+      },
+      {
+        "id": "H8064:HTd/Ncmpa",
+        "found": true,
+        "word": "\u05d4\u05b7\u05e9\u05c1\u05bc\u05b8\u05de\u05b8\u05bd\u05d9\u05b4\u05dd\u05c3 \u05e4",
+        "metadata_strongs": "H8064",
+        "expected_strongs": "H8064"
+      },
+      {
+        "id": "H0853:HC/To",
+        "found": true,
+        "word": "\u05d5\u05bd\u05b0\u05d0\u05b6\u05ea",
+        "metadata_strongs": "H0853",
+        "expected_strongs": "H0853"
+      },
+      {
+        "id": "H0776G:HTd/Ncfsa",
+        "found": true,
+        "word": "\u05d4\u05b8\u05d0\u05b8\u05e8\u05b6\u05e5\u0592",
+        "metadata_strongs": "H0776G",
+        "expected_strongs": "H0776G"
+      },
+      {
+        "id": "H0776G:HC/Td/Ncfsa",
+        "found": true,
+        "word": "\u05d5\u05b0\u05d4\u05b8\u05d0\u05b8\u05e8\u05b6\u05e5",
+        "metadata_strongs": "H0776G",
+        "expected_strongs": "H0776G"
+      },
+      {
+        "id": "H1961:HVqp3fs",
+        "found": true,
+        "word": "\u05d4\u05bd\u05b8\u05d9\u05b0\u05ea\u05b8\u05d4",
+        "metadata_strongs": "H1961",
+        "expected_strongs": "H1961"
+      },
+      {
+        "id": "H8414:HNcmsa",
+        "found": true,
+        "word": "\u05ea\u05bc\u05b9\u05a3\u05d4\u05d5\u05bc",
+        "metadata_strongs": "H8414",
+        "expected_strongs": "H8414"
+      }
+    ]
+  },
+  "dimensions": {
+    "verses": {
+      "dimensions": 1024,
+      "expected": 1024,
+      "correct": true
+    },
+    "words": {
+      "dimensions": 768,
+      "expected": 768,
+      "correct": true
+    }
+  },
+  "books": {
+    "total_books": 66,
+    "embedded_books": 66,
+    "missing_books": [],
+    "book_verse_counts": {
+      "Book1": 1533,
+      "Book2": 1213,
+      "Book3": 859,
+      "Book4": 1288,
+      "Book5": 959,
+      "Book6": 658,
+      "Book7": 618,
+      "Book8": 85,
+      "Book9": 810,
+      "Book10": 695,
+      "Book11": 816,
+      "Book12": 719,
+      "Book13": 942,
+      "Book14": 822,
+      "Book15": 280,
+      "Book16": 406,
+      "Book17": 167,
+      "Book18": 1070,
+      "Book19": 2461,
+      "Book20": 915,
+      "Book21": 222,
+      "Book22": 117,
+      "Book23": 1292,
+      "Book24": 1364,
+      "Book25": 154,
+      "Book26": 1273,
+      "Book27": 357,
+      "Book28": 197,
+      "Book29": 73,
+      "Book30": 146,
+      "Book31": 21,
+      "Book32": 48,
+      "Book33": 105,
+      "Book34": 47,
+      "Book35": 56,
+      "Book36": 53,
+      "Book37": 38,
+      "Book38": 211,
+      "Book39": 55,
+      "Book40": 1068,
+      "Book41": 673,
+      "Book42": 1149,
+      "Book43": 878,
+      "Book44": 1003,
+      "Book45": 432,
+      "Book46": 437,
+      "Book47": 257,
+      "Book48": 149,
+      "Book49": 155,
+      "Book50": 104,
+      "Book51": 95,
+      "Book52": 89,
+      "Book53": 47,
+      "Book54": 113,
+      "Book55": 83,
+      "Book56": 46,
+      "Book57": 25,
+      "Book58": 303,
+      "Book59": 108,
+      "Book60": 105,
+      "Book61": 61,
+      "Book62": 105,
+      "Book63": 13,
+      "Book64": 14,
+      "Book65": 25,
+      "Book66": 404
+    }
+  },
+  "metadata": {
+    "verses": {
+      "issues": []
+    },
+    "words": {
+      "issues": [
+        {
+          "id": "(Con) otras diferentes:NA28+NA27+Tyn+SBL+WH+Treg+TR+Byz",
+          "issues": [
+            "gloss in strongs field: '(Con) otras diferentes'"
+          ]
+        },
+        {
+          "id": "(Cosas) relativas a (esta) vida:NA28+NA27+Tyn+SBL+WH+Treg+TR+Byz",
+          "issues": [
+            "gloss in strongs field: '(Cosas) relativas a (esta) vid'"
+          ]
+        },
+        {
+          "id": "(De) cual:NA28+NA27+Tyn+SBL+WH+Treg",
+          "issues": [
+            "gloss in strongs field: '(De) cual'"
+          ]
+        },
+        {
+          "id": "(De) los:NA28+NA27+Tyn+SBL+WH+Treg+TR+Byz",
+          "issues": [
+            "gloss in strongs field: '(De) los'"
+          ]
+        },
+        {
+          "id": "(De) quien:NA28+NA27+Tyn+SBL+WH+Treg+TR+Byz",
+          "issues": [
+            "gloss in strongs field: '(De) quien'"
+          ]
+        }
+      ]
+    }
+  }
+}

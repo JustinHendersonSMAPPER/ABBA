@@ -1,321 +1,337 @@
-# ABBA
-Annotated Bible and Background Analysis
+# ABBA - Annotated Bible and Background Analysis
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Coverage](https://img.shields.io/badge/coverage-90%25+-brightgreen.svg)](https://github.com/jhenderson/ABBA)
+A comprehensive Python framework for biblical text analysis that provides instant access to original Hebrew, Aramaic, and Greek texts with morphological analysis, cross-translation verse alignment, and comprehensive linguistic data.
 
-## Overview
-
-The Annotated Bible and Background Analysis (ABBA) project makes the Bible more approachable through advanced data processing and multi-format export capabilities. ABBA provides a comprehensive framework for biblical text analysis, supporting multiple languages, canons, and export formats.
-
-## 🚀 Current Status
-
-**Version 1.0 - Production Ready**
-
-All major features have been implemented and tested with 100% test coverage (1106 tests passing). The system successfully handles:
-
-- ✅ Multi-version Bible alignment
-- ✅ Hebrew/Greek morphological analysis  
-- ✅ Advanced annotations with ML support
-- ✅ Timeline tracking with BCE date handling
-- ✅ Cross-reference management
-- ✅ Multiple export formats (SQLite, JSON, OpenSearch, Graph DBs)
-- ✅ Support for Protestant, Catholic, Orthodox, and Ethiopian canons
-
-## 🔄 Data Processing Overview
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Source    │────▶│   Parsers   │────▶│  Alignment  │────▶│ Annotation  │
-│   Texts     │     │ HEB/GRK/EN │     │  & Morph.   │     │  ML Engine  │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-                                                                      │
-                    ┌─────────────┐     ┌─────────────┐              ▼
-                    │   Export    │◀────│   Canon &   │◀────┌─────────────┐
-                    │  Pipeline   │     │  Timeline   │     │ Cross-Refs  │
-                    └─────────────┘     └─────────────┘     └─────────────┘
-                           │
-         ┌─────────────────┼─────────────────┬─────────────────┐
-         ▼                 ▼                 ▼                 ▼
-    ┌─────────┐      ┌─────────┐      ┌─────────┐      ┌─────────┐
-    │ SQLite  │      │  JSON   │      │  Open   │      │  Graph  │
-    │   DB    │      │  Files  │      │ Search  │      │   DB    │
-    └─────────┘      └─────────┘      └─────────┘      └─────────┘
-```
-
-## 📚 Documentation
-
-### Essential Guides
-- **[Quick Start Guide](docs/QUICK_START.md)** - Get started in 5 minutes
-- **[User Guide](docs/USER_GUIDE.md)** - Complete guide with examples and customization options
-- **[Data Flow & Algorithms](docs/DATA_FLOW_AND_ALGORITHMS.md)** - Detailed explanation of processing pipeline and algorithms
-
-### Core Documentation
-- **[Architecture Overview](docs/ARCHITECTURE.md)** - Comprehensive guide to ABBA's multi-format architecture
-- **[API Reference](docs/API.md)** - Complete API documentation
-
-### Technical Specifications
-- **[Canonical Format Specification](docs/CANONICAL_FORMAT.md)** - Detailed specification of the source data format
-- **[Automatic Annotations](docs/AUTOMATIC_ANNOTATIONS.md)** - ML-powered annotation generation
-- **[Search Methodology](docs/SEARCH_METHODOLOGY.md)** - Cross-language search strategies
-- **[Data Integrity](docs/DATA_INTEGRITY.md)** - Validation and quality assurance
-
-### Development
-- **[Code Quality](docs/CODE_QUALITY.md)** - Testing and quality standards
-- **[Modern Alignment Stack](docs/MODERN_ALIGNMENT_STACK.md)** - Advanced alignment system documentation
-
-## 🛠️ Installation
+## Quick Start
 
 ```bash
-# Install from source
-git clone https://github.com/jhenderson/ABBA.git
-cd ABBA
+# Install dependencies
 poetry install
 
-# For development with all features
-poetry install --with dev,test
+# Initialize database and download biblical texts
+poetry run python abba/main.py
 
-# Run tests
-make test
+# List available translations
+poetry run python abba/main.py --list
 
-# See all available commands
-make help
+# View database examples
+poetry run python claude/scripts/simple_db_examples.py
 ```
 
-## 🚀 Quick Start
+## Features
+
+### 📚 Current Implementation (Phase 1 - Complete)
+
+- **SQLite Database Architecture**: Fast, local database with structured biblical data
+- **Multi-Translation Support**: Import and query 1200+ Bible translations
+- **Original Language Integration**: Complete Hebrew (TAHOT) and Greek (TAGNT) texts
+- **Morphological Analysis**: Detailed grammatical information for every word
+- **Strong's Concordance**: Extended Strong's numbers with lexicon definitions
+- **Import Tracking**: Intelligent tracking prevents re-processing of data
+- **Cross-Reference System**: Navigate between related passages
+- **Verse-Level Alignment**: Pragmatic alignment system across all translations
+
+### 🔧 Core Components
+
+1. **Database Schema**
+   - `verses`: All biblical text organized by translation, book, chapter, verse
+   - `words`: Original Hebrew/Greek words with morphology and Strong's numbers
+   - `lexicon`: Dictionary definitions for Hebrew and Greek terms
+   - `morphology`: Grammatical code explanations
+   - `books`: Book metadata and ordering information
+
+2. **Data Sources**
+   - **bible.db**: Source database with 1200+ translations
+   - **STEPBible**: Academic-quality Hebrew/Greek texts with linguistic tagging
+   - **Import Tracking**: JSON-based progress tracking at `.import_status.json`
+
+3. **Configuration System**
+   - Priority: CLI arguments > Environment variables > Config file > Defaults
+   - Supports `.env` files for persistent settings
+   - JSON configuration files for complex setups
+
+## Installation
+
+### Prerequisites
+
+- Python 3.8+
+- Poetry (recommended) or pip
+- ~2GB disk space for full database
+
+### Install with Poetry (Recommended)
 
 ```bash
-# Export complete KJV Bible to JSON with all enrichments
-python -m abba --output kjv_bible --format json --translations ENG_KJV
+# Clone the repository
+git clone https://github.com/yourusername/ABBA.git
+cd ABBA
 
-# Export multiple translations
-python -m abba --output bibles --format json --translations ENG_KJV ENG_ASV ENG_WEB
+# Install dependencies
+poetry install
 
-# Export to SQLite database
-python -m abba --output bible.db --format sqlite --translations ENG_KJV
-
-# Query the exported data
-sqlite3 bible.db "SELECT COUNT(*) FROM verses;"  # Returns: 31102
+# Activate shell
+poetry shell
 ```
 
-See [Quick Start Guide](docs/QUICK_START.md) for more examples.
-
-## 🎯 Key Features
-
-### 1. **Multi-Canon Support**
-Support for different biblical traditions:
-- Protestant (66 books)
-- Catholic (73 books)  
-- Orthodox (76+ books)
-- Ethiopian Orthodox (81 books)
-
-```python
-from abba.canon.registry import CanonRegistry
-
-registry = CanonRegistry()
-catholic_canon = registry.get_canon("catholic")
-books = catholic_canon.get_books()
-```
-
-### 2. **Original Language Processing**
-Advanced morphological analysis for Hebrew and Greek:
-
-```python
-from abba.morphology.hebrew_morphology import HebrewMorphology
-from abba.morphology.greek_morphology import GreekMorphology
-
-# Parse Hebrew morphology
-hebrew = HebrewMorphology()
-morph_data = hebrew.parse_morph_code("Ncmpa")  # Noun, common, masculine, plural, absolute
-
-# Check Greek participles
-greek = GreekMorphology()
-is_participle = greek.is_participle("V-PAN")  # Verb, Participle, Active, Nominative
-```
-
-### 3. **Timeline with BCE Support**
-Proper handling of historical dates including BCE:
-
-```python
-from abba.timeline.models import Event, create_bce_date
-
-exodus = Event(
-    name="The Exodus",
-    time_point=TimePoint(
-        exact_date=create_bce_date(1446),  # 1446 BCE
-        confidence=0.7
-    )
-)
-```
-
-### 4. **Advanced Annotations**
-ML-powered annotation system with multiple approaches:
-
-```python
-from abba.annotations.annotation_engine import AnnotationEngine
-
-engine = AnnotationEngine()
-annotations = await engine.annotate_verse(
-    verse_id=VerseID("JHN", 1, 1),
-    text="In the beginning was the Word...",
-    annotation_types=[AnnotationType.THEOLOGICAL_THEME, AnnotationType.CHRISTOLOGICAL]
-)
-```
-
-### 5. **Multiple Export Formats**
-
-#### SQLite Export
-```python
-from abba.export.sqlite_exporter import SQLiteExporter, SQLiteConfig
-
-config = SQLiteConfig(
-    output_path="bible.db",
-    enable_fts5=True,  # Full-text search support
-    create_indices=True
-)
-
-exporter = SQLiteExporter(config)
-await exporter.export(dataset)
-```
-
-#### JSON Export
-```python
-from abba.export.json_exporter import StaticJSONExporter, JSONConfig
-
-config = JSONConfig(
-    output_path="./json_export",
-    split_by_book=True,
-    create_search_indices=True,
-    pretty_print=True
-)
-
-exporter = StaticJSONExporter(config)
-await exporter.export(dataset)
-```
-
-#### Minimal Exports
-For simple use cases:
-
-```python
-from abba.export.minimal_sqlite import MinimalSQLiteExporter
-
-exporter = MinimalSQLiteExporter("verses.db")
-exporter.add_verse("GEN.1.1", "GEN", 1, 1, "In the beginning...")
-exporter.finalize()
-```
-
-### 6. **Cross-Reference Tracking**
-Comprehensive cross-reference system:
-
-```python
-from abba.cross_references.models import CrossReference, ReferenceType
-
-xref = CrossReference(
-    source_verse=VerseID("GEN", 1, 1),
-    target_verse=VerseID("JHN", 1, 1),
-    reference_type=ReferenceType.PARALLEL,
-    confidence=0.95,
-    metadata={"theme": "creation", "linguistic_parallel": True}
-)
-```
-
-## 📊 Architecture
-
-ABBA uses a modular architecture supporting multiple backends:
-
-| Component | Purpose | Key Features |
-|-----------|---------|--------------|
-| **Parsers** | Text processing | Hebrew, Greek, translation parsing |
-| **Alignment** | Version mapping | Statistical & ML-based alignment |
-| **Annotations** | Content enrichment | Zero-shot, few-shot, BERT models |
-| **Export** | Output generation | SQLite, JSON, OpenSearch, Graph |
-| **Canon** | Tradition support | Multi-canon with proper ordering |
-| **Timeline** | Historical data | BCE dates, uncertainty handling |
-
-## 🧪 Testing
-
-The project maintains 100% test coverage with 1106 tests:
+### Install with pip
 
 ```bash
-# Run all tests
-make test
-
-# Run with coverage report
-make test-coverage
-
-# Run specific test file
-pytest tests/test_morphology.py
-
-# Run with verbose output
-pytest -v tests/
-
-# Run tests in parallel
-pytest -n auto tests/
+pip install -e .
 ```
 
-## 🔧 Development
+## Usage
 
-### Quick Start
+### Basic Commands
+
 ```bash
-# Install development dependencies
-poetry install --with dev,test
+# Initialize database and import default translations
+python abba/main.py
 
-# Run linters
-make lint
+# List all available translations
+python abba/main.py --list
 
-# Format code
-make format
+# Import specific translations only
+python abba/main.py --translations KJV ASV ESV
 
-# Run all checks
-make check
+# Force re-download and rebuild database
+python abba/main.py --force-download --rebuild-db
+
+# Use custom data directory
+python abba/main.py --data-dir /path/to/data
+
+# Quiet mode (minimal output)
+python abba/main.py --quiet
+
+# Verbose mode (detailed progress)
+python abba/main.py --verbose
 ```
 
-### Project Structure
+### Configuration
+
+#### Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+# Data directory location (default: ./bible_data)
+ABBA_DATA_DIR=/path/to/bible/data
+
+# Specific translations to import (comma-separated)
+ABBA_TRANSLATIONS=KJV,ASV,ESV,eng_bbe
+
+# Force download even if files exist
+ABBA_FORCE_DOWNLOAD=false
+
+# Rebuild database from scratch
+ABBA_REBUILD_DB=false
+
+# Output verbosity
+ABBA_VERBOSE=false
+ABBA_QUIET=false
+
+# Custom bible.db URL (if using alternative source)
+ABBA_BIBLE_DB_URL=https://bible.helloao.org/bible.db
+```
+
+#### Configuration File
+
+Create a JSON configuration file:
+
+```json
+{
+  "data_dir": "/custom/path/to/data",
+  "translations": ["KJV", "ASV", "ENGWEBP"],
+  "download_enabled": true,
+  "force_download": false,
+  "rebuild_db": false,
+  "verbose": true,
+  "quiet": false
+}
+```
+
+Use with: `python abba/main.py --config-file my_config.json`
+
+### Database Queries
+
+Once initialized, the SQLite database (`bible_data/abba.db`) can be queried directly:
+
+```sql
+-- Get a specific verse
+SELECT * FROM verses 
+WHERE translation_id = 'eng_kjv' 
+  AND book_id = 43  -- John
+  AND chapter = 3 
+  AND verse = 16;
+
+-- Find original Greek words for a verse
+SELECT w.*, l.gloss, l.definition 
+FROM words w
+LEFT JOIN lexicon l ON SUBSTR(w.translation, 1, 5) = l.strongs_number
+WHERE w.book = 'Jhn' AND w.chapter = 1 AND w.verse = 1
+ORDER BY w.word_num;
+
+-- Search for all occurrences of a Strong's number
+SELECT book, chapter, verse, greek_text, strongs_primary 
+FROM words 
+WHERE translation LIKE 'G3056%'  -- logos
+LIMIT 10;
+```
+
+See `claude/scripts/simple_db_examples.py` for comprehensive query examples.
+
+## Project Structure
+
 ```
 ABBA/
-├── src/abba/          # Main package
-│   ├── alignment/     # Text alignment systems
-│   ├── annotations/   # ML annotation engines
-│   ├── canon/         # Biblical canon support
-│   ├── export/        # Export formats
-│   ├── morphology/    # Language analysis
-│   ├── parsers/       # Text parsers
-│   └── timeline/      # Historical timeline
-├── tests/             # Comprehensive test suite
-├── docs/              # Documentation
-└── examples/          # Usage examples
+├── abba/                       # Main package
+│   ├── __init__.py
+│   ├── main.py                # Entry point
+│   ├── bible_extractor.py     # Core extraction logic
+│   ├── config.py              # Configuration management
+│   ├── cli.py                 # CLI argument parsing
+│   ├── env.py                 # Environment variable handling
+│   └── database/
+│       ├── __init__.py
+│       ├── sqlite_manager.py  # Database operations
+│       └── import_tracker.py  # Import progress tracking
+├── bible_data/                # Data directory (git-ignored)
+│   ├── abba.db               # Main SQLite database
+│   ├── bible.db              # Source database
+│   ├── .import_status.json   # Import tracking
+│   └── stepbible/            # STEPBible original language files
+├── claude/                    # Claude-specific files
+│   ├── checklist.md          # Development checklist
+│   └── scripts/              # Example and debug scripts
+├── docs/                      # Documentation
+│   ├── DATABASE_DESIGN.md    # Database schema details
+│   ├── CONFIGURATION.md      # Configuration guide
+│   └── QUERYING_DATA.md      # Query examples and guides
+├── tests/                     # Test suite
+├── pyproject.toml            # Poetry configuration
+├── .env.example              # Environment template
+└── README.md                 # This file
 ```
 
-## 🤝 Contributing
+## Data Schema
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+### Core Tables
 
-Areas where contributions are especially welcome:
-- Additional language parsers
-- More export formats
-- Enhanced ML models for annotations
-- Additional canon support
-- Performance optimizations
+1. **verses** - Biblical text by translation
+   - `translation_id`: Translation identifier (e.g., 'eng_kjv')
+   - `book_id`: Canonical book number (1-66)
+   - `chapter`: Chapter number
+   - `verse`: Verse number
+   - `text`: Verse text
 
-## 📜 License
+2. **words** - Original language word analysis
+   - `word_ref`: Unique reference (e.g., 'Gen.1.1.1')
+   - `hebrew_text` / `greek_text`: Original text
+   - `transliteration`: Romanized form
+   - `translation`: Strong's number + morphology code
+   - `strongs_primary`: Primary Strong's number
+   - `morphology_code`: Grammatical parsing code
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+3. **lexicon** - Dictionary definitions
+   - `strongs_number`: Strong's concordance number
+   - `original_word`: Dictionary form
+   - `transliteration`: Standard transliteration
+   - `gloss`: Brief definition
+   - `definition`: Full definition
 
-## 🙏 Acknowledgments
+4. **morphology** - Grammar code explanations
+   - `code`: Morphology code
+   - `description`: Human-readable explanation
+   - `language`: hebrew or greek
 
-- Bible translation data from open source projects
-- Strong's Concordance for lexical data
-- Morphological databases from various scholarly sources
-- The broader digital humanities community
+## Development
 
-## 📞 Support
+### Running Tests
 
-- **Issues**: [GitHub Issues](https://github.com/jhenderson/ABBA/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/jhenderson/ABBA/discussions)
-- **Documentation**: [Full Docs](https://github.com/jhenderson/ABBA/tree/main/docs)
+```bash
+# Run all tests with coverage
+nox -s tests
 
----
+# Run specific test
+poetry run pytest tests/test_specific.py
 
-*ABBA - Making biblical texts accessible through modern technology*
+# Run with verbose output
+poetry run pytest -v
+```
+
+### Code Quality
+
+```bash
+# Run all quality checks
+nox
+
+# Individual checks
+nox -s lint      # Linting
+nox -s typing    # Type checking
+nox -s security  # Security scan
+```
+
+### Adding New Features
+
+1. Check `claude/checklist.md` for development phases
+2. Update tests to maintain >95% coverage
+3. Run all quality checks before committing
+4. Update documentation as needed
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"bible.db not found"**
+   - Run with `--force-download` flag
+   - Check internet connection
+   - Verify `ABBA_BIBLE_DB_URL` if using custom source
+
+2. **"Cannot operate on a closed database"**
+   - Database connection issue, restart the import
+   - Check disk space
+   - Ensure write permissions on data directory
+
+3. **Import seems stuck**
+   - Check `.import_status.json` for progress
+   - Use `--verbose` flag for detailed output
+   - Large translations can take several minutes
+
+4. **Missing STEPBible data**
+   - Downloads happen automatically on first run
+   - Check `bible_data/stepbible/` directory
+   - Internet connection required for initial download
+
+### Debug Mode
+
+```bash
+# Maximum verbosity
+python abba/main.py --verbose
+
+# Check import status
+cat bible_data/.import_status.json | python -m json.tool
+
+# Test database connection
+python claude/scripts/check_schema.py
+```
+
+## Future Roadmap
+
+- **Phase 2**: Vector database integration for semantic search
+- **Phase 3**: Ollama-powered concept extraction and mapping
+- **Phase 4**: Advanced linguistic analysis and word studies
+- **Phase 5**: Performance optimization and caching
+- **Phase 6**: API development and web interface
+
+See `claude/checklist.md` for detailed development phases.
+
+## License
+
+[License information here]
+
+## Contributing
+
+[Contributing guidelines here]
+
+## Acknowledgments
+
+- STEPBible for Hebrew and Greek texts
+- bible.helloao.org for the comprehensive translation database
