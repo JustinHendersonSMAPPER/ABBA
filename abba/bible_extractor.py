@@ -8,26 +8,39 @@ Downloads bible.db and extracts translations to JSON files.
 import json
 import sqlite3
 import sys
+import multiprocessing
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import requests
 from tqdm import tqdm
+
+from .parallel_import import ParallelImporter, ImportResult, ImportJob
+from .parallel_stepbible import ParallelStepBibleImporter
+from .operation_manager import OperationManager
+from .hash_validator import HashValidator
+from concurrent.futures import as_completed
 
 
 class BibleExtractor:
     """Simple Bible data downloader and extractor."""
 
-    def __init__(self, data_dir: str = "bible_data"):
+    def __init__(self, data_dir: str = "bible_data", config=None):
         self.data_dir = Path(data_dir)
         self.db_path = self.data_dir / "bible.db"
         self.translations_dir = self.data_dir / "translations"
         self.stepbible_dir = self.data_dir / "stepbible"
+        self.config = config
 
         # Create directories
         self.data_dir.mkdir(exist_ok=True)
         self.translations_dir.mkdir(exist_ok=True)
         self.stepbible_dir.mkdir(exist_ok=True)
+        
+        # Initialize components for parallel operations
+        self.parallel_importer = None
+        self.operation_manager = None
+        self.hash_validator = HashValidator()
 
     def download_bible_db(self) -> bool:
         """Download bible.db from the server."""
@@ -353,8 +366,20 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             # Hebrew (TAHOT): Book.Chapter.Verse#WordNum=Source<TAB>HebrewText<TAB>Transliteration<TAB>Translation<TAB>StrongsRaw<TAB>Morphology<TAB>...<TAB>StrongsPrimary
             # Greek (TAGNT): Book.Chapter.Verse#WordNum=Source<TAB>GreekText (transliteration)<TAB>EnglishGloss<TAB>Strongs=Morphology<TAB>LexiconEntry<TAB>...
             words_added = 0
-
-            for _line_num, line in enumerate(content.split("\n"), 1):
+            lines = content.split("\n")
+            
+            # Count non-empty, non-comment lines for progress
+            data_lines = [l for l in lines if l.strip() and not l.strip().startswith(("#", "=", "TAHOT", "TAGNT", "FIELD"))]
+            
+            # Show progress if not in quiet mode
+            show_progress = not (self.config and self.config.quiet)
+            if show_progress:
+                print(f"  Processing {filename}: {len(data_lines):,} data lines...")
+            
+            # Process with progress bar
+            line_iterator = tqdm(lines, desc=f"    Parsing {filename}", disable=not show_progress, unit="lines")
+            
+            for _line_num, line in enumerate(line_iterator, 1):
                 line = line.strip()
                 if not line:
                     continue
@@ -490,7 +515,11 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                         print(f"Error parsing line {_line_num}: {e}")
                         continue
 
-            print(f"✓ Imported {words_added} words from {filename}")
+            # Close progress bar if it exists
+            if 'line_iterator' in locals() and hasattr(line_iterator, 'close'):
+                line_iterator.close()
+                
+            print(f"✓ Imported {words_added:,} words from {filename}")
             return True
 
         except Exception as e:
@@ -511,7 +540,36 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             print("STEPBible data directory not found")
             return False
 
+        # Quick check if everything is already imported
+        if tracker:
+            all_files = [
+                ("lexicon", "tbesh.txt"),
+                ("lexicon", "tbesg.txt"),
+                ("morphology", "tehmc.txt"),
+                ("morphology", "tegmc.txt"),
+                ("tahot", "tahot_gen_deu.txt"),
+                ("tahot", "tahot_jos_est.txt"),
+                ("tahot", "tahot_job_sng.txt"),
+                ("tahot", "tahot_isa_mal.txt"),
+                ("tagnt", "tagnt_mat_jhn.txt"),
+                ("tagnt", "tagnt_act_rev.txt"),
+            ]
+            
+            all_imported = all(
+                tracker.is_stepbible_file_imported(file_type, filename)
+                for file_type, filename in all_files
+            )
+            
+            if all_imported:
+                print("All STEPBible files already imported - nothing to do")
+                return True
+
         print("Importing STEPBible data into database...")
+        
+        if self.config and self.config.get_parallel_workers() > 1:
+            print(f"Using parallel processing with {self.config.get_parallel_workers()} workers")
+        else:
+            print("Using sequential processing")
 
         # Parse lexicons
         lexicon_files = [
@@ -567,10 +625,36 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 print(f"  Skipping {text_file} - already imported")
                 text_success_count += 1
                 continue
-            if self.parse_stepbible_text(text_file, db_manager):
-                text_success_count += 1
-                if tracker:
-                    tracker.mark_stepbible_file_imported(file_type, text_file)
+            # Use parallel parser if available
+            use_parallel = True
+            if self.config:
+                use_parallel = self.config.get_parallel_workers() > 1
+            
+            if use_parallel:
+                # Use parallel STEPBible importer
+                if not hasattr(self, 'parallel_stepbible'):
+                    self.parallel_stepbible = ParallelStepBibleImporter(
+                        stepbible_dir=self.stepbible_dir,
+                        dest_db_path=db_manager.db_path,
+                        max_workers=self.config.get_parallel_workers() if self.config else None
+                    )
+                
+                success, word_count = self.parallel_stepbible.parse_file_parallel(
+                    text_file,
+                    file_type,
+                    show_progress=not (self.config and self.config.quiet)
+                )
+                
+                if success:
+                    text_success_count += 1
+                    if tracker:
+                        tracker.mark_stepbible_file_imported(file_type, text_file)
+            else:
+                # Use sequential parser
+                if self.parse_stepbible_text(text_file, db_manager):
+                    text_success_count += 1
+                    if tracker:
+                        tracker.mark_stepbible_file_imported(file_type, text_file)
 
         # Consider success if we imported at least some files
         # Count already-imported files as successful
@@ -884,6 +968,171 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 success_count += 1
 
         print(f"\n✓ Successfully extracted {success_count}/{len(translations)} translations")
+    
+    def extract_translations_to_db_parallel(
+        self, 
+        db_manager,
+        translation_ids: Optional[List[str]] = None,
+        use_parallel: bool = True
+    ) -> Dict[str, ImportResult]:
+        """Extract translations directly to ABBA database using parallel processing.
+        
+        Args:
+            db_manager: SQLiteManager for destination database
+            translation_ids: List of translation IDs to import (None for all)
+            use_parallel: Whether to use parallel processing
+            
+        Returns:
+            Dictionary mapping translation_id to ImportResult
+        """
+        # Get translation list
+        if translation_ids is None:
+            translations = self.list_translations()
+            translation_ids = [t["id"] for t in translations]
+        
+        if not translation_ids:
+            print("No translations to import")
+            return {}
+        
+        # Initialize parallel importer if needed
+        if self.parallel_importer is None:
+            self.parallel_importer = ParallelImporter(
+                source_db_path=self.db_path,
+                dest_db_path=db_manager.db_path,
+                operation_manager=self.operation_manager,
+                max_workers=self.config.get_parallel_workers() if self.config else None
+            )
+        
+        # Determine if we should show progress (not in quiet mode)
+        show_progress = True
+        if self.config and hasattr(self.config, 'quiet'):
+            show_progress = not self.config.quiet
+        
+        if not use_parallel or (self.config and self.config.parallel_workers == 1):
+            # Sequential import - still use the parallel importer for consistency
+            # It will detect single translation and show detailed progress
+            return self.parallel_importer.import_translations_parallel(
+                translation_ids=translation_ids,
+                use_processes=False,
+                batch_size=1000,
+                show_progress=show_progress
+            )
+        
+        # Determine best parallelism type based on task
+        # Database import is I/O bound - use threads
+        use_processes = False
+        if self.config and hasattr(self.config, 'use_threads_for_io_bound'):
+            use_processes = not self.config.use_threads_for_io_bound
+        
+        # Run parallel import (messages are printed in main.py)
+        return self.parallel_importer.import_translations_parallel(
+            translation_ids=translation_ids,
+            use_processes=use_processes,
+            batch_size=1000,
+            show_progress=show_progress
+        )
+    
+    def verify_import_parallel(
+        self,
+        db_manager,
+        translation_ids: Optional[List[str]] = None
+    ) -> Dict[str, bool]:
+        """Verify imported translations using parallel hash validation.
+        
+        This is CPU-bound so we use processes.
+        
+        Args:
+            db_manager: SQLiteManager for destination database
+            translation_ids: List of translation IDs to verify (None for all)
+            
+        Returns:
+            Dictionary mapping translation_id to verification status
+        """
+        if translation_ids is None:
+            with db_manager.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT DISTINCT translation_id FROM verses")
+                translation_ids = [row[0] for row in cursor.fetchall()]
+        
+        if not translation_ids:
+            print("No translations to verify")
+            return {}
+        
+        # Get worker count
+        num_workers = self.config.get_parallel_workers() if self.config else multiprocessing.cpu_count()
+        
+        # Verification is CPU-bound (hashing) - use processes
+        use_processes = True
+        if self.config and hasattr(self.config, 'use_processes_for_cpu_bound'):
+            use_processes = self.config.use_processes_for_cpu_bound
+        
+        print(f"Verifying {len(translation_ids)} translations...")
+        print(f"Using {num_workers} {'processes' if use_processes else 'threads'} (CPU bound task)")
+        
+        results = {}
+        
+        if num_workers == 1 or not use_processes:
+            # Sequential verification
+            with tqdm(total=len(translation_ids), desc="Verifying translations", unit="translations") as pbar:
+                valid_count = 0
+                for tid in translation_ids:
+                    is_valid, message = self.hash_validator.quick_validate(
+                        str(self.db_path),
+                        str(db_manager.db_path),
+                        tid
+                    )
+                    results[tid] = is_valid
+                    if is_valid:
+                        valid_count += 1
+                    else:
+                        pbar.write(f"✗ {tid}: {message}")
+                    pbar.set_postfix({
+                        'valid': valid_count,
+                        'invalid': len(results) - valid_count
+                    })
+                    pbar.update(1)
+        else:
+            # Parallel verification using processes
+            from concurrent.futures import ProcessPoolExecutor
+            
+            with ProcessPoolExecutor(max_workers=num_workers) as executor:
+                # Submit all verification jobs
+                future_to_tid = {
+                    executor.submit(
+                        HashValidator().quick_validate,
+                        str(self.db_path),
+                        str(db_manager.db_path),
+                        tid
+                    ): tid
+                    for tid in translation_ids
+                }
+                
+                # Process results
+                with tqdm(total=len(translation_ids), desc="Verifying translations", unit="translations") as pbar:
+                    valid_count = 0
+                    for future in as_completed(future_to_tid):
+                        tid = future_to_tid[future]
+                        try:
+                            is_valid, message = future.result()
+                            results[tid] = is_valid
+                            if is_valid:
+                                valid_count += 1
+                            else:
+                                pbar.write(f"✗ {tid}: {message}")
+                            pbar.set_postfix({
+                                'valid': valid_count,
+                                'invalid': len(results) - valid_count
+                            })
+                        except Exception as e:
+                            results[tid] = False
+                            pbar.write(f"✗ {tid}: Error - {e}")
+                        pbar.update(1)
+        
+        # Summary
+        valid_count = sum(1 for v in results.values() if v)
+        print(f"\n✓ Verification complete: {valid_count}/{len(results)} translations valid")
+        
+        return results
 
 
 def main():

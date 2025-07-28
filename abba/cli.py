@@ -59,6 +59,15 @@ Examples:
         parser.add_argument("--force-reembed", action="store_true", help="Force regeneration of embeddings")
         
         parser.add_argument("--embedding-batch-size", type=int, default=100, help="Batch size for embedding generation")
+        
+        # Performance options
+        parser.add_argument("--parallel-workers", type=int, default=None, help="Number of parallel workers for import (default: auto-detect CPU count)")
+        
+        parser.add_argument("--no-parallel", action="store_true", help="Disable parallel processing for imports")
+        
+        parser.add_argument("--use-processes", action="store_true", help="Use processes instead of threads for parallel import")
+        
+        parser.add_argument("--verify", action="store_true", help="Verify imports using hash validation after import")
 
         # Configuration
         parser.add_argument("--env-file", type=Path, help="Path to .env file (default: .env)")
@@ -150,6 +159,24 @@ Examples:
     def get_embedding_batch_size(self) -> int:
         """Get embedding batch size."""
         return self.args.embedding_batch_size if self.args else 100
+    
+    def get_parallel_workers(self) -> Optional[int]:
+        """Get number of parallel workers."""
+        if self.args and hasattr(self.args, 'parallel_workers'):
+            return self.args.parallel_workers
+        return None
+    
+    def should_use_parallel(self) -> bool:
+        """Check if parallel processing should be used."""
+        if self.args and hasattr(self.args, 'no_parallel'):
+            return not self.args.no_parallel
+        return True  # Default to parallel
+    
+    def should_use_processes(self) -> bool:
+        """Check if processes should be used instead of threads."""
+        if self.args and hasattr(self.args, 'use_processes'):
+            return self.args.use_processes
+        return False  # Default to threads
 
 
 # Global CLI configuration instance

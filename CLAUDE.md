@@ -30,6 +30,12 @@ python abba/main.py --list                    # List available translations
 python abba/main.py --force-download          # Force re-download of bible.db
 python abba/main.py --translations KJV ESV    # Extract specific translations
 
+# Performance options
+python abba/main.py --parallel-workers 8      # Set number of parallel workers (default: auto-detect CPU count)
+python abba/main.py --no-parallel             # Disable parallel processing
+python abba/main.py --use-processes           # Use processes instead of threads
+python abba/main.py --verify                  # Verify imports with hash validation
+
 # Embedding generation (optional - main.py auto-generates missing embeddings)
 python abba/main.py --embed-verses            # Force re-generate verse embeddings
 python abba/main.py --embed-words             # Force re-generate word embeddings
@@ -102,6 +108,13 @@ STEPBible Files → SQLite Database → Ollama Processing → Vector Database
 3. **Enhanced Context Embeddings**:
    - Combine verse text + original language + morphology + Strong's numbers
    - Language-specific pipelines for optimal accuracy
+
+4. **Parallel Processing Architecture**:
+   - **Auto-detection**: Default uses CPU count for optimal performance
+   - **Task-specific parallelism**:
+     - I/O-bound (database imports): Uses threads for efficiency
+     - CPU-bound (hash validation): Uses processes to bypass GIL
+   - **Configurable**: Can override with `--parallel-workers N` or disable with `--no-parallel`
 
 ## STEPBible Data Structure
 
@@ -184,6 +197,30 @@ claude/
 - Clean up `claude/` folder before final commits
 - Add `claude/` to `.gitignore` if needed to prevent accidental commits
 
+## Data Validation System
+
+The project uses a robust validation system for data integrity:
+
+1. **Hash-Based Validation**: Every verse is hashed using MurmurHash3 for fast validation
+   - Detects any content changes during import
+   - Validates embeddings match source verses
+   - ~3GB/s validation throughput
+
+2. **State Tracking**: Hierarchical job tracking with automatic recovery
+   - Tracks individual translation imports separately
+   - Automatically detects and cleans up interrupted operations
+   - Validates completion with expected counts
+
+3. **Validation Flow**:
+   ```python
+   # Import with validation
+   op_manager.start_job("import_translations", "KJV", db_manager)
+   # ... do import ...
+   op_manager.complete_job("import_translations", "KJV", db_manager)  # Validates automatically
+   ```
+
+See `docs/VALIDATION_SYSTEM.md` for detailed documentation.
+
 ## Important Notes
 
 - The project uses Poetry for dependency management - always use `poetry add` for new dependencies
@@ -195,3 +232,4 @@ claude/
 - Every new feature must include comprehensive tests to maintain >95% coverage
 - All code must pass ALL quality checks - no exceptions
 - **Use `claude/` folder for all Claude-generated debugging files and temporary scripts**
+- **All imports and embeddings are validated using MurmurHash3 for data integrity**

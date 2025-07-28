@@ -8,6 +8,7 @@ for linguistic and semantic analysis.
 
 import logging
 import sys
+import multiprocessing
 
 from abba.bible_extractor import BibleExtractor
 from abba.cli import cli_config
@@ -15,6 +16,8 @@ from abba.config import config_manager
 from abba.database import SQLiteManager
 from abba.database.import_tracker import ImportTracker
 from abba.embeddings import ChromaManager, EmbeddingModelManager, ContextBuilder, EmbeddingPipeline
+from abba.operation_manager import OperationManager
+from tqdm import tqdm
 
 
 def main():
@@ -40,9 +43,23 @@ def main():
             if not config.quiet:
                 print(f"Initializing ABBA database at {config.abba_db_path}...")
             db_manager.initialize_database()
+        else:
+            # Ensure database schema exists even if file exists
+            try:
+                stats = db_manager.get_database_stats()
+                # If we can't get stats, the schema might be missing
+            except Exception:
+                if not config.quiet:
+                    print(f"Database exists but schema missing, reinitializing...")
+                db_manager.initialize_database()
 
-        # Initialize extractor
-        extractor = BibleExtractor(str(config.data_dir))
+        # Initialize operation manager for state tracking
+        state_file = config.data_dir / ".abba_state.json"
+        operation_manager = OperationManager(state_file, config.db_path)
+        
+        # Initialize extractor with config
+        extractor = BibleExtractor(str(config.data_dir), config=config)
+        extractor.operation_manager = operation_manager
 
         # Handle list command
         if cli_config.should_list():
@@ -153,30 +170,75 @@ def main():
                 
                 db_manager.insert_translation(trans)
 
-            # Import verses for selected translations
+            # Check for interrupted operations
+            interrupted_warnings = operation_manager.handle_interrupted_operations()
+            if interrupted_warnings and not config.quiet:
+                print("\nDetected interrupted operations:")
+                for warning in interrupted_warnings:
+                    print(f"  {warning}")
+                print()
+            
+            # Import verses for selected translations using parallel processing
+            translation_ids_to_import = [trans["id"] for trans in translations_to_import]
+            
+            # Use parallel import if enabled
+            use_parallel = config.get_parallel_workers() > 1
+            
+            if not config.quiet:
+                if use_parallel:
+                    print(f"Using parallel import with {config.get_parallel_workers()} workers...")
+                    print(f"Parallelism: threads (I/O bound task)")
+                else:
+                    print("Using sequential import...")
+                print(f"\nImporting {len(translation_ids_to_import)} translation(s)...")
+            
+            # Run import
+            import_results = extractor.extract_translations_to_db_parallel(
+                db_manager=db_manager,
+                translation_ids=translation_ids_to_import,
+                use_parallel=use_parallel
+            )
+            
+            # Process results
             success_count = 0
             failed_translations = []
             
-            for trans in translations_to_import:
-                translation_id = trans["id"]
-                if config.verbose:
-                    print(f"Importing verses for {translation_id}...")
-
-                try:
-                    if extractor.import_translation_to_db(translation_id, db_manager):
-                        success_count += 1
-                        tracker.mark_translation_imported(translation_id)
-                    else:
-                        failed_translations.append(translation_id)
-                        print(f"Failed to import {translation_id}")
-                except Exception as e:
-                    failed_translations.append(translation_id)
-                    print(f"Error importing {translation_id}: {e}")
+            for tid, result in import_results.items():
+                if result.success:
+                    success_count += 1
+                    tracker.mark_translation_imported(tid)
+                    if config.verbose:
+                        print(f"✓ {tid}: {result.verse_count} verses in {result.duration:.1f}s")
+                else:
+                    failed_translations.append(tid)
+                    print(f"✗ {tid}: {result.error}")
             
             if not config.quiet and translations_to_import:
-                print(f"Successfully imported {success_count}/{len(translations_to_import)} translations")
+                total_time = sum(r.duration for r in import_results.values())
+                total_verses = sum(r.verse_count for r in import_results.values() if r.success)
+                print(f"\nSuccessfully imported {success_count}/{len(translations_to_import)} translations")
+                print(f"Total verses: {total_verses:,}")
+                print(f"Total time: {total_time:.1f}s")
+                if total_time > 0:
+                    print(f"Average rate: {total_verses/total_time:.0f} verses/second")
                 if failed_translations:
                     print(f"Failed translations: {', '.join(failed_translations)}")
+            
+            # Verify imports if requested
+            if cli_config.args and hasattr(cli_config.args, 'verify') and cli_config.args.verify:
+                if not config.quiet:
+                    print("\nVerifying imports with hash validation...")
+                
+                verify_results = extractor.verify_import_parallel(
+                    db_manager=db_manager,
+                    translation_ids=translation_ids_to_import
+                )
+                
+                invalid = [tid for tid, valid in verify_results.items() if not valid]
+                if invalid:
+                    print(f"\n⚠️  Validation failed for: {', '.join(invalid)}")
+                else:
+                    print("\n✓ All imports validated successfully")
 
         # Print current database stats
         if not config.quiet:
@@ -361,4 +423,8 @@ def main():
 
 
 if __name__ == "__main__":
+    # Required for Windows multiprocessing support
+    if sys.platform == 'win32':
+        multiprocessing.freeze_support()
+    
     main()

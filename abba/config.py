@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
+import multiprocessing
 
 from .cli import cli_config
 from .env import env_config
@@ -52,8 +53,10 @@ class ABBAConfig:
     enable_query_expansion: bool = True
 
     # Performance settings
-    parallel_workers: int = 4
+    parallel_workers: Optional[int] = None  # None means auto-detect
     connection_pool_size: int = 10
+    use_processes_for_cpu_bound: bool = True  # Use processes for CPU-bound tasks
+    use_threads_for_io_bound: bool = True  # Use threads for I/O-bound tasks
 
     # File paths
     env_file: Optional[Path] = None
@@ -117,6 +120,12 @@ class ABBAConfig:
         """Create necessary directories."""
         self.data_dir.mkdir(exist_ok=True)
         self.translations_dir.mkdir(exist_ok=True)
+    
+    def get_parallel_workers(self) -> int:
+        """Get number of parallel workers, auto-detecting if not set."""
+        if self.parallel_workers is not None:
+            return self.parallel_workers
+        return multiprocessing.cpu_count()
 
 
 class ConfigManager:
@@ -295,11 +304,20 @@ class ConfigManager:
             self.config.enable_query_expansion = env_enable_query_expansion
 
         # Performance settings
+        cli_parallel_workers = cli_config.get_parallel_workers()
         env_parallel_workers = env_config.get_int("ABBA_PARALLEL_WORKERS")
         env_connection_pool_size = env_config.get_int("ABBA_CONNECTION_POOL_SIZE")
-
-        if env_parallel_workers is not None:
+        
+        # CLI takes precedence
+        if cli_parallel_workers is not None:
+            self.config.parallel_workers = cli_parallel_workers
+        elif env_parallel_workers is not None:
             self.config.parallel_workers = env_parallel_workers
+            
+        # Check if parallel is disabled
+        if not cli_config.should_use_parallel():
+            self.config.parallel_workers = 1
+            
         if env_connection_pool_size is not None:
             self.config.connection_pool_size = env_connection_pool_size
 
