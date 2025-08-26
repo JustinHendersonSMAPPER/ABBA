@@ -1,5 +1,35 @@
 # ABBA Implementation Checklist
 
+## Architectural Changes Summary
+
+### Key Modifications from Original Design:
+
+1. **Original Language Embeddings Only**
+   - Instead of embedding all 1,204 translations (~13.8M verses)
+   - Embed only original Hebrew/Greek texts (~31K unique verses)
+   - Maps to translations via canonical verse references
+   - Ensures universal semantic search across all languages
+
+2. **User-Defined Concepts with LLM Validation**
+   - Concepts are user-supplied, not LLM-generated
+   - Traditional Strong's/term mapping as baseline
+   - LLM validates each verse for accuracy (removes false positives)
+   - LLM scans ALL verses to find missing relevant ones
+   - Full traceability of inclusion/exclusion decisions
+
+3. **Build-Time LLM Processing**
+   - All LLM processing happens during dataset build
+   - No LLM required for actual searching
+   - Creates portable, self-contained dataset
+   - Trading build time (~65 hours) for search accuracy
+
+4. **Semantic Search Architecture**
+   ```
+   User Query → Concept Extraction → Original Language Search → Translation Mapping
+                                            ↓
+                                  Pre-validated Concept Mappings
+   ```
+
 ## Configuration Architecture Overview
 
 ### Environment Variables (.env)
@@ -121,18 +151,18 @@ ABBA_CONNECTION_POOL_SIZE=10
 - [x] Implement language detection for model selection
 
 ### Ollama Configuration (Semantic Analysis)
-- [ ] Add Ollama settings to `config.py`:
-  - [ ] `ollama_host` - Ollama API endpoint (default: http://localhost:11434)
-  - [ ] `ollama_semantic_models` - List of models for analysis
-  - [ ] `ollama_consensus_threshold` - Agreement threshold for multi-model
-  - [ ] `ollama_timeout` - API timeout in seconds
-  - [ ] `ollama_batch_size` - Batch size for processing
-- [ ] Add Ollama CLI arguments:
-  - [ ] `--ollama-host` - Override Ollama endpoint
-  - [ ] `--ollama-models` - Comma-separated model list
-  - [ ] `--ollama-consensus` - Set consensus threshold
-- [ ] Create Ollama connection validator
-- [ ] Add `.env` variables:
+- [x] Add Ollama settings to `config.py`:
+  - [x] `ollama_host` - Ollama API endpoint (default: http://localhost:11434)
+  - [x] `ollama_semantic_models` - List of models for analysis
+  - [x] `ollama_consensus_threshold` - Agreement threshold for multi-model
+  - [x] `ollama_timeout` - API timeout in seconds
+  - [x] `ollama_batch_size` - Batch size for processing
+- [x] Add Ollama CLI arguments:
+  - [x] `--ollama-host` - Override Ollama endpoint
+  - [x] `--ollama-models` - Comma-separated model list
+  - [x] `--ollama-consensus` - Set consensus threshold
+- [x] Create Ollama connection validator
+- [x] Add `.env` variables:
   ```
   ABBA_OLLAMA_HOST=http://localhost:11434
   ABBA_OLLAMA_SEMANTIC_MODELS=llama4:scout,command-r-plus:latest
@@ -167,23 +197,25 @@ ABBA_CONNECTION_POOL_SIZE=10
   - [x] Mixed language verses → Both models with alignment
 
 ### Multi-Model Semantic Analysis (Ollama)
-- [ ] Create `abba/semantic/` directory
-- [ ] Implement `ollama_analyzer.py` for concept extraction
-- [ ] Build consensus scoring system:
-  - [ ] Collect responses from multiple models
-  - [ ] Calculate agreement scores
-  - [ ] Weight by model performance/size
-- [ ] Add semantic analysis caching
+- [x] Create `abba/semantic/` directory
+- [x] Implement `ollama_analyzer.py` for concept extraction
+- [x] Build consensus scoring system:
+  - [x] Collect responses from multiple models
+  - [x] Calculate agreement scores
+  - [x] Weight by model performance/size
+- [x] Add semantic analysis caching
 
-### Embedding Generation (Option A: Verse-level)
-- [x] Create enhanced verse embedding pipeline:
-  - [x] Combine verse text + original language + morphology
-  - [x] Generate embeddings with full context
-  - [x] Store both English and multilingual embeddings
-- [x] Add cross-lingual alignment scoring
-- [x] Implement embedding quality validation
+### Original Language Embedding Generation
+- [ ] Remove translation-specific verse embeddings
+- [ ] Implement original language verse embeddings:
+  - [ ] Use Hebrew/Greek text from `stepbible_verses` table
+  - [ ] Include morphology and Strong's numbers in context
+  - [ ] Generate single embedding per canonical verse
+  - [ ] Map embeddings to all translations via verse reference
+- [ ] Verify embedding deduplication (31K verses, not 13M)
+- [ ] Update embedding validator for new structure
 
-### Embedding Generation (Option B: Word-level)
+### Word-level Embeddings (Original Language)
 - [x] Extract unique words with linguistic context:
   - [x] Include lexicon definitions
   - [x] Add morphological variations
@@ -221,34 +253,68 @@ ABBA_CONNECTION_POOL_SIZE=10
 
 ## Phase 4: Concept Mapping System
 
-### Concept Configuration
-- [ ] Add concept settings to `config.py`:
-  - [ ] `concepts_file` - Path to concepts JSON
-  - [ ] `concept_languages` - Languages for concept analysis
-  - [ ] `min_concept_confidence` - Minimum confidence score
-  - [ ] `auto_expand_concepts` - Enable concept discovery
-- [ ] Add concept CLI arguments:
-  - [ ] `--concepts-file` - Override concepts file path
-  - [ ] `--import-concepts` - Import concept definitions
-  - [ ] `--export-concepts` - Export learned concepts
+### User-Defined Concept Configuration
+- [x] Add concept settings to `config.py`:
+  - [x] `concepts_file` - Path to user-defined concepts JSON/YAML
+  - [x] `concept_validation_model` - Ollama model for validation
+  - [x] `concept_validation_batch_size` - Verses per validation batch
+  - [x] `concept_validation_cache` - Cache validation results
+- [x] Add concept CLI arguments:
+  - [x] `--concepts-file` - Override concepts file path
+  - [x] `--validate-concepts` - Run LLM validation on concepts
+  - [x] `--concept-report` - Generate validation report
 
-### Concept Infrastructure
-- [ ] Create `concepts.json` template file
-- [ ] Design concept taxonomy structure
-- [ ] Implement `concepts.py` for concept management
-- [ ] Create concept import/export functionality
+### Concept Definition Structure
+- [x] Create `concepts.yaml` template with structure:
+  ```yaml
+  concepts:
+    - name: "sexual_sin"
+      description: "Sexual immorality including adultery, fornication..."
+      hebrew_terms: ["זנה", "נאף", "ערוה"]
+      greek_terms: ["πορνεία", "μοιχεία", "ἀσέλγεια"]
+      strongs_numbers: ["H2181", "H5003", "G4202", "G3430"]
+  ```
+- [x] Implement concept loader and validator
+- [x] Create concept management utilities
 
-### Initial Concept List
-- [ ] Research theological concept taxonomies
-- [ ] Create base concept list (50-100 concepts)
-- [ ] Define concept hierarchies and relationships
-- [ ] Add biblical references for each concept
+### LLM-Enhanced Concept Validation Pipeline
+- [x] Implement traditional mapping phase:
+  - [x] Find verses by Strong's numbers
+  - [x] Find verses by Hebrew/Greek terms
+  - [x] Create initial verse sets per concept
+- [x] Implement LLM validation phase:
+  - [x] Validate each initial verse for relevance
+  - [x] Remove false positives with explanations
+  - [x] Log validation decisions for review
+- [x] Implement comprehensive scanning phase:
+  - [x] Check ALL verses not in initial set
+  - [x] Find missing relevant verses
+  - [x] Use batching with progress tracking
+  - [x] Estimate: ~1.3 hours per concept with RTX 4090
 
-### Concept Embedding Generation (Option C)
-- [ ] Generate embeddings for each concept
-- [ ] Create concept-to-verse mapping pipeline
-- [ ] Implement concept similarity scoring
-- [ ] Add concept search to API
+### Concept-to-Verse Mapping Storage
+- [x] Create database tables:
+  ```sql
+  CREATE TABLE concept_definitions (
+    concept_id TEXT PRIMARY KEY,
+    name TEXT,
+    description TEXT,
+    hebrew_terms TEXT,
+    greek_terms TEXT,
+    strongs_numbers TEXT
+  );
+  
+  CREATE TABLE concept_verse_mappings (
+    concept_id TEXT,
+    verse_id TEXT,
+    validation_method TEXT, -- 'traditional', 'llm_validated', 'llm_discovered'
+    confidence_score REAL,
+    validation_reason TEXT,
+    PRIMARY KEY (concept_id, verse_id)
+  );
+  ```
+- [x] Store validation metadata and reasons
+- [x] Enable traceability of mapping decisions
 
 ## Phase 5: Enhanced Features
 

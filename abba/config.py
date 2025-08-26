@@ -27,7 +27,7 @@ class ABBAConfig:
 
     # Output settings
     verbose: bool = False
-    quiet: bool = False
+    log_level: str = "INFO"
 
     # Database settings
     database_path: Optional[Path] = None
@@ -47,6 +47,19 @@ class ABBAConfig:
     embedding_context_mode: str = "enhanced"
     embedding_cache_dir: Optional[Path] = None
 
+    # Ollama configuration (for semantic analysis)
+    ollama_host: str = "http://localhost:11434"
+    ollama_semantic_models: List[str] = field(default_factory=lambda: ["llama3"])
+    ollama_consensus_threshold: float = 0.7
+    ollama_timeout: int = 30
+    ollama_batch_size: int = 100
+
+    # Concept mapping configuration
+    concepts_file: Optional[Path] = None
+    concept_validation_enabled: bool = True
+    concept_validation_batch_size: int = 100
+    concept_validation_cache: bool = True
+
     # Search settings
     max_results: int = 50
     similarity_threshold: float = 0.7
@@ -57,6 +70,11 @@ class ABBAConfig:
     connection_pool_size: int = 10
     use_processes_for_cpu_bound: bool = True  # Use processes for CPU-bound tasks
     use_threads_for_io_bound: bool = True  # Use threads for I/O-bound tasks
+
+    # Rebuild flags
+    rebuild_db: bool = False
+    rebuild_stepbible: bool = False
+    rebuild_embeddings: bool = False
 
     # File paths
     env_file: Optional[Path] = None
@@ -76,6 +94,8 @@ class ABBAConfig:
             self.vector_db_path = Path(self.vector_db_path)
         if self.embedding_cache_dir and isinstance(self.embedding_cache_dir, str):
             self.embedding_cache_dir = Path(self.embedding_cache_dir)
+        if self.concepts_file and isinstance(self.concepts_file, str):
+            self.concepts_file = Path(self.concepts_file)
 
     @property
     def db_path(self) -> Path:
@@ -107,6 +127,13 @@ class ABBAConfig:
         if self.embedding_cache_dir:
             return self.embedding_cache_dir
         return self.data_dir / "models"
+    
+    @property
+    def concepts_path(self) -> Path:
+        """Get path to concepts definition file."""
+        if self.concepts_file:
+            return self.concepts_file
+        return Path("concepts.yaml")
 
     def should_download(self) -> bool:
         """Check if should download bible.db."""
@@ -125,7 +152,14 @@ class ABBAConfig:
         """Get number of parallel workers, auto-detecting if not set."""
         if self.parallel_workers is not None:
             return self.parallel_workers
-        return multiprocessing.cpu_count()
+        # Use a more conservative default for SQLite
+        # SQLite doesn't handle high concurrency well
+        cpu_count = multiprocessing.cpu_count()
+        return min(cpu_count, 8)  # Cap at 8 workers to avoid database locks
+    
+    def should_show_output(self) -> bool:
+        """Check if general output should be shown (not quiet mode)."""
+        return self.log_level not in ["ERROR", "CRITICAL"]
 
 
 class ConfigManager:
@@ -175,7 +209,10 @@ class ConfigManager:
                     setattr(self.config, key, value)
 
         except (json.JSONDecodeError, IOError) as e:
-            print(f"Warning: Could not load config file {config_file}: {e}")
+            # Import logger here to avoid circular imports
+            from .logging_setup import get_logger
+            logger = get_logger(__name__)
+            logger.warning(f"Could not load config file {config_file}: {e}")
 
     def _apply_settings(self):
         """Apply settings with priority: CLI > env > current config."""
@@ -218,16 +255,20 @@ class ConfigManager:
         if env_url:
             self.config.bible_db_url = env_url
 
-        # Output settings
-        if cli_config.is_verbose():
-            self.config.verbose = True
-        elif env_config.get_bool("ABBA_VERBOSE"):
-            self.config.verbose = True
-
-        if cli_config.is_quiet():
-            self.config.quiet = True
-        elif env_config.get_bool("ABBA_QUIET"):
-            self.config.quiet = True
+        # Log level (includes handling of verbose flag)
+        cli_log_level = cli_config.get_log_level()
+        env_log_level = env_config.get_str("ABBA_LOG_LEVEL")
+        env_verbose = env_config.get_bool("ABBA_VERBOSE")
+        
+        if cli_log_level:
+            self.config.log_level = cli_log_level
+        elif env_verbose:
+            self.config.log_level = "DEBUG"
+        elif env_log_level:
+            self.config.log_level = env_log_level
+            
+        # Set verbose based on log level for backward compatibility
+        self.config.verbose = self.config.log_level in ["DEBUG", "TRACE"]
 
         # File paths
         cli_env_file = cli_config.get_env_file()
@@ -291,6 +332,57 @@ class ConfigManager:
         if env_embedding_cache_dir:
             self.config.embedding_cache_dir = env_embedding_cache_dir
 
+        # Ollama settings
+        cli_ollama_host = cli_config.get_ollama_host()
+        cli_ollama_models = cli_config.get_ollama_models()
+        cli_ollama_consensus = cli_config.get_ollama_consensus()
+        
+        env_ollama_host = env_config.get_str("ABBA_OLLAMA_HOST")
+        env_ollama_semantic_models = env_config.get_list("ABBA_OLLAMA_SEMANTIC_MODELS")
+        env_ollama_consensus_threshold = env_config.get_float("ABBA_OLLAMA_CONSENSUS_THRESHOLD")
+        env_ollama_timeout = env_config.get_int("ABBA_OLLAMA_TIMEOUT")
+        env_ollama_batch_size = env_config.get_int("ABBA_OLLAMA_BATCH_SIZE")
+
+        # CLI takes precedence
+        if cli_ollama_host:
+            self.config.ollama_host = cli_ollama_host
+        elif env_ollama_host:
+            self.config.ollama_host = env_ollama_host
+            
+        if cli_ollama_models is not None:
+            self.config.ollama_semantic_models = cli_ollama_models
+        elif env_ollama_semantic_models is not None:
+            self.config.ollama_semantic_models = env_ollama_semantic_models
+            
+        if cli_ollama_consensus is not None:
+            self.config.ollama_consensus_threshold = cli_ollama_consensus
+        elif env_ollama_consensus_threshold is not None:
+            self.config.ollama_consensus_threshold = env_ollama_consensus_threshold
+            
+        if env_ollama_timeout is not None:
+            self.config.ollama_timeout = env_ollama_timeout
+        if env_ollama_batch_size is not None:
+            self.config.ollama_batch_size = env_ollama_batch_size
+
+        # Concept mapping settings
+        cli_concepts_file = cli_config.get_concepts_file()
+        env_concepts_file = env_config.get_path("ABBA_CONCEPTS_FILE")
+        env_concept_validation_enabled = env_config.get_bool("ABBA_CONCEPT_VALIDATION_ENABLED")
+        env_concept_validation_batch_size = env_config.get_int("ABBA_CONCEPT_VALIDATION_BATCH_SIZE")
+        env_concept_validation_cache = env_config.get_bool("ABBA_CONCEPT_VALIDATION_CACHE")
+
+        if cli_concepts_file:
+            self.config.concepts_file = cli_concepts_file
+        elif env_concepts_file:
+            self.config.concepts_file = env_concepts_file
+        
+        if env_concept_validation_enabled is not None:
+            self.config.concept_validation_enabled = env_concept_validation_enabled
+        if env_concept_validation_batch_size is not None:
+            self.config.concept_validation_batch_size = env_concept_validation_batch_size
+        if env_concept_validation_cache is not None:
+            self.config.concept_validation_cache = env_concept_validation_cache
+
         # Search settings
         env_max_results = env_config.get_int("ABBA_MAX_RESULTS")
         env_similarity_threshold = env_config.get_float("ABBA_SIMILARITY_THRESHOLD")
@@ -302,6 +394,27 @@ class ConfigManager:
             self.config.similarity_threshold = env_similarity_threshold
         if env_enable_query_expansion is not None:
             self.config.enable_query_expansion = env_enable_query_expansion
+
+        # Rebuild flags
+        env_rebuild_db = env_config.get_bool("ABBA_REBUILD_DB")
+        env_rebuild_stepbible = env_config.get_bool("ABBA_REBUILD_STEPBIBLE")
+        env_rebuild_embeddings = env_config.get_bool("ABBA_REBUILD_EMBEDDINGS")
+        
+        # CLI takes precedence for rebuild flags
+        if cli_config.should_rebuild_db():
+            self.config.rebuild_db = True
+        elif env_rebuild_db is not None:
+            self.config.rebuild_db = env_rebuild_db
+            
+        if cli_config.should_rebuild_stepbible():
+            self.config.rebuild_stepbible = True
+        elif env_rebuild_stepbible is not None:
+            self.config.rebuild_stepbible = env_rebuild_stepbible
+            
+        if cli_config.should_rebuild_embeddings():
+            self.config.rebuild_embeddings = True
+        elif env_rebuild_embeddings is not None:
+            self.config.rebuild_embeddings = env_rebuild_embeddings
 
         # Performance settings
         cli_parallel_workers = cli_config.get_parallel_workers()
@@ -343,7 +456,10 @@ class ConfigManager:
             with open(config_file, "w") as f:
                 json.dump(config_dict, f, indent=2)
         except IOError as e:
-            print(f"Warning: Could not save config file {config_file}: {e}")
+            # Import logger here to avoid circular imports
+            from .logging_setup import get_logger
+            logger = get_logger(__name__)
+            logger.warning(f"Could not save config file {config_file}: {e}")
 
     def get_config(self) -> ABBAConfig:
         """Get current configuration."""

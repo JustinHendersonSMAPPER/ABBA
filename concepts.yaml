@@ -1,0 +1,791 @@
+concepts:
+- description: 'Sexual immorality including adultery, fornication, prostitution,  sexual
+    promiscuity, and related moral violations as defined in  biblical law and teaching.
+
+    '
+  greek_terms:
+  - πορνεία
+  - μοιχεία
+  - ἀσέλγεια
+  - ἀκαθαρσία
+  hebrew_terms:
+  - זנה
+  - נאף
+  - ערוה
+  - זמה
+  keywords:
+  - adultery
+  - fornication
+  - whoredom
+  - harlot
+  - prostitute
+  - sexual immorality
+  - unchastity
+  name: sexual_sin
+  strongs_numbers:
+  - H2181
+  - H5003
+  - H6172
+  - H2154
+  - G4202
+  - G3430
+  - G766
+  - G167
+- description: 'God''s love, mercy, compassion, and loving-kindness toward humanity,
+    including covenant love (hesed) and unconditional love (agape).
+
+    '
+  greek_terms:
+  - ἀγάπη
+  - ἀγαπάω
+  - ἔλεος
+  - φιλανθρωπία
+  hebrew_terms:
+  - אהב
+  - חסד
+  - רחם
+  - חנן
+  keywords:
+  - love
+  - mercy
+  - compassion
+  - loving-kindness
+  - gracious
+  - tender mercy
+  name: divine_love
+  strongs_numbers:
+  - H157
+  - H2617
+  - H7355
+  - H2603
+  - G26
+  - G25
+  - G1656
+  - G5363
+- description: 'Faith, trust, belief, and confidence in God, including faithfulness
+    and reliability in human relationships as reflection of divine character.
+
+    '
+  greek_terms:
+  - πίστις
+  - πιστεύω
+  - πιστός
+  - πεποίθησις
+  hebrew_terms:
+  - אמן
+  - בטח
+  - חסה
+  - אמונה
+  keywords:
+  - faith
+  - trust
+  - believe
+  - confidence
+  - faithful
+  - refuge
+  name: faith_trust
+  strongs_numbers:
+  - H539
+  - H982
+  - H2620
+  - H530
+  - G4102
+  - G4100
+  - G4103
+  - G4006
+- description: 'Divine wisdom, understanding, insight, and practical knowledge for
+    righteous living, including fear of the Lord as beginning of wisdom.
+
+    '
+  greek_terms:
+  - σοφία
+  - σύνεσις
+  - φρόνησις
+  - ἐπίγνωσις
+  hebrew_terms:
+  - חכמה
+  - בינה
+  - דעת
+  - שכל
+  keywords:
+  - wisdom
+  - understanding
+  - knowledge
+  - insight
+  - prudence
+  - discernment
+  name: wisdom_understanding
+  strongs_numbers:
+  - H2451
+  - H998
+  - H1847
+  - H7922
+  - G4678
+  - G4907
+  - G5428
+  - G1922
+- description: 'Divine and human justice, righteousness, moral uprightness, and ethical
+    behavior according to God''s standards and laws.
+
+    '
+  greek_terms:
+  - δικαιοσύνη
+  - δίκαιος
+  - κρίσις
+  - εὐθύς
+  hebrew_terms:
+  - צדק
+  - צדקה
+  - משפט
+  - ישר
+  keywords:
+  - righteousness
+  - justice
+  - judgment
+  - upright
+  - righteous
+  - just
+  name: justice_righteousness
+  strongs_numbers:
+  - H6664
+  - H6666
+  - H4941
+  - H3477
+  - G1343
+  - G1342
+  - G2920
+  - G2117
+- description: The holy trinity, comprising the Father (יהוה), the Son (ישוע), and
+    the Holy Spirit (רוח), represents the biblical revelation of God's triune nature.
+    This divine unity manifests as three distinct persons - Father, Son, and Holy Spirit -
+    each fully God yet maintaining perfect unity in essence, will, and purpose.
+  greek_terms:
+  - πατήρ
+  - υἱός
+  - πνεῦμα
+  - θεός
+  - κύριος
+  hebrew_terms:
+  - יהוה
+  - אלהים
+  - רוח
+  - ישוע
+  - אדון
+  keywords:
+  - Trinity
+  - Father
+  - Son
+  - Holy Spirit
+  - triune God
+  - three persons
+  - divine unity
+  - Godhead
+  name: trinity
+  strongs_numbers:
+  - H3068
+  - H430
+  - H7307
+  - H3091
+  - H113
+  - G3962
+  - G5207
+  - G4151
+  - G2316
+  - G2962
+- description: God's binding agreements and promises with humanity, including both
+    conditional and unconditional covenants such as those made with Noah, Abraham,
+    Moses, David, and the New Covenant through Christ.
+  greek_terms:
+  - διαθήκη
+  - συνθήκη
+  - ἐπαγγελία
+  - ὅρκος
+  hebrew_terms:
+  - ברית
+  - נדר
+  - שבועה
+  - חסד
+  keywords:
+  - covenant
+  - promise
+  - agreement
+  - testament
+  - vow
+  - oath
+  - faithfulness
+  - steadfast love
+  name: covenant
+  strongs_numbers:
+  - H1285
+  - H5087
+  - H7621
+  - H2617
+  - G1242
+  - G4934
+  - G1860
+  - G3727
+- description: Missing the mark of God's righteous standards, rebellion against divine
+    law, transgression, iniquity, and moral failure that separates humanity from God
+    and requires divine forgiveness and redemption.
+  greek_terms:
+  - ἁμαρτία
+  - παράβασις
+  - ἀνομία
+  - πονηρία
+  hebrew_terms:
+  - חטא
+  - עון
+  - פשע
+  - רשע
+  keywords:
+  - sin
+  - transgression
+  - iniquity
+  - wickedness
+  - trespass
+  - lawlessness
+  - evil
+  - rebellion
+  name: sin
+  strongs_numbers:
+  - H2398
+  - H5771
+  - H6588
+  - H7562
+  - G266
+  - G3847
+  - G458
+  - G4189
+- description: God's deliverance and redemption from sin, death, and judgment through
+    divine intervention, encompassing rescue, liberation, healing, and eternal life
+    provided through Christ's atoning work.
+  greek_terms:
+  - σωτηρία
+  - ἀπολύτρωσις
+  - λύτρωσις
+  - ῥύομαι
+  hebrew_terms:
+  - ישועה
+  - פדות
+  - גאלה
+  - חלץ
+  keywords:
+  - salvation
+  - redemption
+  - deliverance
+  - rescue
+  - liberation
+  - healing
+  - eternal life
+  - atonement
+  name: salvation
+  strongs_numbers:
+  - H3444
+  - H6304
+  - H1353
+  - H2502
+  - G4991
+  - G629
+  - G3085
+  - G4506
+- description: God's unmerited favor, kindness, and divine enablement freely given
+    to humanity, including both saving grace and sanctifying grace that empowers
+    righteous living and spiritual growth.
+  greek_terms:
+  - χάρις
+  - χαρίζομαι
+  - εὐλογία
+  - φιλανθρωπία
+  hebrew_terms:
+  - חן
+  - חנן
+  - ברכה
+  - טוב
+  keywords:
+  - grace
+  - favor
+  - kindness
+  - blessing
+  - mercy
+  - goodness
+  - unmerited favor
+  - divine enablement
+  name: grace
+  strongs_numbers:
+  - H2580
+  - H2603
+  - H1293
+  - H2896
+  - G5485
+  - G5483
+  - G2129
+  - G18
+- description: The remission and pardoning of sin, debt, and offense through divine
+    mercy, including both God's forgiveness toward humanity and the commanded forgiveness
+    between people as reflection of divine character.
+  greek_terms:
+  - ἄφεσις
+  - ἀφίημι
+  - χαρίζομαι
+  - συγχωρέω
+  hebrew_terms:
+  - סלח
+  - מחל
+  - נשא
+  - כפר
+  keywords:
+  - forgiveness
+  - pardon
+  - remission
+  - mercy
+  - atonement
+  - reconciliation
+  - absolution
+  - release
+  name: forgiveness
+  strongs_numbers:
+  - H5545
+  - H4229
+  - H5375
+  - H3722
+  - G859
+  - G863
+  - G5483
+  - G4814
+- description: God's moral perfection, purity, and separateness from sin, including
+    the call for believers to live in holiness and sanctification as reflection
+    of divine character and preparation for eternal communion with God.
+  greek_terms:
+  - ἁγιασμός
+  - ἅγιος
+  - ἁγιότης
+  - καθαρός
+  hebrew_terms:
+  - קדש
+  - קדוש
+  - טהר
+  - נקי
+  keywords:
+  - holiness
+  - sanctification
+  - purity
+  - sacred
+  - set apart
+  - consecration
+  - clean
+  - holy
+  name: holiness
+  strongs_numbers:
+  - H6944
+  - H6918
+  - H2891
+  - H5355
+  - G38
+  - G40
+  - G41
+  - G2513
+- description: Confident expectation and trust in God's promises and future fulfillment,
+    including both earthly hopes and eternal hope of resurrection, glorification,
+    and dwelling with God forever.
+  greek_terms:
+  - ἐλπίς
+  - ἐλπίζω
+  - προσδοκάω
+  - ἀπεκδέχομαι
+  hebrew_terms:
+  - תקוה
+  - יחל
+  - קוה
+  - בטח
+  keywords:
+  - hope
+  - expectation
+  - trust
+  - confidence
+  - anticipation
+  - future
+  - promise
+  - assurance
+  name: hope
+  strongs_numbers:
+  - H8615
+  - H3176
+  - H6960
+  - H982
+  - G1680
+  - G1679
+  - G4328
+  - G553
+- description: God's perfect peace, wholeness, and harmony that transcends human understanding,
+    including both the peace between God and humanity through reconciliation and the
+    inner peace, well-being, and completeness found in divine relationship.
+  greek_terms:
+  - εἰρήνη
+  - εἰρηνεύω
+  - εἰρηνικός
+  - καταλλαγή
+  hebrew_terms:
+  - שלום
+  - שלם
+  - רגע
+  - מנוחה
+  keywords:
+  - peace
+  - wholeness
+  - harmony
+  - reconciliation
+  - rest
+  - tranquility
+  - well-being
+  - completeness
+  name: peace
+  strongs_numbers:
+  - H7965
+  - H7999
+  - H7280
+  - H4496
+  - G1515
+  - G1514
+  - G1516
+  - G2643
+- description: Jesus Christ as the Messiah, the anointed one of God, Savior, Lord,
+    and central figure of Christian faith. This encompasses His divine nature, earthly
+    ministry, atoning death, resurrection, and eternal lordship over all creation.
+  greek_terms:
+  - Χριστός
+  - Ἰησοῦς
+  - κύριος
+  - σωτήρ
+  - υἱὸς θεοῦ
+  hebrew_terms:
+  - משיח
+  - ישוע
+  - אדון
+  - גואל
+  - בן אלהים
+  keywords:
+  - Jesus
+  - Christ
+  - Messiah
+  - Lord
+  - Savior
+  - Son of God
+  - anointed one
+  - redeemer
+  name: jesus_christ
+  strongs_numbers:
+  - H4899
+  - H3091
+  - H113
+  - H1350
+  - H1121
+  - G5547
+  - G2424
+  - G2962
+  - G4990
+  - G5207
+- description: The sovereign rule and reign of God over all creation, including both
+    the present spiritual kingdom and the future eternal kingdom. This encompasses
+    God's authority, divine government, and the realm where His will is perfectly done.
+  greek_terms:
+  - βασιλεία
+  - βασιλεύς
+  - βασιλεύω
+  - κυριότης
+  hebrew_terms:
+  - מלכות
+  - מלך
+  - מלכים
+  - ממשלה
+  keywords:
+  - kingdom
+  - reign
+  - rule
+  - sovereignty
+  - dominion
+  - authority
+  - government
+  - throne
+  name: kingdom_of_god
+  strongs_numbers:
+  - H4438
+  - H4428
+  - H4427
+  - H4475
+  - G932
+  - G935
+  - G936
+  - G2963
+- description: The victory over death through divine power, including Christ's resurrection
+    from the dead and the promised resurrection of believers. This represents triumph
+    over sin, death, and the grave through God's life-giving power.
+  greek_terms:
+  - ἀνάστασις
+  - ἐγείρω
+  - ἀνίστημι
+  - ζωοποιέω
+  hebrew_terms:
+  - תחיה
+  - קום
+  - חיה
+  - עמד
+  keywords:
+  - resurrection
+  - rising
+  - raised
+  - victory over death
+  - eternal life
+  - triumph
+  - raised up
+  - life from death
+  name: resurrection
+  strongs_numbers:
+  - H8617
+  - H6965
+  - H2421
+  - H5975
+  - G386
+  - G1453
+  - G450
+  - G2227
+- description: The good news of salvation through Jesus Christ, including the message
+    of God's love, redemption, forgiveness, and eternal life freely offered to all
+    humanity through faith in Christ's atoning work.
+  greek_terms:
+  - εὐαγγέλιον
+  - εὐαγγελίζω
+  - κήρυγμα
+  - λόγος
+  hebrew_terms:
+  - בשורה
+  - בשר
+  - דבר
+  - קרא
+  keywords:
+  - gospel
+  - good news
+  - message
+  - proclamation
+  - preaching
+  - word
+  - glad tidings
+  - evangelism
+  name: gospel
+  strongs_numbers:
+  - H1319
+  - H1309
+  - H1697
+  - H7121
+  - G2098
+  - G2097
+  - G2782
+  - G3056
+- description: The assembly of believers, the body of Christ, and the community of
+    faith called out from the world to worship God and serve His purposes. This includes
+    both the universal church and local congregations.
+  greek_terms:
+  - ἐκκλησία
+  - σῶμα
+  - κοινωνία
+  - ἅγιοι
+  hebrew_terms:
+  - קהל
+  - עדה
+  - כנסת
+  - קדושים
+  keywords:
+  - church
+  - assembly
+  - congregation
+  - body of Christ
+  - fellowship
+  - saints
+  - community
+  - believers
+  name: church
+  strongs_numbers:
+  - H6951
+  - H5712
+  - H3664
+  - H6918
+  - G1577
+  - G4983
+  - G2842
+  - G40
+- description: The reverence, adoration, honor, and service offered to God in recognition
+    of His holiness, majesty, and worthiness. This includes both individual devotion
+    and corporate worship expressions.
+  greek_terms:
+  - προσκυνέω
+  - λατρεύω
+  - δοξάζω
+  - αἰνέω
+  hebrew_terms:
+  - שחה
+  - עבד
+  - הלל
+  - ברך
+  keywords:
+  - worship
+  - praise
+  - adoration
+  - service
+  - honor
+  - reverence
+  - glorify
+  - bow down
+  name: worship
+  strongs_numbers:
+  - H7812
+  - H5647
+  - H1984
+  - H1288
+  - G4352
+  - G3000
+  - G1392
+  - G134
+- description: Communication with God through petition, intercession, thanksgiving,
+    and communion. This includes both individual and corporate prayer as the means
+    of fellowship with the divine and seeking God's will.
+  greek_terms:
+  - προσευχή
+  - δέησις
+  - εὐχή
+  - ἱκετηρία
+  hebrew_terms:
+  - תפלה
+  - פלל
+  - בקש
+  - חנן
+  keywords:
+  - prayer
+  - intercession
+  - petition
+  - supplication
+  - communion
+  - fellowship
+  - seeking God
+  - calling upon
+  name: prayer
+  strongs_numbers:
+  - H8605
+  - H6419
+  - H1245
+  - H2603
+  - G4335
+  - G1162
+  - G2171
+  - G2428
+- description: Divine and human love in its various expressions, including God's unconditional
+    love (agape), brotherly love (philadelphia), and the commandment to love God
+    and neighbor as the greatest expression of faith.
+  greek_terms:
+  - ἀγάπη
+  - ἀγαπάω
+  - φιλαδελφία
+  - φιλέω
+  hebrew_terms:
+  - אהבה
+  - אהב
+  - חבה
+  - דוד
+  keywords:
+  - love
+  - beloved
+  - affection
+  - charity
+  - devotion
+  - compassion
+  - brotherly love
+  - divine love
+  name: love
+  strongs_numbers:
+  - H160
+  - H157
+  - H2245
+  - H1730
+  - G26
+  - G25
+  - G5360
+  - G5368
+- description: Submission to God's will, commands, and authority, including faithful
+    adherence to divine law and willing compliance with God's instructions as expression
+    of love and reverence.
+  greek_terms:
+  - ὑπακοή
+  - ὑπακούω
+  - πείθω
+  - φυλάσσω
+  hebrew_terms:
+  - שמע
+  - שמר
+  - עשה
+  - צוה
+  keywords:
+  - obedience
+  - submission
+  - compliance
+  - hearing
+  - keeping
+  - following
+  - commandments
+  - faithful
+  name: obedience
+  strongs_numbers:
+  - H8085
+  - H8104
+  - H6213
+  - H6680
+  - G5218
+  - G5219
+  - G3982
+  - G5442
+- description: The gift of eternal existence with God, imperishable life that transcends
+    physical death, and the quality of divine life experienced both now and forever
+    through relationship with Jesus Christ.
+  greek_terms:
+  - ζωὴ αἰώνιος
+  - ζωή
+  - ἀθάνατος
+  - ἄφθαρτος
+  hebrew_terms:
+  - חיי עולם
+  - חיים
+  - נצח
+  - עד
+  keywords:
+  - eternal life
+  - everlasting life
+  - immortality
+  - life everlasting
+  - perpetual
+  - forever
+  - imperishable
+  - divine life
+  name: eternal_life
+  strongs_numbers:
+  - H2416
+  - H5769
+  - H5331
+  - H5703
+  - G2222
+  - G166
+  - G110
+  - G862
+config:
+  comprehensive_scan:
+    enabled: true
+    max_verses_per_concept: 500
+    relevance_threshold: 0.7
+  output:
+    generate_reports: true
+    include_analysis_details: true
+    include_false_positives: true
+  traditional_mapping:
+    keyword_weight: 0.8
+    strongs_weight: 1.0
+    term_weight: 0.9
+  validation:
+    confidence_threshold: 0.6
+    consensus_threshold: 0.7
+    enabled: true

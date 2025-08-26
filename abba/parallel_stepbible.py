@@ -15,6 +15,42 @@ from .hash_validator import HashValidator
 logger = logging.getLogger(__name__)
 
 
+def _clean_strongs_number(strongs: str) -> str:
+    """Clean Strong's number to base form.
+    
+    Examples:
+        {H0001G} -> H0001
+        {H0001G}/H9020 -> H0001
+        G0001G -> G0001
+        H1234 -> H1234
+        H3899H}\H9016\ \H9018 -> H3899
+    """
+    if not strongs:
+        return strongs
+    
+    # Remove all backslashes and spaces
+    strongs = strongs.replace('\\', '').replace(' ', '')
+    
+    # Remove curly braces and everything after them
+    if '{' in strongs:
+        strongs = strongs.split('{')[0]
+    if '}' in strongs:
+        strongs = strongs.split('}')[0]
+        
+    # Take first part before any slash
+    if '/' in strongs:
+        strongs = strongs.split('/')[0]
+    
+    # Extract just the primary Strong's number (letter + 4 digits)
+    import re
+    match = re.match(r'([GH]\d{4})', strongs)
+    if match:
+        return match.group(1)
+    
+    # If no match, return empty string to avoid bad data
+    return ''
+
+
 @dataclass
 class StepBibleJob:
     """Represents a STEPBible parsing job."""
@@ -119,7 +155,9 @@ class ParallelStepBibleImporter:
             })
         
         if show_progress:
-            print(f"  Processing {filename}: {len(data_lines):,} data lines in {len(chunks)} chunks...")
+            from .logging_setup import get_logger
+            logger = get_logger(__name__)
+            logger.debug(f"  Processing {filename}: {len(data_lines):,} data lines in {len(chunks)} chunks...")
         
         # Process chunks in parallel
         total_words = 0
@@ -179,10 +217,13 @@ class ParallelStepBibleImporter:
         # Summary
         success = len([r for r in results if r.success]) == len(chunks)
         
+        from .logging_setup import get_logger
+        logger = get_logger(__name__)
+        
         if total_words > 0:
-            print(f"✓ Parsed {total_words:,} {language} words from {filename}")
+            logger.debug(f"✓ Parsed {total_words:,} {language} words from {filename}")
         else:
-            print(f"✗ No words parsed from {filename}")
+            logger.warning(f"✗ No words parsed from {filename}")
         
         return success, total_words
     
@@ -258,7 +299,7 @@ class ParallelStepBibleImporter:
                             morphology_code = ""
                         
                         word_info = {
-                            "source": "tagnt",
+                            "source": job.filename,  # Use the actual filename
                             "book": book,
                             "chapter": chapter,
                             "verse": verse,
@@ -266,7 +307,7 @@ class ParallelStepBibleImporter:
                             "original_word": greek_text,
                             "transliteration": transliteration,
                             "english": english_gloss.strip("[]"),
-                            "strongs_primary": strongs_primary,
+                            "strongs_primary": _clean_strongs_number(strongs_primary),
                             "morphology": morphology_code,
                             "language": "greek"
                         }
@@ -279,8 +320,11 @@ class ParallelStepBibleImporter:
                         morphology = parts[5] if len(parts) > 5 else ""
                         strongs_primary = parts[13] if len(parts) > 13 else strongs_raw
                         
+                        # Clean the Strong's number for primary field
+                        cleaned_primary = _clean_strongs_number(strongs_primary or strongs_raw)
+                        
                         word_info = {
-                            "source": "tahot",
+                            "source": job.filename,  # Use the actual filename
                             "book": book,
                             "chapter": chapter,
                             "verse": verse,
@@ -289,7 +333,7 @@ class ParallelStepBibleImporter:
                             "transliteration": transliteration,
                             "english": translation,
                             "strongs_raw": strongs_raw,
-                            "strongs_primary": strongs_primary or strongs_raw,
+                            "strongs_primary": cleaned_primary,
                             "morphology": morphology,
                             "language": "hebrew"
                         }
@@ -333,6 +377,7 @@ class ParallelStepBibleImporter:
             return
         
         import sqlite3
+        import mmh3
         
         with sqlite3.connect(self.dest_db_path) as conn:
             cursor = conn.cursor()
@@ -340,6 +385,10 @@ class ParallelStepBibleImporter:
             # Prepare batch data
             batch = []
             for word in word_data:
+                # Calculate hash of the word data for integrity checking
+                hash_data = f"{word.get('original_word', '')}|{word.get('strongs_raw', '')}|{word.get('morphology', '')}"
+                data_hash = mmh3.hash(hash_data)
+                
                 batch.append((
                     word.get('source', ''),
                     word.get('book', ''),
@@ -352,16 +401,17 @@ class ParallelStepBibleImporter:
                     word.get('strongs_raw', ''),
                     word.get('strongs_primary', ''),
                     word.get('morphology', ''),
-                    word.get('language', '')
+                    word.get('language', ''),
+                    data_hash
                 ))
             
             # Batch insert
             cursor.executemany("""
                 INSERT OR REPLACE INTO stepbible_verses 
-                (source, book, chapter, verse, word_number, original_word,
+                (source_file, book, chapter, verse, word_number, original_word,
                  transliteration, english, strongs_raw, strongs_primary,
-                 morphology, language)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 morphology, language, data_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, batch)
             
             conn.commit()

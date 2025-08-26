@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 
 import requests
 from tqdm import tqdm
+from loguru import logger
 
 from .parallel_import import ParallelImporter, ImportResult, ImportJob
 from .parallel_stepbible import ParallelStepBibleImporter
@@ -45,11 +46,11 @@ class BibleExtractor:
     def download_bible_db(self) -> bool:
         """Download bible.db from the server."""
         if self.db_path.exists():
-            print(f"bible.db already exists at {self.db_path}")
+            logger.debug(f"bible.db already exists at {self.db_path}")
             return True
 
         url = "https://bible.helloao.org/bible.db"
-        print(f"Downloading bible.db from {url}...")
+        logger.info(f"Downloading bible.db from {url}...")
 
         try:
             response = requests.get(url, stream=True, timeout=30)
@@ -63,18 +64,18 @@ class BibleExtractor:
                         f.write(chunk)
                         pbar.update(len(chunk))
 
-            print(f"✓ Downloaded bible.db to {self.db_path}")
+            logger.info(f"✓ Downloaded bible.db to {self.db_path}")
             return True
 
         except Exception as e:
-            print(f"✗ Failed to download bible.db: {e}")
+            logger.error(f"✗ Failed to download bible.db: {e}")
             if self.db_path.exists():
                 self.db_path.unlink()
             return False
 
     def download_stepbible_data(self) -> bool:
         """Download STEPBible lexicon and morphology data."""
-        print("Downloading STEPBible data...")
+        logger.info("Downloading STEPBible data...")
 
         # STEPBible data URLs - Complete system: texts, lexicons, and morphology
         stepbible_files = {
@@ -130,12 +131,12 @@ class BibleExtractor:
             file_path = self.stepbible_dir / filename
 
             if file_path.exists():
-                print(f"✓ {filename} already exists")
+                logger.debug(f"✓ {filename} already exists")
                 success_count += 1
                 continue
 
             try:
-                print(f"Downloading {filename}...")
+                logger.debug(f"Downloading {filename}...")
                 response = requests.get(url, stream=True, timeout=30)
                 response.raise_for_status()
 
@@ -147,11 +148,11 @@ class BibleExtractor:
                             f.write(chunk)
                             pbar.update(len(chunk))
 
-                print(f"✓ Downloaded {filename}")
+                logger.debug(f"✓ Downloaded {filename}")
                 success_count += 1
 
             except Exception as e:
-                print(f"✗ Failed to download {filename}: {e}")
+                logger.error(f"✗ Failed to download {filename}: {e}")
                 if file_path.exists():
                     file_path.unlink()
 
@@ -185,11 +186,11 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         try:
             with open(attribution_path, "w", encoding="utf-8") as f:
                 f.write(attribution_content)
-            print(f"✓ Created attribution file at {attribution_path}")
+            logger.debug(f"✓ Created attribution file at {attribution_path}")
         except Exception as e:
-            print(f"✗ Failed to create attribution file: {e}")
+            logger.error(f"✗ Failed to create attribution file: {e}")
 
-        print(f"STEPBible data download complete: {success_count}/{len(stepbible_files)} files downloaded")
+        logger.info(f"STEPBible data download complete: {success_count}/{len(stepbible_files)} files downloaded")
 
         # Consider success if we got all essential files
         # We need at least the lexicons and morphology files
@@ -229,7 +230,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         lexicon_path = self.stepbible_dir / lexicon_file
 
         if not lexicon_path.exists():
-            print(f"Lexicon file not found: {lexicon_path}")
+            logger.warning(f"Lexicon file not found: {lexicon_path}")
             return False
 
         try:
@@ -273,11 +274,11 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 db_manager.insert_lexicon_entry(lexicon_data)
                 entries_added += 1
 
-            print(f"✓ Imported {entries_added} {language} lexicon entries")
+            logger.info(f"✓ Imported {entries_added} {language} lexicon entries")
             return True
 
         except Exception as e:
-            print(f"✗ Failed to parse {language} lexicon: {e}")
+            logger.error(f"✗ Failed to parse {language} lexicon: {e}")
             return False
 
     def parse_stepbible_morphology(self, language: str, db_manager) -> bool:
@@ -294,7 +295,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         morphology_path = self.stepbible_dir / morphology_file
 
         if not morphology_path.exists():
-            print(f"Morphology file not found: {morphology_path}")
+            logger.warning(f"Morphology file not found: {morphology_path}")
             return False
 
         try:
@@ -331,11 +332,11 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 db_manager.insert_morphology_entry(morphology_data)
                 entries_added += 1
 
-            print(f"✓ Imported {entries_added} {language} morphology codes")
+            logger.info(f"✓ Imported {entries_added} {language} morphology codes")
             return True
 
         except Exception as e:
-            print(f"✗ Failed to parse {language} morphology: {e}")
+            logger.error(f"✗ Failed to parse {language} morphology: {e}")
             return False
 
     def parse_stepbible_text(self, filename: str, db_manager) -> bool:
@@ -351,7 +352,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         text_path = self.stepbible_dir / filename
 
         if not text_path.exists():
-            print(f"Text file not found: {text_path}")
+            logger.warning(f"Text file not found: {text_path}")
             return False
 
         # Determine language and file type
@@ -372,9 +373,9 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             data_lines = [l for l in lines if l.strip() and not l.strip().startswith(("#", "=", "TAHOT", "TAGNT", "FIELD"))]
             
             # Show progress if not in quiet mode
-            show_progress = not (self.config and self.config.quiet)
+            show_progress = self.config and self.config.should_show_output()
             if show_progress:
-                print(f"  Processing {filename}: {len(data_lines):,} data lines...")
+                logger.info(f"  Processing {filename}: {len(data_lines):,} data lines...")
             
             # Process with progress bar
             line_iterator = tqdm(lines, desc=f"    Parsing {filename}", disable=not show_progress, unit="lines")
@@ -512,32 +513,53 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                         # Skip lines that don't parse correctly (likely headers or metadata)
                         continue
                     except Exception as e:
-                        print(f"Error parsing line {_line_num}: {e}")
+                        logger.error(f"Error parsing line {_line_num}: {e}")
                         continue
 
             # Close progress bar if it exists
             if 'line_iterator' in locals() and hasattr(line_iterator, 'close'):
                 line_iterator.close()
                 
-            print(f"✓ Imported {words_added:,} words from {filename}")
+            logger.info(f"✓ Imported {words_added:,} words from {filename}")
             return True
 
         except Exception as e:
-            print(f"✗ Failed to parse {filename}: {e}")
+            logger.error(f"✗ Failed to parse {filename}: {e}")
             return False
 
-    def import_stepbible_data(self, db_manager, tracker=None) -> bool:
+    def import_stepbible_data(self, db_manager, tracker=None, force_reimport=False) -> bool:
         """Import all STEPBible data into the database.
 
         Args:
             db_manager: SQLiteManager instance
             tracker: ImportTracker instance for tracking progress (optional)
+            force_reimport: If True, clear existing data before import
 
         Returns:
             True if successful, False otherwise
         """
+        if force_reimport:
+            # Clear existing STEPBible data
+            try:
+                with db_manager.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM stepbible_verses")
+                    cursor.execute("DELETE FROM lexicon")
+                    cursor.execute("DELETE FROM morphology")
+                    cursor.execute("DELETE FROM stepbible_validation")  # Clear validation history
+                    conn.commit()
+                logger.info("Cleared existing STEPBible data for re-import")
+                
+                # Clear tracking for STEPBible files
+                if tracker:
+                    tracker.clear_stepbible_tracking()
+                    logger.info("Cleared STEPBible import tracking")
+            except Exception as e:
+                logger.error(f"Error clearing STEPBible data: {e}")
+                return False
+        
         if not self.stepbible_dir.exists():
-            print("STEPBible data directory not found")
+            logger.warning("STEPBible data directory not found")
             return False
 
         # Quick check if everything is already imported
@@ -561,15 +583,15 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             )
             
             if all_imported:
-                print("All STEPBible files already imported - nothing to do")
+                logger.debug("All STEPBible files already imported - nothing to do")
                 return True
 
-        print("Importing STEPBible data into database...")
+        logger.info("Importing STEPBible data into database...")
         
         if self.config and self.config.get_parallel_workers() > 1:
-            print(f"Using parallel processing with {self.config.get_parallel_workers()} workers")
+            logger.debug(f"Using parallel processing with {self.config.get_parallel_workers()} workers")
         else:
-            print("Using sequential processing")
+            logger.debug("Using sequential processing")
 
         # Parse lexicons
         lexicon_files = [
@@ -579,7 +601,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         
         for file_type, filename in lexicon_files:
             if tracker and tracker.is_stepbible_file_imported(file_type, filename):
-                print(f"  Skipping {filename} - already imported")
+                logger.debug(f"  Skipping {filename} - already imported")
                 continue
                 
             if filename.startswith("tbesh"):
@@ -598,7 +620,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         
         for file_type, filename in morph_files:
             if tracker and tracker.is_stepbible_file_imported(file_type, filename):
-                print(f"  Skipping {filename} - already imported")
+                logger.debug(f"  Skipping {filename} - already imported")
                 continue
                 
             if filename.startswith("teh"):
@@ -622,7 +644,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         text_success_count = 0
         for file_type, text_file in text_files:
             if tracker and tracker.is_stepbible_file_imported(file_type, text_file):
-                print(f"  Skipping {text_file} - already imported")
+                logger.debug(f"  Skipping {text_file} - already imported")
                 text_success_count += 1
                 continue
             # Use parallel parser if available
@@ -642,7 +664,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 success, word_count = self.parallel_stepbible.parse_file_parallel(
                     text_file,
                     file_type,
-                    show_progress=not (self.config and self.config.quiet)
+                    show_progress=self.config and self.config.should_show_output()
                 )
                 
                 if success:
@@ -669,16 +691,16 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         success = imported_count > 0 or text_success_count > 0
 
         if success:
-            print(f"✓ STEPBible import complete")
+            logger.info(f"✓ STEPBible import complete")
         else:
-            print("✗ STEPBible import failed")
+            logger.error("✗ STEPBible import failed")
 
         return success
 
     def list_translations(self) -> List[Dict[str, str]]:
         """List all available translations in bible.db."""
         if not self.db_path.exists():
-            print("bible.db not found. Please download it first.")
+            logger.error("bible.db not found. Please download it first.")
             return []
 
         try:
@@ -701,18 +723,18 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             return translations
 
         except Exception as e:
-            print(f"Error listing translations: {e}")
+            logger.error(f"Error listing translations: {e}")
             return []
 
     def extract_translation(self, translation_id: str) -> bool:
         """Extract a single translation to JSON format."""
         if not self.db_path.exists():
-            print("bible.db not found. Please download it first.")
+            logger.error("bible.db not found. Please download it first.")
             return False
 
         output_path = self.translations_dir / f"{translation_id}.json"
         if output_path.exists():
-            print(f"Translation {translation_id} already extracted")
+            logger.debug(f"Translation {translation_id} already extracted")
             return True
 
         try:
@@ -731,11 +753,11 @@ and Koine Greek biblical texts, designed to support biblical language study and 
 
             result = cursor.fetchone()
             if not result:
-                print(f"Translation {translation_id} not found")
+                logger.error(f"Translation {translation_id} not found")
                 return False
 
             name, english_name, language = result
-            print(f"Extracting {english_name} ({translation_id})...")
+            logger.info(f"Extracting {english_name} ({translation_id})...")
 
             # Get all books
             cursor.execute(
@@ -750,7 +772,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
 
             books_list = cursor.fetchall()
             if not books_list:
-                print(f"No books found for translation {translation_id}")
+                logger.warning(f"No books found for translation {translation_id}")
                 return False
 
             translation_data = {
@@ -805,11 +827,11 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 json.dump(translation_data, f, ensure_ascii=False, indent=2)
 
             conn.close()
-            print(f"✓ Extracted {english_name} to {output_path}")
+            logger.info(f"✓ Extracted {english_name} to {output_path}")
             return True
 
         except Exception as e:
-            print(f"✗ Failed to extract {translation_id}: {e}")
+            logger.error(f"✗ Failed to extract {translation_id}: {e}")
             return False
 
     def import_translation_to_db(self, translation_id: str, db_manager) -> bool:
@@ -823,7 +845,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             True if successful, False otherwise
         """
         if not self.db_path.exists():
-            print("bible.db not found. Please download it first.")
+            logger.error("bible.db not found. Please download it first.")
             return False
 
         try:
@@ -842,7 +864,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
 
             result = cursor.fetchone()
             if not result:
-                print(f"Translation {translation_id} not found")
+                logger.error(f"Translation {translation_id} not found")
                 return False
 
             name, english_name, language = result
@@ -860,7 +882,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
 
             books_list = cursor.fetchall()
             if not books_list:
-                print(f"No books found for translation {translation_id}")
+                logger.warning(f"No books found for translation {translation_id}")
                 return False
 
             # Import books metadata
@@ -895,7 +917,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                             ),
                         )
                 except Exception as e:
-                    print(f"✗ Error inserting book {book_name}: {e}")
+                    logger.error(f"✗ Error inserting book {book_name}: {e}")
                     raise
 
                 # Get all verses for this book
@@ -937,7 +959,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             return True
 
         except Exception as e:
-            print(f"✗ Failed to import {translation_id}: {e}")
+            logger.error(f"✗ Failed to import {translation_id}: {e}")
             return False
 
     def _insert_verse_batch(self, db_manager, verse_batch):
@@ -957,17 +979,17 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         translations = self.list_translations()
 
         if not translations:
-            print("No translations found")
+            logger.warning("No translations found")
             return
 
-        print(f"Found {len(translations)} translations")
+        logger.info(f"Found {len(translations)} translations")
 
         success_count = 0
         for trans in tqdm(translations, desc="Extracting translations"):
             if self.extract_translation(trans["id"]):
                 success_count += 1
 
-        print(f"\n✓ Successfully extracted {success_count}/{len(translations)} translations")
+        logger.info(f"\n✓ Successfully extracted {success_count}/{len(translations)} translations")
     
     def extract_translations_to_db_parallel(
         self, 
@@ -991,7 +1013,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             translation_ids = [t["id"] for t in translations]
         
         if not translation_ids:
-            print("No translations to import")
+            logger.warning("No translations to import")
             return {}
         
         # Initialize parallel importer if needed
@@ -1005,8 +1027,8 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         
         # Determine if we should show progress (not in quiet mode)
         show_progress = True
-        if self.config and hasattr(self.config, 'quiet'):
-            show_progress = not self.config.quiet
+        if self.config:
+            show_progress = self.config.should_show_output()
         
         if not use_parallel or (self.config and self.config.parallel_workers == 1):
             # Sequential import - still use the parallel importer for consistency
@@ -1055,7 +1077,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 translation_ids = [row[0] for row in cursor.fetchall()]
         
         if not translation_ids:
-            print("No translations to verify")
+            logger.warning("No translations to verify")
             return {}
         
         # Get worker count
@@ -1066,8 +1088,8 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         if self.config and hasattr(self.config, 'use_processes_for_cpu_bound'):
             use_processes = self.config.use_processes_for_cpu_bound
         
-        print(f"Verifying {len(translation_ids)} translations...")
-        print(f"Using {num_workers} {'processes' if use_processes else 'threads'} (CPU bound task)")
+        logger.info(f"Verifying {len(translation_ids)} translations...")
+        logger.info(f"Using {num_workers} {'processes' if use_processes else 'threads'} (CPU bound task)")
         
         results = {}
         
@@ -1130,7 +1152,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         
         # Summary
         valid_count = sum(1 for v in results.values() if v)
-        print(f"\n✓ Verification complete: {valid_count}/{len(results)} translations valid")
+        logger.info(f"\n✓ Verification complete: {valid_count}/{len(results)} translations valid")
         
         return results
 
@@ -1159,12 +1181,12 @@ def main():
     if args.list:
         translations = extractor.list_translations()
         if translations:
-            print(f"\nAvailable translations ({len(translations)}):")
-            print("-" * 60)
+            logger.info(f"\nAvailable translations ({len(translations)}):")
+            logger.info("-" * 60)
             for trans in translations:
-                print(f"{trans['id']:10} {trans['language']:10} {trans['english_name']}")
+                logger.info(f"{trans['id']:10} {trans['language']:10} {trans['english_name']}")
         else:
-            print("No translations found")
+            logger.warning("No translations found")
 
     # Extract specific translation
     if args.extract:

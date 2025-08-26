@@ -115,7 +115,7 @@ class EmbeddingModelManager:
             prefixed_texts = texts
         
         # Log encoding details
-        logger.info(f"Encoding {len(texts)} texts with {model_type} model")
+        logger.debug(f"Encoding {len(texts)} texts with {model_type} model")
         
         # Generate embeddings
         embeddings = model.encode(

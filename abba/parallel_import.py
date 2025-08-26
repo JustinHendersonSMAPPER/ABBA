@@ -1,6 +1,5 @@
 """Parallel import system for ABBA with optimized performance."""
 
-import logging
 import multiprocessing as mp
 import sqlite3
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
@@ -9,16 +8,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from queue import Queue
 from threading import Lock
-from typing import Any, Dict, List, Optional, Tuple, Iterator
+from typing import Any, Dict, List, Optional, Tuple, Iterator, Set
 import time
+from enum import Enum
+import random
 
 from tqdm import tqdm
 import mmh3
+from loguru import logger
 
 from .operation_manager import OperationManager
 from .hash_validator import HashValidator
-
-logger = logging.getLogger(__name__)
 
 # Book ID mapping from 3-letter codes to numeric IDs
 BOOK_ID_MAP = {
@@ -40,6 +40,122 @@ BOOK_ID_MAP = {
     'JUD': 65, 'REV': 66
 }
 
+# Canon types for biblical texts
+class Canon(Enum):
+    BOOKS_39 = "hebrew"        # Hebrew Bible/Tanakh only
+    BOOKS_66 = "protestant"    # Protestant canon
+    BOOKS_73 = "catholic"      # Catholic canon
+    BOOKS_76_PLUS = "orthodox" # Orthodox canons
+    BOOKS_81 = "ethiopian"     # Ethiopian canon
+
+# All known apocryphal books across all traditions
+# This is used to suppress warnings for books that exist in some Bible traditions
+# even if we don't import them into our 66-book focused database
+ALL_KNOWN_EXTENDED_BOOKS = {
+    'TOB', 'JDT', 'ESG', 'WIS', 'SIR', 'BAR', '1MA', '2MA',  # Catholic core
+    'LJE', 'S3Y', 'SUS', 'BEL',  # Daniel additions
+    '1ES', '3ES', '3MA', '4MA', 'MAN', 'PS2',  # Orthodox additions
+    '2ES', '4ES', '5ES', '6ES',  # Esdras variations
+    'ENO', 'JUB',  # Ethiopian additions
+    'PSS', 'LAO', 'ODE',  # Other Orthodox books
+    'EZA', 'DAG', 'PS3', 'POL', 'EEP', 'ADE'  # Less common books
+}
+
+# Books that are part of extended canons (beyond Protestant 66)
+EXTENDED_CANON_BOOKS: Dict[Canon, Set[str]] = {
+    Canon.BOOKS_73: {  # Catholic additions
+        'TOB', 'JDT', 'ESG', 'WIS', 'SIR', 'BAR', '1MA', '2MA',
+        'LJE', 'S3Y', 'SUS', 'BEL'  # Additions to Daniel
+    },
+    Canon.BOOKS_76_PLUS: {  # Orthodox additions (includes Catholic)
+        'TOB', 'JDT', 'ESG', 'WIS', 'SIR', 'BAR', '1MA', '2MA',
+        'LJE', 'S3Y', 'SUS', 'BEL',  # Catholic books
+        '1ES', '3MA', 'MAN', 'PS2', '4MA', '2ES'  # Additional Orthodox
+    },
+    Canon.BOOKS_81: {  # Ethiopian additions (includes Orthodox)
+        'TOB', 'JDT', 'ESG', 'WIS', 'SIR', 'BAR', '1MA', '2MA',
+        'LJE', 'S3Y', 'SUS', 'BEL', '1ES', '3MA', 'MAN', 'PS2', '4MA', '2ES',
+        'ENO', 'JUB', '4ES', '5ES', '6ES'  # Additional Ethiopian
+    }
+}
+
+def get_translation_canon(translation_id: str, source_db_path: str = None) -> Canon:
+    """Determine which canon a translation follows.
+    
+    First tries pattern matching on the translation ID. If that yields Protestant
+    canon (the default), it then checks if the translation actually contains
+    apocryphal books.
+    
+    Args:
+        translation_id: The translation identifier
+        source_db_path: Optional path to source database for checking actual books
+        
+    Returns:
+        The Canon enum for this translation
+    """
+    tid = translation_id.upper()
+    
+    # Pattern-based detection first
+    # Catholic translations
+    if any(indicator in tid for indicator in [
+        'NABRE', 'DRC', 'CPDV', 'RSV-CE', 'NRSV-CE', 'CE', 
+        'CATHOLIC', 'NJB', 'CCB', 'GNT-CE', 'VULG', 'VUL', 'CLEMENTINE'
+    ]):
+        return Canon.BOOKS_73
+        
+    # Orthodox translations
+    if any(indicator in tid for indicator in [
+        'EOB', 'OSB', 'ORTHODOX', 'LXX', 'SEPT', 'SAAS', 'BRENTON'
+    ]):
+        return Canon.BOOKS_76_PLUS
+        
+    # Ethiopian translations
+    if any(indicator in tid for indicator in ['ETHIOP', 'AMHAR']):
+        return Canon.BOOKS_81
+        
+    # Jewish/Hebrew translations (OT only)
+    if any(indicator in tid for indicator in ['JPS', 'TNK', 'OJB', 'HEBREW']):
+        return Canon.BOOKS_39
+        
+    # Check for deuterocanon/apocrypha in name
+    if any(indicator in tid for indicator in ['DEUTEROCANON', 'APOCRYPHA', 'APOC']):
+        return Canon.BOOKS_73
+    
+    # If we have a database path and pattern matching yielded Protestant,
+    # check if the translation actually contains deuterocanonical books
+    if source_db_path and Path(source_db_path).exists():
+        try:
+            import sqlite3
+            with sqlite3.connect(source_db_path) as conn:
+                cursor = conn.cursor()
+                # Check for any Catholic apocryphal book
+                cursor.execute("""
+                    SELECT COUNT(*) FROM ChapterVerse 
+                    WHERE translationId = ? 
+                    AND bookId IN ('TOB', 'JDT', 'WIS', 'SIR', 'BAR', '1MA', '2MA')
+                    LIMIT 1
+                """, (translation_id,))
+                
+                if cursor.fetchone()[0] > 0:
+                    # Has Catholic apocryphal books
+                    # Check if it also has Orthodox-specific books
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM ChapterVerse 
+                        WHERE translationId = ? 
+                        AND bookId IN ('1ES', '3MA', 'MAN', 'PS2')
+                        LIMIT 1
+                    """, (translation_id,))
+                    
+                    if cursor.fetchone()[0] > 0:
+                        return Canon.BOOKS_76_PLUS
+                    else:
+                        return Canon.BOOKS_73
+        except Exception as e:
+            logger.debug(f"Could not check actual books for {translation_id}: {e}")
+    
+    # Default to Protestant
+    return Canon.BOOKS_66
+
 
 @dataclass
 class ImportJob:
@@ -59,6 +175,8 @@ class ImportResult:
     word_count: int
     duration: float
     error: Optional[str] = None
+    is_partial_canon: bool = False
+    apocrypha_count: int = 0
 
 
 class ParallelImporter:
@@ -160,10 +278,10 @@ class ParallelImporter:
                     pbar.n = current
                     pbar.refresh()
                 
-                result = self._import_single_translation(job, progress_callback)
+                result = self._import_single_translation(job, progress_callback, show_progress=True)
                 pbar.close()
             else:
-                result = self._import_single_translation(job)
+                result = self._import_single_translation(job, show_progress=show_progress)
             
             results[job.translation_id] = result
             return results
@@ -174,7 +292,7 @@ class ParallelImporter:
         with executor_class(max_workers=self.max_workers) as executor:
             # Submit all jobs
             future_to_job = {
-                executor.submit(self._import_single_translation, job): job
+                executor.submit(self._import_single_translation, job, None, show_progress): job
                 for job in jobs
             }
             
@@ -221,12 +339,13 @@ class ParallelImporter:
         return results
     
     @staticmethod
-    def _import_single_translation(job: ImportJob, progress_callback=None) -> ImportResult:
+    def _import_single_translation(job: ImportJob, progress_callback=None, show_progress=True) -> ImportResult:
         """Import a single translation (runs in separate process/thread).
         
         Args:
             job: Import job details
             progress_callback: Optional callback for progress updates
+            show_progress: Whether progress bar is being shown (affects logging)
             
         Returns:
             ImportResult with details
@@ -239,20 +358,53 @@ class ParallelImporter:
             # Each process gets its own connections
             source_conn = sqlite3.connect(job.source_db_path)
             source_conn.row_factory = sqlite3.Row
-            dest_conn = sqlite3.connect(job.dest_db_path)
+            dest_conn = sqlite3.connect(job.dest_db_path, timeout=30.0)
             
             # Enable optimizations
             dest_conn.execute("PRAGMA synchronous = OFF")
             dest_conn.execute("PRAGMA journal_mode = WAL")
             dest_conn.execute("PRAGMA cache_size = 10000")
             dest_conn.execute("PRAGMA temp_store = MEMORY")
+            dest_conn.execute("PRAGMA busy_timeout = 30000")  # 30 second timeout
             
             try:
-                # Start transaction
-                dest_conn.execute("BEGIN TRANSACTION")
+                # Start transaction with retry on lock
+                max_retries = 5
+                for retry in range(max_retries):
+                    try:
+                        dest_conn.execute("BEGIN IMMEDIATE TRANSACTION")
+                        break
+                    except sqlite3.OperationalError as e:
+                        if "locked" in str(e) and retry < max_retries - 1:
+                            wait_time = (retry + 1) * 0.1 + random.uniform(0, 0.1)
+                            logger.debug(f"Database locked for {job.translation_id}, retrying in {wait_time:.2f}s...")
+                            time.sleep(wait_time)
+                        else:
+                            raise
+                
+                # Get book statistics for this translation
+                source_cursor = source_conn.cursor()
+                source_cursor.execute("""
+                    SELECT bookId, COUNT(*) as verse_count
+                    FROM ChapterVerse 
+                    WHERE translationId = ?
+                    GROUP BY bookId
+                    ORDER BY bookId
+                """, (job.translation_id,))
+                
+                books_data = source_cursor.fetchall()
+                total_books = len(books_data)
+                mapped_books = sum(1 for book, _ in books_data if BOOK_ID_MAP.get(book, 0) > 0)
+                extended_books = sum(1 for book, _ in books_data if book in ALL_KNOWN_EXTENDED_BOOKS)
+                
+                # Track partial canon info (will be saved to database)
+                is_partial_canon = extended_books > 0
+                apocrypha_count = extended_books
+                
+                # Only log in debug mode
+                logger.debug(f"Translation {job.translation_id}: {total_books} total books, {mapped_books} will be imported, {extended_books} apocrypha skipped")
                 
                 # Get total verse count for progress tracking
-                source_cursor = source_conn.cursor()
                 source_cursor.execute(
                     "SELECT COUNT(*) FROM ChapterVerse WHERE translationId = ?",
                     (job.translation_id,)
@@ -272,6 +424,15 @@ class ParallelImporter:
                 #     source_conn, dest_conn, job.translation_id, job.batch_size
                 # )
                 
+                # Update partial canon info if needed (inside transaction)
+                if is_partial_canon:
+                    dest_cursor = dest_conn.cursor()
+                    dest_cursor.execute("""
+                        UPDATE translations 
+                        SET is_partial_canon = ?, apocrypha_count = ?
+                        WHERE id = ?
+                    """, (1, apocrypha_count, job.translation_id))
+                
                 # Commit transaction
                 dest_conn.commit()
                 
@@ -282,7 +443,9 @@ class ParallelImporter:
                     success=True,
                     verse_count=verse_count,
                     word_count=word_count,
-                    duration=duration
+                    duration=duration,
+                    is_partial_canon=is_partial_canon,
+                    apocrypha_count=apocrypha_count
                 )
                 
             finally:
@@ -332,7 +495,16 @@ class ParallelImporter:
             book_str = row[1]  # bookId
             book_id = BOOK_ID_MAP.get(book_str, 0)
             if book_id == 0:
-                logger.warning(f"Unknown book ID: {book_str}")
+                # This book is not in our standard 66-book mapping
+                # Check if it's a known extended canon book
+                if book_str in ALL_KNOWN_EXTENDED_BOOKS:
+                    # It's a known apocryphal book
+                    # Skip it silently - it exists in bible.db but we don't map it
+                    logger.debug(f"Skipping apocryphal book {book_str} in {translation_id}")
+                    continue
+                else:
+                    # Truly unknown book - this is worth warning about
+                    logger.warning(f"Unknown book ID: {book_str} in translation {translation_id}")
                 continue
             
             # Extract values
@@ -414,7 +586,16 @@ class ParallelImporter:
             book_str = row[1]  # bookId
             book_id = BOOK_ID_MAP.get(book_str, 0)
             if book_id == 0:
-                logger.warning(f"Unknown book ID: {book_str}")
+                # This book is not in our standard 66-book mapping
+                # Check if it's a known extended canon book
+                if book_str in ALL_KNOWN_EXTENDED_BOOKS:
+                    # It's a known apocryphal book
+                    # Skip it silently - it exists in bible.db but we don't map it
+                    logger.debug(f"Skipping apocryphal book {book_str} in {translation_id}")
+                    continue
+                else:
+                    # Truly unknown book - this is worth warning about
+                    logger.warning(f"Unknown book ID: {book_str} in translation {translation_id}")
                 continue
             
             # Extract values
@@ -729,7 +910,7 @@ def benchmark_import_methods(
                 import_results = {}
                 for tid in translation_ids:
                     job = ImportJob(tid, str(source_db), str(temp_db))
-                    import_results[tid] = ParallelImporter._import_single_translation(job)
+                    import_results[tid] = ParallelImporter._import_single_translation(job, None, False)
             
             duration = time.time() - start
             

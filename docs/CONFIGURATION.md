@@ -40,8 +40,16 @@ python abba/main.py --force-download
 # Skip download, only process existing data
 python abba/main.py --no-download
 
-# Rebuild database from scratch
-python abba/main.py --rebuild-db
+# Rebuild specific components
+python abba/main.py --rebuild-db          # Clear and reimport all translations
+python abba/main.py --rebuild-stepbible   # Clear and reimport Hebrew/Greek texts
+python abba/main.py --rebuild-embeddings  # Clear and regenerate all embeddings
+
+# Completely purge all data and start fresh (requires confirmation)
+python abba/main.py --purge-all
+
+# Purge without confirmation prompt
+python abba/main.py --purge-all --yes
 ```
 
 ### Translation Selection
@@ -54,14 +62,57 @@ python abba/main.py --translations KJV ASV ESV
 python abba/main.py --translations eng_kjv,eng_asv,eng_bbe,heb_wlc
 ```
 
+### Embedding Generation
+
+```bash
+# Generate verse embeddings
+python abba/main.py --embed-verses
+
+# Generate word embeddings
+python abba/main.py --embed-words
+
+# Generate all embeddings
+python abba/main.py --embed-all
+
+# Force regenerate embeddings (overwrite existing)
+python abba/main.py --rebuild-embeddings --embed-all
+
+# Verify imports with hash validation
+python abba/main.py --verify
+
+# Check for STEPBible data updates
+python abba/main.py --check-for-updates
+```
+
+### Parallel Processing
+
+```bash
+# Set number of parallel workers (default: CPU count)
+python abba/main.py --parallel-workers 8
+
+# Disable parallel processing
+python abba/main.py --no-parallel
+
+# Use processes instead of threads for CPU-bound tasks
+python abba/main.py --use-processes
+```
+
 ### Output Control
 
 ```bash
 # Verbose output (detailed progress)
 python abba/main.py --verbose
 
-# Quiet mode (minimal output)
-python abba/main.py --quiet
+# Set log level for different output verbosity
+python abba/main.py --log-level ERROR    # Minimal output (errors only)
+python abba/main.py --log-level INFO     # Normal output (default)
+python abba/main.py --log-level DEBUG    # Verbose output (same as --verbose)
+
+# Skip confirmation prompts
+python abba/main.py --yes
+
+# Short form
+python abba/main.py -y
 ```
 
 ### Configuration File
@@ -72,6 +123,22 @@ python abba/main.py --config-file my_config.json
 
 # Combine with other options (CLI takes precedence)
 python abba/main.py --config-file prod.json --verbose
+```
+
+### Special Operations
+
+```bash
+# Complete data purge (useful for testing and troubleshooting)
+python abba/main.py --purge-all
+
+# This removes:
+# - abba.db (SQLite database)
+# - vectors/ (ChromaDB embeddings)
+# - .import_status.json (import tracking)
+# - .embedding_progress.json (embedding tracking)
+# - .abba_state.json (operation state tracking)
+
+# After purge, all data will be re-downloaded and regenerated
 ```
 
 ## Environment Variables
@@ -96,8 +163,10 @@ ABBA_FORCE_DOWNLOAD=true
 # Skip download phase
 ABBA_NO_DOWNLOAD=false
 
-# Rebuild database from scratch
-ABBA_REBUILD_DB=false
+# Rebuild flags
+ABBA_REBUILD_DB=false          # Clear and reimport all translations
+ABBA_REBUILD_STEPBIBLE=false   # Clear and reimport Hebrew/Greek texts  
+ABBA_REBUILD_EMBEDDINGS=false  # Clear and regenerate all embeddings
 ```
 
 ### Output Settings
@@ -106,10 +175,7 @@ ABBA_REBUILD_DB=false
 # Enable verbose output
 ABBA_VERBOSE=true
 
-# Enable quiet mode
-ABBA_QUIET=false
-
-# Log level (DEBUG, INFO, WARNING, ERROR)
+# Log level (TRACE, DEBUG, INFO, WARNING, ERROR, CRITICAL) 
 ABBA_LOG_LEVEL=INFO
 ```
 
@@ -127,6 +193,22 @@ ABBA_DOWNLOAD_TIMEOUT=60
 
 # Number of retry attempts for downloads (default: 3)
 ABBA_DOWNLOAD_RETRIES=5
+
+# Vector database settings
+ABBA_VECTOR_DB_PATH=/path/to/vectors
+ABBA_VECTOR_DB_TYPE=chroma
+
+# Embedding model cache directory
+ABBA_EMBEDDING_CACHE_DIR=/path/to/models
+
+# Parallel processing settings
+ABBA_PARALLEL_WORKERS=8
+ABBA_NO_PARALLEL=false
+ABBA_USE_PROCESSES=false
+
+# Embedding generation settings
+ABBA_EMBED_VERSES=true
+ABBA_EMBED_WORDS=true
 ```
 
 ### Using .env Files
@@ -137,8 +219,7 @@ Create a `.env` file in the project root:
 # .env file example
 ABBA_DATA_DIR=/home/user/bible_data
 ABBA_TRANSLATIONS=KJV,ASV,ESV,NASB
-ABBA_VERBOSE=false
-ABBA_QUIET=true
+ABBA_LOG_LEVEL=ERROR
 ABBA_FORCE_DOWNLOAD=false
 ```
 
@@ -180,7 +261,18 @@ Configuration files use JSON format and can specify any setting.
   "log_level": "INFO",
   "import_batch_size": 2000,
   "download_timeout": 60,
-  "download_retries": 5
+  "download_retries": 5,
+  "vector_db_path": "/opt/abba/vectors",
+  "vector_db_type": "chroma",
+  "embedding_cache_dir": "/opt/abba/models",
+  "parallel_workers": 8,
+  "no_parallel": false,
+  "use_processes": false,
+  "embed_verses": false,
+  "embed_words": false,
+  "rebuild_db": false,
+  "rebuild_stepbible": false,
+  "rebuild_embeddings": false
 }
 ```
 
@@ -297,7 +389,7 @@ env:
 `Dockerfile`:
 ```dockerfile
 ENV ABBA_DATA_DIR=/data
-ENV ABBA_QUIET=true
+ENV ABBA_LOG_LEVEL=ERROR
 ENV ABBA_TRANSLATIONS=KJV,ASV,ESV
 ```
 
@@ -307,7 +399,7 @@ services:
   abba:
     environment:
       - ABBA_DATA_DIR=/data
-      - ABBA_VERBOSE=true
+      - ABBA_LOG_LEVEL=DEBUG
       - ABBA_TRANSLATIONS=${TRANSLATIONS:-KJV,ASV}
     volumes:
       - ./data:/data
@@ -436,6 +528,44 @@ try:
     print(f"Settings: {list(config.keys())}")
 except Exception as e:
     print(f"Invalid configuration: {e}")
+```
+
+## Canon-Aware Configuration
+
+The import system automatically detects biblical canons to reduce false warnings:
+
+### Translation Canon Detection
+
+The system recognizes these patterns:
+
+```bash
+# Catholic translations (73 books)
+*NABRE*, *DRC*, *CPDV*, *-CE*, *CATHOLIC*, *NJB*, *VULG*
+
+# Orthodox translations (76+ books)
+*EOB*, *OSB*, *ORTHODOX*, *LXX*, *SEPT*
+
+# Ethiopian translations (81 books)
+*ETHIOP*, *AMHAR*
+
+# Jewish translations (39 books, OT only)
+*JPS*, *TNK*, *OJB*, *HEBREW*
+
+# Default: Protestant (66 books)
+All others
+```
+
+### Canon Behavior
+
+```bash
+# Import Catholic Bible - no warnings for deuterocanonical books
+python abba/main.py --translations NABRE
+
+# Import Protestant Bible - warns about books outside 66-book canon
+python abba/main.py --translations KJV
+
+# Mixed import - each translation uses appropriate canon
+python abba/main.py --translations KJV,NABRE,EOB
 ```
 
 ## Advanced Configuration

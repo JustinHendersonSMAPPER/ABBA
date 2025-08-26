@@ -59,14 +59,19 @@ class ChromaManager:
         self.persist_path.mkdir(parents=True, exist_ok=True)
         
         # Initialize ChromaDB client with persistence
-        self.client = chromadb.PersistentClient(
-            path=str(self.persist_path),
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True,
-                persist_directory=str(self.persist_path)
+        try:
+            self.client = chromadb.PersistentClient(
+                path=str(self.persist_path),
+                settings=Settings(
+                    anonymized_telemetry=False,
+                    allow_reset=True,
+                    persist_directory=str(self.persist_path)
+                )
             )
-        )
+        except Exception as e:
+            # If telemetry error occurs, try again with minimal settings
+            logger.warning(f"Initial ChromaDB setup failed: {e}, retrying with minimal settings")
+            self.client = chromadb.PersistentClient(path=str(self.persist_path))
         
         # Cache for collections
         self._collections: Dict[str, chromadb.Collection] = {}
@@ -195,8 +200,20 @@ class ChromaManager:
                 "metadata": collection.metadata
             }
         except Exception as e:
-            logger.error(f"Error getting stats for collection {name}: {e}")
-            return {"name": name, "error": str(e)}
+            error_msg = str(e)
+            logger.error(f"Error getting stats for collection {name}: {error_msg}")
+            
+            # If database is corrupted, return empty stats
+            if "database disk image is malformed" in error_msg:
+                logger.warning(f"Collection {name} appears corrupted - returning empty stats")
+                return {
+                    "name": name,
+                    "count": 0,
+                    "dimensions": 0,
+                    "error": "Database corrupted"
+                }
+            
+            return {"name": name, "error": error_msg}
     
     def reset_all(self, confirm: bool = False) -> bool:
         """Reset all collections (dangerous operation).
@@ -413,3 +430,18 @@ class ChromaManager:
                 stats["total_embeddings"] += collection_stats["count"]
         
         return stats
+    
+    def close(self):
+        """Close ChromaDB connection and persist any pending changes."""
+        try:
+            # Clear collection cache
+            self._collections.clear()
+            
+            # ChromaDB PersistentClient automatically persists
+            # but we can force a sync by accessing heartbeat
+            if hasattr(self.client, '_server'):
+                self.client.heartbeat()
+            
+            logger.info("ChromaDB connection closed successfully")
+        except Exception as e:
+            logger.warning(f"Error closing ChromaDB: {e}")

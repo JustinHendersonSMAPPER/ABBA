@@ -36,11 +36,40 @@ python abba/main.py --no-parallel             # Disable parallel processing
 python abba/main.py --use-processes           # Use processes instead of threads
 python abba/main.py --verify                  # Verify imports with hash validation
 
+# Update checking
+python abba/main.py --check-for-updates       # Check for STEPBible data updates and re-import if changed
+
 # Embedding generation (optional - main.py auto-generates missing embeddings)
 python abba/main.py --embed-verses            # Force re-generate verse embeddings
 python abba/main.py --embed-words             # Force re-generate word embeddings
 python abba/main.py --embed-all               # Force re-generate all embeddings
 python abba/main.py --force-reembed           # Force overwrite existing embeddings
+
+# Database and data management
+python abba/main.py --rebuild-db              # Rebuild database (keeps tracking files)
+python abba/main.py --purge-all               # DANGER: Remove ALL data and start fresh (requires confirmation)
+python abba/main.py --purge-all --yes         # Purge without confirmation prompt
+
+# Semantic search and concept mapping (requires embeddings + Ollama)
+python abba/main.py --map-concepts            # Map all concepts using semantic concordance
+python abba/main.py --search-concept love     # Search for a specific biblical concept
+python abba/main.py --export-concept-mappings output.json  # Export results to JSON
+python abba/main.py --export-concept-mappings output.csv   # Export results to CSV
+
+# Concept validation and management
+python abba/main.py --validate-concepts       # Validate concept definitions in concepts.yaml
+python abba/main.py --validate-concept-data   # Validate Hebrew/Greek terms exist in database
+python abba/main.py --concept-report          # Generate detailed concept mapping report
+python abba/main.py --concepts-file FILE      # Use custom concepts YAML file
+
+# Ollama configuration for semantic validation
+python abba/main.py --ollama-host URL         # Override Ollama server URL (default: http://localhost:11434)
+python abba/main.py --ollama-models llama3    # Specify Ollama models for analysis
+python abba/main.py --ollama-consensus 0.8    # Set consensus threshold for multi-model validation
+
+# General options
+python abba/main.py --yes                     # Skip all confirmation prompts
+python abba/main.py -y                        # Short form of --yes
 ```
 
 ### Testing and Quality Checks
@@ -211,15 +240,56 @@ The project uses a robust validation system for data integrity:
    - Automatically detects and cleans up interrupted operations
    - Validates completion with expected counts
 
-3. **Validation Flow**:
+3. **Post-Import Validation**: Comprehensive metadata and data integrity checks
+   - Validates all required metadata fields (name, language, canon)
+   - Verifies verse counts match source
+   - Checks book coverage completeness
+   - Detects duplicate verses and data anomalies
+   - Stops execution if validation fails below 100%
+
+4. **Validation Flow**:
    ```python
    # Import with validation
    op_manager.start_job("import_translations", "KJV", db_manager)
    # ... do import ...
-   op_manager.complete_job("import_translations", "KJV", db_manager)  # Validates automatically
+   op_manager.complete_job("import_translations", "KJV", db_manager)  # Hash validation
+   # Post-import validation runs automatically and stops if < 100%
    ```
 
 See `docs/VALIDATION_SYSTEM.md` for detailed documentation.
+
+## Semantic Search Methodology
+
+The project uses a **Strong's-Centric Semantic Mapping** approach for biblical concept searching. This methodology prioritizes lexicographic accuracy and scholarly defensibility.
+
+### Key Principles:
+1. **Strong's Numbers as Primary Identifiers**: All concepts are defined using Strong's Concordance numbers
+2. **No Semantic Inference**: System only returns matches based on authoritative lexicons (BDAG, BDB, Strong's)
+3. **Transparent Confidence Scoring**: Each match type has explicit confidence levels
+4. **Traceable Results**: Every match includes evidence trail to lexicographic sources
+
+### Database Design for Semantic Search:
+- **normalized_word**: Hebrew/Greek text with vowel points and accents removed
+- **strongs_lexical**: Clean Strong's numbers extracted from complex formats (e.g., `{H7225G}` → `H7225`)
+- **Indexed columns**: Both normalized text and Strong's numbers for fast searching
+
+### Concept Definition Format:
+```yaml
+concept:
+  name: love
+  primary_strongs: [G25, G26]      # Core representation
+  extended_strongs: [G5368]        # Related terms
+  hebrew_strongs: [H157, H160]     # Hebrew equivalents
+  validation_source: "BDAG"        # Authority
+```
+
+### Why This Approach:
+1. **Accuracy**: Based on established biblical scholarship, not algorithmic guessing
+2. **Defensibility**: Results can be verified against published lexicons
+3. **Transparency**: Users understand exactly why each match was returned
+4. **Extensibility**: New concepts added by defining Strong's numbers
+
+See `docs/SEMANTIC_SEARCH_METHODOLOGY.md` for complete documentation.
 
 ## Important Notes
 
@@ -233,3 +303,28 @@ See `docs/VALIDATION_SYSTEM.md` for detailed documentation.
 - All code must pass ALL quality checks - no exceptions
 - **Use `claude/` folder for all Claude-generated debugging files and temporary scripts**
 - **All imports and embeddings are validated using MurmurHash3 for data integrity**
+- **Canon-aware import system**: The parallel import recognizes Protestant (66 books), Catholic (73 books), Orthodox (76+ books), and Ethiopian (81 books) canons to avoid false warnings for deuterocanonical books
+
+## Semantic Search Methodology
+
+The project implements **Strong's-Centric Semantic Mapping** for biblical concept searching:
+
+1. **Lexical Foundation**: Every concept is defined by Strong's Concordance numbers
+2. **Embedding Enhancement**: Original language embeddings find semantically similar verses
+3. **Ollama Validation**: LLM validates semantic matches to reduce false positives
+4. **Hybrid Ranking**: Combines lexical precision with semantic recall
+
+### Search Process:
+```
+Concept (e.g., "love") → Strong's Numbers (G25, G26, H157)
+                      ↓
+              Lexical Matches (high precision)
+                      +
+              Semantic Matches (high recall)
+                      ↓
+              Ollama Validation (filter false positives)
+                      ↓
+              Ranked Results (confidence scores)
+```
+
+This approach prioritizes accuracy and scholarly defensibility over pure algorithmic complexity.

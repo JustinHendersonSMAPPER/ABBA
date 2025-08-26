@@ -2,7 +2,7 @@
 
 ## Overview
 
-The ABBA project implements a robust validation system to ensure data integrity during import and embedding operations. The system uses fast hash-based validation with MurmurHash3 and hierarchical job tracking to handle interruptions gracefully.
+The ABBA project implements a robust validation system to ensure data integrity during import and embedding operations. The system uses fast hash-based validation with MurmurHash3, hierarchical job tracking to handle interruptions gracefully, and canon-aware import validation to eliminate false warnings while maintaining data integrity.
 
 ## Architecture
 
@@ -105,6 +105,37 @@ The system allows configurable tolerance for real-world data:
 - **Verse counts**: 5% variance allowed (empty verses, textual variants)
 - **Word counts**: 20% variance allowed (deduplication, morphology)
 - **Exact match**: Available for critical operations
+
+## Canon-Aware Validation
+
+### Book Validation
+
+The system includes intelligent book validation that recognizes different biblical canons:
+
+1. **Canon Detection**
+   - Automatically identifies translation type (Protestant, Catholic, Orthodox, etc.)
+   - Based on translation ID patterns (e.g., "RSV-CE" → Catholic)
+   
+2. **Smart Warning System**
+   ```python
+   # Example: Catholic Bible with Wisdom book
+   translation_id = "NABRE"  # Catholic translation
+   book_id = "WIS"          # Wisdom of Solomon
+   
+   # System recognizes WIS is valid for Catholic canon
+   # No warning generated - imports silently
+   ```
+
+3. **Validation Rules**
+   - Protestant translations: Warn for books outside 66-book canon
+   - Catholic translations: Accept 73-book canon including deuterocanonicals
+   - Orthodox translations: Accept extended canon with 76+ books
+   - Unknown books: Always warn regardless of translation
+
+### Benefits
+- Eliminates thousands of false warnings during import
+- Maintains data integrity checks for truly unknown books
+- Respects theological differences between traditions
 
 ## Import Process
 

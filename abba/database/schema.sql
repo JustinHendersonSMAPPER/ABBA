@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS translations (
     name TEXT NOT NULL,
     english_name TEXT,
     language TEXT,
+    canon TEXT CHECK(canon IN ('hebrew', 'protestant', 'catholic', 'orthodox', 'ethiopian')),
+    is_partial_canon BOOLEAN DEFAULT 0,
+    apocrypha_count INTEGER DEFAULT 0,
+    has_import_failures BOOLEAN DEFAULT 0,
+    failed_verse_count INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -127,6 +132,57 @@ CREATE TABLE IF NOT EXISTS word_concepts (
     PRIMARY KEY (word_id, concept_id),
     FOREIGN KEY (word_id) REFERENCES words(id),
     FOREIGN KEY (concept_id) REFERENCES semantic_concepts(id)
+);
+
+-- STEPBible verses (from TAHOT/TAGNT files)
+CREATE TABLE IF NOT EXISTS stepbible_verses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_file TEXT NOT NULL,     -- source file name
+    book TEXT NOT NULL,
+    chapter INTEGER NOT NULL,
+    verse INTEGER NOT NULL,
+    word_number INTEGER NOT NULL,
+    original_word TEXT,
+    transliteration TEXT,
+    english TEXT,
+    strongs_raw TEXT,
+    strongs_primary TEXT,
+    morphology TEXT,
+    language TEXT CHECK(language IN ('hebrew', 'greek', 'aramaic')) NOT NULL,
+    data_hash INTEGER,  -- MurmurHash3 of the word data for integrity checking
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(source_file, book, chapter, verse, word_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stepbible_verses_reference ON stepbible_verses(book, chapter, verse);
+CREATE INDEX IF NOT EXISTS idx_stepbible_verses_source ON stepbible_verses(source_file);
+CREATE INDEX IF NOT EXISTS idx_stepbible_verses_strongs ON stepbible_verses(strongs_primary);
+CREATE INDEX IF NOT EXISTS idx_stepbible_verses_language ON stepbible_verses(language);
+
+-- Track failed verse imports
+CREATE TABLE IF NOT EXISTS failed_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    translation_id TEXT NOT NULL,
+    book_id INTEGER NOT NULL,
+    chapter INTEGER NOT NULL,
+    verse INTEGER NOT NULL,
+    reason TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (translation_id) REFERENCES translations(id),
+    UNIQUE(translation_id, book_id, chapter, verse)
+);
+
+CREATE INDEX IF NOT EXISTS idx_failed_imports_translation ON failed_imports(translation_id);
+
+-- STEPBible validation results
+CREATE TABLE IF NOT EXISTS stepbible_validation (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    validation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    total_checks INTEGER,
+    passed_checks INTEGER,
+    failed_checks INTEGER,
+    success_rate REAL,
+    details TEXT  -- JSON with detailed results
 );
 
 -- Database metadata

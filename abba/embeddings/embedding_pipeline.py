@@ -63,6 +63,11 @@ class EmbeddingPipeline:
         Returns:
             Summary of embedding results
         """
+        # If rebuilding, clear existing embeddings
+        if force_reembed:
+            logger.info("Clearing existing verse embeddings for rebuild...")
+            self.chroma.delete_collection("verses")
+        
         # Get verses collection
         verses_collection = self.chroma.get_or_create_collection(
             "verses",
@@ -93,6 +98,14 @@ class EmbeddingPipeline:
                     logger.info(f"Skipping {translation_id} - already embedded")
                     continue
                 
+                # Check if partially embedded (interrupted)
+                start_offset = 0
+                if not force_reembed:
+                    progress_info = self.progress.get("verses", {}).get(translation_id, {})
+                    if "last_count" in progress_info and not progress_info.get("complete", False):
+                        start_offset = progress_info["last_count"]
+                        logger.info(f"Resuming {translation_id} from verse {start_offset}...")
+                
                 logger.info(f"Embedding verses for {translation_id}...")
                 
                 # Get all verses for translation
@@ -103,8 +116,10 @@ class EmbeddingPipeline:
                     continue
                 
                 # Process in batches
-                for i in tqdm(range(0, len(verses), batch_size), 
-                             desc=f"Embedding {translation_id}"):
+                for i in tqdm(range(start_offset, len(verses), batch_size), 
+                             desc=f"Embedding {translation_id}",
+                             initial=start_offset // batch_size,
+                             total=len(verses) // batch_size):
                     batch = verses[i:i + batch_size]
                     
                     # Build contexts
@@ -113,6 +128,23 @@ class EmbeddingPipeline:
                     metadatas = []
                     
                     for verse in batch:
+                        # Generate ID first to check if already exists
+                        verse_id = self.chroma.generate_verse_id(
+                            verse['translation_id'],
+                            verse['book_id'],
+                            verse['chapter'],
+                            verse['verse']
+                        )
+                        
+                        # Skip if already embedded (for resume safety)
+                        if start_offset > 0:
+                            try:
+                                existing = verses_collection.get(ids=[verse_id])
+                                if existing and existing['ids']:
+                                    continue
+                            except:
+                                pass  # Continue if error checking
+                        
                         # Build enhanced context
                         context = self.context.build_verse_context(
                             verse['translation_id'],
@@ -125,14 +157,6 @@ class EmbeddingPipeline:
                             continue
                         
                         contexts.append(context)
-                        
-                        # Generate ID
-                        verse_id = self.chroma.generate_verse_id(
-                            verse['translation_id'],
-                            verse['book_id'],
-                            verse['chapter'],
-                            verse['verse']
-                        )
                         ids.append(verse_id)
                         
                         # Create metadata (ensure no None values)
@@ -148,22 +172,42 @@ class EmbeddingPipeline:
                         metadatas.append(metadata)
                     
                     if contexts:
-                        # Generate embeddings
-                        embeddings = self.models.encode_texts(
-                            contexts,
-                            model_type="english",
-                            batch_size=32,
-                            show_progress=False
-                        )
-                        
-                        # Add to ChromaDB
-                        verses_collection.add(
-                            embeddings=embeddings.tolist(),
-                            ids=ids,
-                            metadatas=metadatas
-                        )
-                        
-                        results["verses_embedded"] += len(contexts)
+                        try:
+                            # Generate embeddings
+                            embeddings = self.models.encode_texts(
+                                contexts,
+                                model_type="english",
+                                batch_size=32,
+                                show_progress=False
+                            )
+                            
+                            # Add to ChromaDB with retry logic
+                            max_retries = 3
+                            retry_count = 0
+                            while retry_count < max_retries:
+                                try:
+                                    verses_collection.add(
+                                        embeddings=embeddings.tolist(),
+                                        ids=ids,
+                                        metadatas=metadatas
+                                    )
+                                    results["verses_embedded"] += len(contexts)
+                                    break
+                                except Exception as e:
+                                    retry_count += 1
+                                    if retry_count >= max_retries:
+                                        raise
+                                    logger.warning(f"ChromaDB add failed (attempt {retry_count}/{max_retries}): {str(e)}")
+                                    # Wait briefly before retry
+                                    import time
+                                    time.sleep(1)
+                        except Exception as e:
+                            # Log error but continue with next batch
+                            error_msg = f"Error processing batch at index {i} for {translation_id}: {str(e)}"
+                            logger.error(error_msg)
+                            results["errors"].append(error_msg)
+                            # Update progress anyway to allow resume
+                            self._update_progress("verses", translation_id, i)
                     
                     # Update progress
                     self._update_progress("verses", translation_id, i + len(batch))
@@ -195,6 +239,11 @@ class EmbeddingPipeline:
         Returns:
             Summary of embedding results
         """
+        # If rebuilding, clear existing embeddings
+        if force_reembed:
+            logger.info("Clearing existing word embeddings for rebuild...")
+            self.chroma.delete_collection("words")
+        
         # Check if already done
         if not force_reembed and self._are_words_embedded():
             logger.info("Words already embedded")
@@ -370,23 +419,23 @@ class EmbeddingPipeline:
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Get unique combinations of Strong's + morphology
+            # Get unique combinations of Strong's + morphology from stepbible_verses
             query = """
                 SELECT DISTINCT
-                    w.strongs_primary,
-                    w.morphology_code,
-                    w.language,
-                    MAX(w.greek_text) as greek_text,
-                    MAX(w.hebrew_text) as hebrew_text,
-                    MAX(w.transliteration) as transliteration,
+                    sv.strongs_primary,
+                    sv.morphology,
+                    sv.language,
+                    MAX(sv.original_word) as original_word,
+                    MAX(sv.transliteration) as transliteration,
+                    MAX(sv.english) as english,
                     MAX(l.gloss) as gloss,
                     MAX(l.part_of_speech) as part_of_speech,
                     COUNT(*) as frequency
-                FROM words w
-                LEFT JOIN lexicon l ON w.strongs_primary = l.strongs_number
-                WHERE w.strongs_primary IS NOT NULL
-                  AND w.strongs_primary != ''
-                GROUP BY w.strongs_primary, w.morphology_code, w.language
+                FROM stepbible_verses sv
+                LEFT JOIN lexicon l ON sv.strongs_primary = l.strongs_number
+                WHERE sv.strongs_primary IS NOT NULL
+                  AND sv.strongs_primary != ''
+                GROUP BY sv.strongs_primary, sv.morphology, sv.language
                 ORDER BY frequency DESC
             """
             
@@ -398,10 +447,12 @@ class EmbeddingPipeline:
                     "strongs_primary": row[0],
                     "morphology_code": row[1],
                     "language": row[2],
-                    "greek_text": row[3],
-                    "hebrew_text": row[4],
-                    "transliteration": row[5],
-                    "gloss": row[6],
+                    "original_word": row[3],  # Can be either Greek or Hebrew
+                    "greek_text": row[3] if row[2] == 'greek' else None,
+                    "hebrew_text": row[3] if row[2] == 'hebrew' else None,
+                    "transliteration": row[4],
+                    "english": row[5],
+                    "gloss": row[6] or row[5],  # Use English if no gloss
                     "part_of_speech": row[7],
                     "frequency": row[8]
                 })
@@ -471,8 +522,8 @@ class EmbeddingPipeline:
         self.progress[category][key]["last_count"] = count
         self.progress[category][key]["last_update"] = datetime.now().isoformat()
         
-        # Save periodically
-        if count % 1000 == 0:
+        # Save more frequently for better crash recovery
+        if count % 100 == 0:
             self._save_progress()
     
     def _get_verse_count(self, translation_id: str) -> int:

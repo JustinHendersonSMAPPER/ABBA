@@ -28,6 +28,11 @@ class SQLiteManager:
             logger.info(f"Creating new database at {self.db_path}")
 
         self._execute_schema()
+        
+        # Run migrations for existing databases
+        from .migrations import run_migrations
+        run_migrations(self.db_path)
+        
         logger.info("Database initialized successfully")
 
     def _execute_schema(self) -> None:
@@ -47,10 +52,12 @@ class SQLiteManager:
         """Get a database connection with proper error handling."""
         conn = None
         try:
-            conn = sqlite3.connect(str(self.db_path))
+            conn = sqlite3.connect(str(self.db_path), timeout=30.0)
             conn.row_factory = sqlite3.Row  # Enable dict-like access
-            # Enable foreign key constraints
+            # Enable foreign key constraints and concurrency settings
             conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("PRAGMA journal_mode = WAL")
+            conn.execute("PRAGMA busy_timeout = 30000")
             yield conn
         except Exception as e:
             if conn:
@@ -254,9 +261,19 @@ class SQLiteManager:
         Args:
             translation_data: Translation information
         """
+        # Detect canon if not provided
+        canon = translation_data.get("canon")
+        if not canon:
+            from ..parallel_import import get_translation_canon
+            canon_enum = get_translation_canon(
+                translation_data["id"], 
+                str(self.db_path.parent / "bible.db")
+            )
+            canon = canon_enum.value
+        
         query = """
-            INSERT OR REPLACE INTO translations (id, name, english_name, language)
-            VALUES (?, ?, ?, ?)
+            INSERT OR REPLACE INTO translations (id, name, english_name, language, canon)
+            VALUES (?, ?, ?, ?, ?)
         """
         self.execute_update(
             query,
@@ -265,8 +282,24 @@ class SQLiteManager:
                 translation_data["name"],
                 translation_data.get("english_name"),
                 translation_data.get("language"),
+                canon,
             ),
         )
+
+    def update_translation_partial_canon(self, translation_id: str, is_partial: bool, apocrypha_count: int) -> None:
+        """Update partial canon information for a translation.
+        
+        Args:
+            translation_id: Translation ID
+            is_partial: Whether the canon is partial
+            apocrypha_count: Number of apocryphal books included
+        """
+        query = """
+            UPDATE translations 
+            SET is_partial_canon = ?, apocrypha_count = ?
+            WHERE id = ?
+        """
+        self.execute_update(query, (is_partial, apocrypha_count, translation_id))
 
     def insert_verse(self, verse_data: Dict[str, Any]) -> None:
         """Insert a verse.
@@ -377,11 +410,15 @@ class SQLiteManager:
             Dictionary with table row counts
         """
         stats = {}
-        tables = ["words", "lexicon", "morphology", "translations", "books", "verses"]
+        tables = ["words", "lexicon", "morphology", "translations", "books", "verses", "stepbible_verses"]
 
         for table in tables:
             query = f"SELECT COUNT(*) as count FROM {table}"
             result = self.execute_query(query)
             stats[table] = result[0]["count"] if result else 0
+
+        # For backward compatibility, add stepbible_verses count to words count
+        if "stepbible_verses" in stats and stats["stepbible_verses"] > 0:
+            stats["words"] = stats.get("words", 0) + stats["stepbible_verses"]
 
         return stats

@@ -162,3 +162,15 @@ class ImportTracker:
             ISO timestamp or None if not imported
         """
         return self.status["imports"]["translations"].get(translation_id)
+    
+    def clear_stepbible_tracking(self):
+        """Clear all STEPBible import tracking records."""
+        # Clear all STEPBible file tracking
+        for file_type in self.status["imports"]["stepbible"]:
+            self.status["imports"]["stepbible"][file_type] = {}
+        
+        # Also clear the overall complete marker
+        if "complete" in self.status["imports"]["stepbible"]:
+            del self.status["imports"]["stepbible"]["complete"]
+        
+        self._save_status()
