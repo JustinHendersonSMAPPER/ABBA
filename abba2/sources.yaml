@@ -1,0 +1,186 @@
+# ABBA (Annotated Bible and Background Analysis) 2.0
+# Data Sources Manifest - All free and open biblical resources
+
+sources:
+  # Greek Lexicons
+  abbott_smith:
+    name: "Abbott-Smith Greek Lexicon"
+    type: lexicon
+    language: greek
+    year: 1922
+    license: public_domain
+    url: "https://github.com/translatable-exegetical-tools/Abbott-Smith/raw/master/abbott-smith.tei.xml"
+    checksum: "sha256:placeholder"  # To be updated with actual checksum
+    description: "Classical-focused Greek lexicon with 5,500+ entries"
+    format: tei_xml
+    
+  thayer:
+    name: "Thayer's Greek-English Lexicon"
+    type: lexicon
+    language: greek
+    year: 1889
+    license: public_domain
+    url: "https://github.com/morphgnt/strongs-dictionary-xml/raw/master/greek/strongsgreek.xml"
+    checksum: "sha256:placeholder"
+    description: "Comprehensive Greek lexicon with 5,600+ entries"
+    format: xml
+    
+  dodson:
+    name: "Dodson Greek Lexicon"
+    type: lexicon
+    language: greek
+    year: 2010
+    license: public_domain
+    url: "https://github.com/bridgeconn/Dodson-Greek-Lexicon/raw/main/dodson.xml"
+    checksum: "sha256:placeholder"
+    description: "Modern, concise Greek definitions"
+    format: xml
+    
+  lsj:
+    name: "Liddell-Scott-Jones Greek Lexicon"
+    type: lexicon
+    language: greek
+    year: 1940
+    license: public_domain
+    url: "https://github.com/PerseusDL/lexica/raw/master/CTS_XML_TEI/perseus/pdllex/grc/lsj/grc.lsj.perseus-eng1.xml"
+    checksum: "sha256:placeholder"
+    description: "Classical Greek context and usage"
+    format: tei_xml
+    
+  # Hebrew Lexicons
+  bdb:
+    name: "Brown-Driver-Briggs Hebrew Lexicon"
+    type: lexicon
+    language: hebrew
+    year: 1906
+    license: public_domain
+    url: "https://github.com/openscriptures/HebrewLexicon/raw/master/BrownDriverBriggs/BDB.xml"
+    checksum: "sha256:placeholder"
+    description: "Comprehensive Hebrew lexicon"
+    format: xml
+    
+  strongs_hebrew:
+    name: "Strong's Hebrew Dictionary"
+    type: lexicon
+    language: hebrew
+    year: 1890
+    license: public_domain
+    url: "https://github.com/morphgnt/strongs-dictionary-xml/raw/master/hebrew/strongshebrew.xml"
+    checksum: "sha256:placeholder"
+    description: "Universal reference system for Hebrew"
+    format: xml
+    
+  # Morphological Databases
+  morphgnt:
+    name: "MorphGNT"
+    type: morphology
+    language: greek
+    license: cc_by_sa
+    url: "https://github.com/morphgnt/sblgnt/archive/refs/heads/master.zip"
+    checksum: "sha256:placeholder"
+    description: "Morphological Greek New Testament"
+    format: morphgnt
+    
+  oshb:
+    name: "Open Scriptures Hebrew Bible"
+    type: morphology
+    language: hebrew
+    license: cc_by
+    url: "https://github.com/openscriptures/morphhb/archive/refs/heads/master.zip"
+    checksum: "sha256:placeholder"
+    description: "Morphological Hebrew Bible"
+    format: oshb
+    
+  # Syntactic Treebanks
+  proiel:
+    name: "PROIEL Treebank"
+    type: treebank
+    language: greek
+    license: cc_by_nc_sa
+    url: "https://github.com/proiel/proiel-treebank/raw/master/greek-nt.xml"
+    checksum: "sha256:placeholder"
+    description: "Greek NT dependency treebank"
+    format: proiel_xml
+    
+  lowfat:
+    name: "Lowfat Treebank"
+    type: treebank
+    language: greek
+    license: cc_by
+    url: "https://github.com/biblicalhumanities/greek-new-testament/raw/master/syntax-trees/nestle1904-lowfat/xml/nestle1904lowfat.xml"
+    checksum: "sha256:placeholder"
+    description: "Alternative Greek NT syntax trees"
+    format: lowfat_xml
+    
+  bhsa:
+    name: "Biblia Hebraica Stuttgartensia Amstelodamensis"
+    type: treebank
+    language: hebrew
+    license: cc_by_nc
+    url: "https://github.com/etcbc/bhsa/archive/refs/heads/master.zip"
+    checksum: "sha256:placeholder"
+    description: "Hebrew Bible syntax and linguistic annotations"
+    format: etcbc
+    
+  # Bible Texts
+  sblgnt:
+    name: "SBL Greek New Testament"
+    type: text
+    language: greek
+    license: cc_by
+    url: "https://github.com/LogosBible/SBLGNT/raw/master/data/sblgnt.xml"
+    checksum: "sha256:placeholder"
+    description: "Critical edition of Greek NT"
+    format: osis_xml
+    
+  wlc:
+    name: "Westminster Leningrad Codex"
+    type: text
+    language: hebrew
+    license: public_domain
+    url: "https://github.com/openscriptures/morphhb/raw/master/wlc/WLC.txt"
+    checksum: "sha256:placeholder"
+    description: "Hebrew Bible text"
+    format: wlc
+    
+  # Semantic Resources
+  louw_nida:
+    name: "Louw-Nida Semantic Domains (Partial)"
+    type: semantic
+    language: greek
+    license: fair_use
+    url: "manual_entry"
+    description: "Semantic domain classifications (extracted fair use)"
+    format: custom
+    note: "Requires manual extraction under fair use"
+    
+  # Translation Alignments
+  berean_interlinear:
+    name: "Berean Interlinear Bible"
+    type: alignment
+    languages: ["greek", "english"]
+    license: cc_by_sa
+    url: "https://github.com/Berean-Bible/berean-interlinear/archive/refs/heads/master.zip"
+    checksum: "sha256:placeholder"
+    description: "Word-by-word Greek-English alignment"
+    format: berean
+
+# Download settings
+download:
+  parallel: true
+  max_concurrent: 3
+  retry_count: 3
+  timeout: 300
+  verify_ssl: true
+  user_agent: "ABBA/2.0 (https://github.com/yourusername/abba)"
+  
+# Validation rules
+validation:
+  required_coverage:
+    nt_vocabulary: 0.98  # Must cover 98% of NT vocabulary
+    ot_vocabulary: 0.95  # Must cover 95% of OT vocabulary
+  minimum_sources:
+    greek: 3  # Need at least 3 Greek sources
+    hebrew: 2  # Need at least 2 Hebrew sources
+  checksum_verification: true
+  structure_validation: true
