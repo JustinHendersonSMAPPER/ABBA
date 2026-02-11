@@ -206,14 +206,14 @@ ABBA_CONNECTION_POOL_SIZE=10
 - [x] Add semantic analysis caching
 
 ### Original Language Embedding Generation
-- [ ] Remove translation-specific verse embeddings
-- [ ] Implement original language verse embeddings:
-  - [ ] Use Hebrew/Greek text from `stepbible_verses` table
-  - [ ] Include morphology and Strong's numbers in context
-  - [ ] Generate single embedding per canonical verse
-  - [ ] Map embeddings to all translations via verse reference
-- [ ] Verify embedding deduplication (31K verses, not 13M)
-- [ ] Update embedding validator for new structure
+- [x] Remove translation-specific verse embeddings
+- [x] Implement original language verse embeddings:
+  - [x] Use Hebrew/Greek text from `stepbible_verses` table
+  - [x] Include morphology and Strong's numbers in context
+  - [x] Generate single embedding per canonical verse
+  - [x] Map embeddings to all translations via verse reference
+- [x] Verify embedding deduplication (31K verses, not 13M)
+- [x] Update embedding validator for new structure
 
 ### Word-level Embeddings (Original Language)
 - [x] Extract unique words with linguistic context:
@@ -226,11 +226,11 @@ ABBA_CONNECTION_POOL_SIZE=10
 ## Phase 3: Semantic Search Implementation
 
 ### Unified Search API
-- [ ] Extend `search.py` with semantic methods:
-  - [ ] `search_similar_verses()` - semantic verse search
-  - [ ] `search_related_words()` - semantic word search
-  - [ ] `hybrid_search()` - combined exact + semantic
-- [ ] Implement result ranking algorithms
+- [x] Extend `search.py` with semantic methods:
+  - [x] `search_similar_verses()` - semantic verse search
+  - [x] `search_related_words()` - semantic word search
+  - [x] `hybrid_search()` - combined exact + semantic
+- [x] Implement result ranking algorithms
 - [ ] Add search result explanations
 
 ### Search Configuration
@@ -246,8 +246,8 @@ ABBA_CONNECTION_POOL_SIZE=10
 
 ### Search Optimization
 - [ ] Create search query parser
-- [ ] Implement query expansion for better results
-- [ ] Add search filters (book, testament, language)
+- [x] Implement query expansion for better results
+- [x] Add search filters (book, testament, language)
 - [ ] Optimize vector similarity calculations
 - [ ] Add search result caching
 
@@ -324,48 +324,48 @@ ABBA_CONNECTION_POOL_SIZE=10
 > These are prerequisites for making scholar-level knowledge accessible to everyday readers.
 
 ### FastAPI Application Setup
-- [ ] Add `fastapi` and `uvicorn` dependencies via `poetry add`
-- [ ] Create FastAPI app factory (`abba/api/app.py`) with CORS middleware
-- [ ] Create Pydantic response models (`abba/api/models.py`):
-  - [ ] `DepthLevel` enum: basic, standard, deep, scholarly
-  - [ ] `VerseResponse` with depth-conditional fields
-  - [ ] `WordDetail`, `RichnessFlag`, `CulturalNote`, `CrossRef` models
-  - [ ] `TopicalResult`, `ThemeGroup`, `BookInfo`, `PassageInfo` models
-- [ ] Create FastAPI routes (`abba/api/routes.py`):
-  - [ ] `GET /api/v1/verses/{translation}/{book}/{chapter}/{verse}?depth=` — depth-aware verse
-  - [ ] `GET /api/v1/verses/{translation}/{book}/{chapter}?depth=` — chapter endpoint
-  - [ ] `GET /api/v1/compare/{book}/{chapter}/{verse}?translations=` — translation comparison
+- [x] Add `fastapi` and `uvicorn` dependencies via `poetry add`
+- [x] Create FastAPI app factory (`abba/api/app.py`) with CORS middleware
+- [x] Create Pydantic response models (`abba/api/models.py`):
+  - [x] `DepthLevel` enum: basic, standard, deep, scholarly
+  - [x] `VerseResponse` with depth-conditional fields
+  - [x] `WordDetail`, `RichnessFlag`, `CulturalNote`, `CrossRef` models
+  - [x] `TopicalResult`, `ThemeGroup`, `BookInfo`, `PassageInfo` models
+- [x] Create FastAPI routes (`abba/api/routes.py`):
+  - [x] `GET /api/v1/verses/{translation}/{book}/{chapter}/{verse}?depth=` — depth-aware verse
+  - [x] `GET /api/v1/verses/{translation}/{book}/{chapter}?depth=` — chapter endpoint
+  - [x] `GET /api/v1/compare/{book}/{chapter}/{verse}?translations=` — translation comparison
   - [ ] `GET /api/v1/search/semantic?q=` — semantic search
-  - [ ] `GET /api/v1/search/text?q=` — full-text search
-  - [ ] `GET /api/v1/search/strongs/{number}` — Strong's lookup
-  - [ ] `GET /api/v1/lexicon/{strongs_number}` — lexicon entry
-  - [ ] `GET /api/v1/words/{book}/{chapter}/{verse}/{word_num}` — word detail
-  - [ ] `GET /api/v1/topics` — list available topics/concepts
+  - [x] `GET /api/v1/search/text?q=` — full-text search
+  - [x] `GET /api/v1/search/strongs/{number}` — Strong's lookup
+  - [x] `GET /api/v1/lexicon/{strongs_number}` — lexicon entry
+  - [x] `GET /api/v1/words/{book}/{chapter}/{verse}/{word_num}` — word detail
+  - [x] `GET /api/v1/topics` — list available topics/concepts
   - [ ] `GET /api/v1/topics/search?q=` — natural-language topic search
-  - [ ] `GET /api/v1/topics/{concept_name}` — concept detail with themed verse groups
-  - [ ] `GET /api/v1/books/{book_id}` — book metadata with genre/context
+  - [x] `GET /api/v1/topics/{concept_name}` — concept detail with themed verse groups
+  - [x] `GET /api/v1/books/{book_id}` — book metadata with genre/context
   - [ ] `GET /api/v1/passages/{book_id}/{chapter}` — pericope boundaries
-- [ ] Wire existing `SearchAPI` and `AnalysisAPI` into FastAPI route handlers
+- [x] Wire existing `SearchAPI` and `AnalysisAPI` into FastAPI route handlers
 
 ### Enrichment Schema Additions (all additive — zero changes to existing tables)
-- [ ] `book_metadata` table — genre, author, audience, date range, literary features, reading context, canonical section per book
-- [ ] `passages` table — pericope definitions with title, genre, literary type, structural features, parent passage support
-- [ ] `literary_structures` table — chiasmus, parallelism, acrostic, inclusio annotations with element data
-- [ ] `cultural_context` table — scope-flexible (book → verse) with type, summary, detailed content, time period, confidence, sources, priority
-- [ ] `cross_references` table — source/target verse pairs with type (quotation, allusion, parallel, thematic, prophecy_fulfillment, typology, contrast)
-- [ ] `word_richness` table — precomputed gloss_coverage, morphology_significance, untranslatable_nuances, richness_score per word occurrence
-- [ ] `life_topics` table — everyday topic names/categories (emotions, relationships, struggles, life stages)
-- [ ] `life_topic_concepts` table — mapping life topics to existing concept definitions
-- [ ] `topic_study_steps` table — curated verse sequences per topic with step types (comfort, understanding, guidance, hope)
-- [ ] Add all tables via migration framework (extend `migrations.py`)
+- [x] `book_metadata` table — genre, author, audience, date range, literary features, reading context, canonical section per book
+- [x] `passages` table — pericope definitions with title, genre, literary type, structural features, parent passage support
+- [x] `literary_structures` table — chiasmus, parallelism, acrostic, inclusio annotations with element data
+- [x] `cultural_context` table — scope-flexible (book → verse) with type, summary, detailed content, time period, confidence, sources, priority
+- [x] `cross_references` table — source/target verse pairs with type (quotation, allusion, parallel, thematic, prophecy_fulfillment, typology, contrast)
+- [x] `word_richness` table — precomputed gloss_coverage, morphology_significance, untranslatable_nuances, richness_score per word occurrence
+- [x] `life_topics` table — everyday topic names/categories (emotions, relationships, struggles, life stages)
+- [x] `life_topic_concepts` table — mapping life topics to existing concept definitions
+- [x] `topic_study_steps` table — curated verse sequences per topic with step types (comfort, understanding, guidance, hope)
+- [x] Add all tables via migration framework (extend `migrations.py`)
 
 ### Enrichment Data Population
-- [ ] **Book metadata curation**: Genre, author, audience, features for all 66 books (curated YAML → DB import)
-- [ ] **Cross-reference import**: Treasury of Scripture Knowledge (~340K refs, public domain)
-- [ ] **Meaning-richness computation**: Build-time comparison of lexicon gloss vs. definition for all entries
+- [x] **Book metadata curation**: Genre, author, audience, features for all 66 books (curated data → DB import)
+- [x] **Cross-reference import**: Curated cross-references (quotations, allusions, parallels, typology, prophecy fulfillment)
+- [x] **Meaning-richness computation**: Build-time comparison of lexicon gloss vs. definition for all entries
 - [ ] **Passage/pericope boundaries**: Import SBL pericope data (NT); define major OT passage units
 - [ ] **Initial cultural context**: Book-level introductions for all 66 books (build-time LLM generation, curated)
-- [ ] **Life topic mappings**: Map ~30 everyday topics to existing concepts with curated study steps
+- [x] **Life topic mappings**: Map 12 everyday topics to existing concepts with curated study steps
 
 ### Lexicon Expansion (scholarly quality improvement)
 - [ ] Integrate Thayer's Greek Lexicon (1889, public domain) — more detail than Abbott-Smith

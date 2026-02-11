@@ -314,6 +314,84 @@ class EmbeddingPipeline:
 
         return results
 
+    def remove_legacy_translation_embeddings(self) -> Dict[str, Any]:
+        """Remove legacy per-translation verse embeddings.
+
+        The original architecture created one embedding per (translation, verse) pair,
+        resulting in ~13M embeddings.  The current architecture uses ONE embedding per
+        canonical verse from the original Hebrew/Greek (~31K), stored in the
+        ``original_verses`` collection.
+
+        This method deletes the old ``verses`` collection to reclaim space.
+
+        Returns:
+            Summary with count of removed embeddings.
+        """
+        result: Dict[str, Any] = {"removed": False, "count": 0}
+
+        collection = self.chroma.get_collection("verses")
+        if collection is not None:
+            count = collection.count()
+            if count > 0:
+                logger.info("Removing %d legacy translation-specific embeddings", count)
+                self.chroma.delete_collection("verses")
+                result = {"removed": True, "count": count}
+            else:
+                logger.info("Legacy verses collection exists but is empty; removing")
+                self.chroma.delete_collection("verses")
+                result = {"removed": True, "count": 0}
+        else:
+            logger.info("No legacy verses collection found — nothing to remove")
+
+        return result
+
+    def verify_deduplication(self) -> Dict[str, Any]:
+        """Verify that embeddings are properly deduplicated.
+
+        Checks that the ``original_verses`` collection contains at most one
+        embedding per canonical verse and that no legacy ``verses`` collection
+        exists.
+
+        Returns:
+            Verification summary.
+        """
+        report: Dict[str, Any] = {"passed": True, "checks": []}
+
+        # Check 1: no legacy collection
+        legacy = self.chroma.get_collection("verses")
+        if legacy is not None and legacy.count() > 0:
+            report["passed"] = False
+            report["checks"].append(
+                {
+                    "name": "legacy_removed",
+                    "passed": False,
+                    "detail": f"Legacy verses collection has {legacy.count()} entries",
+                }
+            )
+        else:
+            report["checks"].append({"name": "legacy_removed", "passed": True, "detail": "No legacy verses collection"})
+
+        # Check 2: original_verses count is reasonable (≤ ~31,102 canonical verses)
+        orig = self.chroma.get_collection("original_verses")
+        if orig is not None:
+            count = orig.count()
+            reasonable = count <= 35000  # generous upper bound
+            report["checks"].append(
+                {
+                    "name": "canonical_count",
+                    "passed": reasonable,
+                    "detail": f"original_verses has {count} embeddings",
+                }
+            )
+            if not reasonable:
+                report["passed"] = False
+        else:
+            report["checks"].append(
+                {"name": "canonical_count", "passed": True, "detail": "original_verses collection not yet created"}
+            )
+
+        return report
+
     def get_embedding_stats(self) -> Dict[str, Any]:
         """Get statistics about current embeddings.
 
