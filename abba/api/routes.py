@@ -113,9 +113,12 @@ async def get_verse(
     if not result:
         raise HTTPException(status_code=404, detail="Verse not found")
 
+    # Resolve the book name from the books table (words table uses names like "Gen", not IDs)
+    book_name = _resolve_book_name(book_id, translation_id)
+
     response = VerseResponse(
-        reference=f"{result.book_name or book_id} {chapter}:{verse}",
-        book_name=result.book_name or str(book_id),
+        reference=f"{book_name or book_id} {chapter}:{verse}",
+        book_name=book_name or str(book_id),
         chapter=chapter,
         verse=verse,
         text=result.text,
@@ -123,7 +126,7 @@ async def get_verse(
     )
 
     if depth in (DepthLevel.STANDARD, DepthLevel.DEEP, DepthLevel.SCHOLARLY):
-        response.words = _get_words_for_verse(str(book_id), chapter, verse)
+        response.words = _get_words_for_verse(book_name or str(book_id), chapter, verse)
 
     if depth in (DepthLevel.DEEP, DepthLevel.SCHOLARLY):
         # Placeholder for enrichment data — populated once enrichment tables exist
@@ -133,7 +136,7 @@ async def get_verse(
 
     if depth == DepthLevel.SCHOLARLY:
         analysis = _get_analysis()
-        parallels = analysis.parallel_passage_detection(str(book_id), chapter, verse)
+        parallels = analysis.parallel_passage_detection(book_name or str(book_id), chapter, verse)
         response.parallel_passages = parallels
 
     return response
@@ -510,6 +513,51 @@ async def semantic_domain(domain: str) -> List[Dict[str, Any]]:
 
 
 # --- Internal helpers ---
+
+
+def _resolve_book_name(book_id: int, translation_id: str) -> Optional[str]:
+    """Look up the book name used in the words table for a given numeric book_id.
+
+    The words table stores abbreviated book names from STEPBible (e.g. 'Gen', 'John'),
+    while the books table stores full names (e.g. 'Genesis', 'John').  This function
+    first checks the words table for the actual abbreviation used, then falls back to
+    the books table full name.
+    """
+    db = _get_db()
+
+    # First: check what abbreviation the words table actually uses for this book.
+    # The books table maps book_id -> book_order which corresponds to the canonical number,
+    # but the words table uses the STEPBible short name.  We look up via the books table
+    # name and also try the words table directly.
+    book_rows = db.execute_query(
+        "SELECT name FROM books WHERE book_id = ? AND translation_id = ? LIMIT 1",
+        (book_id, translation_id),
+    )
+    full_name: Optional[str] = str(book_rows[0][0]) if book_rows else None
+
+    # Check if the words table uses this full name
+    if full_name:
+        word_check = db.execute_query(
+            "SELECT 1 FROM words WHERE book = ? LIMIT 1",
+            (full_name,),
+        )
+        if word_check:
+            return full_name
+
+    # Try the words table for common abbreviation patterns (STEPBible uses 3-char codes)
+    # Look up any word at the expected chapter/verse to find the actual book abbreviation
+    word_rows = db.execute_query(
+        "SELECT DISTINCT book FROM words ORDER BY book LIMIT 100",
+    )
+    if full_name and word_rows:
+        full_lower = full_name.lower()
+        for row in word_rows:
+            candidate: str = str(row[0])
+            # Match if the full name starts with the abbreviation
+            if full_lower.startswith(candidate.lower()) or candidate.lower().startswith(full_lower[:3]):
+                return candidate
+
+    return full_name
 
 
 def _get_words_for_verse(book: str, chapter: int, verse: int) -> List[WordDetail]:

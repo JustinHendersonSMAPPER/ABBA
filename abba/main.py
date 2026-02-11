@@ -36,6 +36,27 @@ def main():  # noqa: C901
 
         logger = get_logger(__name__)
 
+        # Handle --serve: start the API server
+        if cli_config.should_serve():
+            import uvicorn
+
+            from abba.api.app import create_app
+
+            db_path = config.abba_db_path
+            if not db_path.exists():
+                logger.error(f"Database not found at {db_path}. Run the import pipeline first.")
+                sys.exit(1)
+
+            host = cli_config.get_host()
+            port = cli_config.get_port()
+            logger.info(f"Starting ABBA API server at http://{host}:{port}")
+            logger.info(f"Using database: {db_path}")
+            logger.info("API docs available at /docs")
+
+            app = create_app(db_path=db_path)
+            uvicorn.run(app, host=host, port=port)
+            return None
+
         # Handle purge-all first before any other operations
         if cli_config.should_purge_all():
             if config.should_show_output():

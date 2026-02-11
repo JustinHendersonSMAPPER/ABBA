@@ -156,6 +156,13 @@ Examples:
 
         parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts (assume yes)")
 
+        # Server options
+        parser.add_argument("--serve", action="store_true", help="Start the ABBA API server (uvicorn)")
+
+        parser.add_argument("--host", default="127.0.0.1", help="API server bind address (default: 127.0.0.1)")
+
+        parser.add_argument("--port", type=int, default=8000, help="API server port (default: 8000)")
+
         return parser
 
     def parse_args(self, args: Optional[List[str]] = None) -> argparse.Namespace:
@@ -325,6 +332,18 @@ Examples:
     def should_map_concepts(self) -> bool:
         """Check if should map concepts to verses."""
         return self.args.map_concepts if self.args else False
+
+    def should_serve(self) -> bool:
+        """Check if should start the API server."""
+        return self.args.serve if self.args else False
+
+    def get_host(self) -> str:
+        """Get the API server host."""
+        return self.args.host if self.args else "127.0.0.1"
+
+    def get_port(self) -> int:
+        """Get the API server port."""
+        return self.args.port if self.args else 8000
 
 
 # Global CLI configuration instance
