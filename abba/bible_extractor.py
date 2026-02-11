@@ -109,14 +109,15 @@ class BibleExtractor:
                 "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Translators%20Amalgamated%20OT%2BNT/"
                 "TAGNT%20Act-Rev%20-%20Translators%20Amalgamated%20Greek%20NT%20-%20STEPBible.org%20CC-BY.txt"
             ),
-            # Lexicons (definitions/meanings)
-            "hebrew_lexicon.txt": (
-                "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Lexicons/"
-                "TBESH - Translators Brief lexicon of Extended Strongs for Hebrew - STEPBible.org CC BY.txt"
+            # Lexicons - free/open-source XML sources (replacing STEPBible TSV lexicons)
+            # OpenScriptures HebrewStrong.xml: CC BY 4.0 / Public Domain
+            "hebrew_strongs.xml": (
+                "https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/HebrewStrong.xml"
             ),
-            "greek_lexicon.txt": (
-                "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Lexicons/"
-                "TBESG - Translators Brief lexicon of Extended Strongs for Greek - STEPBible.org CC BY.txt"
+            # Abbott-Smith Greek Lexicon: Public Domain (1922)
+            "abbott_smith.xml": (
+                "https://raw.githubusercontent.com/"
+                "translatable-exegetical-tools/Abbott-Smith/master/abbott-smith.tei.xml"
             ),
             # Morphology code explanations
             "hebrew_morphology.txt": (
@@ -162,29 +163,28 @@ class BibleExtractor:
 
         # Create attribution file
         attribution_path = self.stepbible_dir / "ATTRIBUTION.txt"
-        attribution_content = """STEPBible Data Attribution
+        attribution_content = """Biblical Data Attribution
 ========================
 
-This folder contains data from the STEPBible project, used under the CC BY 4.0 license.
+This folder contains data from multiple open-source projects.
 
-Source: STEPBible.org
-Repository: https://github.com/STEPBible/STEPBible-Data
-License: Creative Commons Attribution 4.0 International (CC BY 4.0)
-License URL: https://creativecommons.org/licenses/by/4.0/
+1. STEPBible (Tyndale House, Cambridge)
+   - Hebrew OT text (TAHOT), Greek NT text (TAGNT)
+   - Hebrew/Greek morphology codes (TEHMC, TEGMC)
+   - Repository: https://github.com/STEPBible/STEPBible-Data
+   - License: Creative Commons Attribution 4.0 International (CC BY 4.0)
 
-Files included:
-- Hebrew OT text (TAHOT - Translators Amalgamated Hebrew OT, 4 files: Gen-Deu, Jos-Est, Job-Sng, Isa-Mal)
-- Greek NT text (TAGNT - Translators Amalgamated Greek NT, 2 files: Mat-Jhn, Act-Rev)
-- Hebrew lexicon (TBESH - Translators Brief lexicon of Extended Strongs for Hebrew)
-- Greek lexicon (TBESG - Translators Brief lexicon of Extended Strongs for Greek)
-- Hebrew morphology codes (TEHMC - Translators Expansion of Hebrew Morphology Codes)
-- Greek morphology codes (TEGMC - Translators Expansion of Greek Morphology Codes)
+2. OpenScriptures Hebrew Lexicon (Strong's Hebrew Dictionary)
+   - File: hebrew_strongs.xml
+   - Repository: https://github.com/openscriptures/HebrewLexicon
+   - License: CC BY 4.0 (markup), Public Domain (dictionary content, 1890)
+   - Attribution: Open Scriptures Hebrew Bible Project
 
-Attribution: This data is provided by STEPBible.org and Tyndale House, Cambridge.
-For more information, corrections, or updates, contact: STEPBible@gmail.com
-
-The data includes lexical, morphological, and textual information for Hebrew, Aramaic,
-and Koine Greek biblical texts, designed to support biblical language study and research.
+3. Abbott-Smith Greek Lexicon
+   - File: abbott_smith.xml
+   - Repository: https://github.com/translatable-exegetical-tools/Abbott-Smith
+   - License: Public Domain (1922, out of copyright)
+   - Source: G. Abbott-Smith, "A Manual Greek Lexicon of the New Testament"
 """
 
         try:
@@ -199,8 +199,8 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         # Consider success if we got all essential files
         # We need at least the lexicons and morphology files
         core_files = [
-            "hebrew_lexicon.txt",
-            "greek_lexicon.txt",  # Lexicons
+            "hebrew_strongs.xml",
+            "abbott_smith.xml",  # Lexicons
             "hebrew_morphology.txt",
             "greek_morphology.txt",  # Morphology
         ]
@@ -220,8 +220,11 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         # Success if we have core files and at least some text files
         return core_success and (text_count >= 2 or success_count == len(stepbible_files))
 
-    def parse_stepbible_lexicon(self, language: str, db_manager) -> bool:
-        """Parse STEPBible lexicon files and import into database.
+    def parse_lexicon(self, language: str, db_manager) -> bool:
+        """Parse lexicon XML files and import into database.
+
+        Uses OpenScriptures HebrewStrong.xml for Hebrew and
+        Abbott-Smith TEI XML for Greek (both free/open-source).
 
         Args:
             language: 'hebrew' or 'greek'
@@ -230,59 +233,33 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         Returns:
             True if successful, False otherwise
         """
-        lexicon_file = f"{language}_lexicon.txt"
-        lexicon_path = self.stepbible_dir / lexicon_file
+        from abba.lexicon_parser import parse_abbott_smith_xml, parse_hebrew_strongs_xml
+
+        if language == "hebrew":
+            lexicon_path = self.stepbible_dir / "hebrew_strongs.xml"
+            parser_fn = parse_hebrew_strongs_xml
+        elif language == "greek":
+            lexicon_path = self.stepbible_dir / "abbott_smith.xml"
+            parser_fn = parse_abbott_smith_xml
+        else:
+            logger.error(f"Unknown lexicon language: {language}")
+            return False
 
         if not lexicon_path.exists():
             logger.warning(f"Lexicon file not found: {lexicon_path}")
             return False
 
         try:
-            with open(lexicon_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            entries = parser_fn(lexicon_path)
 
-            # Parse lexicon entries - STEPBible format varies but generally:
-            # Strong's|Original|Transliteration|PartOfSpeech|Gloss|Definition
-            entries_added = 0
-            for _line_num, line in enumerate(content.split("\n"), 1):
-                line = line.strip()
-                if not line or line.startswith("#") or line.startswith("="):
-                    continue
+            for entry in entries:
+                db_manager.insert_lexicon_entry(entry)
 
-                # Split on tab or pipe character
-                parts = line.split("\t") if "\t" in line else line.split("|")
-                if len(parts) < 4:
-                    continue
-
-                # Extract lexicon data
-                strongs_number = parts[0].strip()
-                original_word = parts[1].strip() if len(parts) > 1 else ""
-                transliteration = parts[2].strip() if len(parts) > 2 else ""
-                part_of_speech = parts[3].strip() if len(parts) > 3 else ""
-                gloss = parts[4].strip() if len(parts) > 4 else ""
-                definition = parts[5].strip() if len(parts) > 5 else ""
-
-                if not strongs_number:
-                    continue
-
-                lexicon_data = {
-                    "strongs_number": strongs_number,
-                    "original_word": original_word,
-                    "transliteration": transliteration,
-                    "part_of_speech": part_of_speech,
-                    "gloss": gloss,
-                    "definition": definition,
-                    "language": language,
-                }
-
-                db_manager.insert_lexicon_entry(lexicon_data)
-                entries_added += 1
-
-            logger.info(f"✓ Imported {entries_added} {language} lexicon entries")
+            logger.info(f"Imported {len(entries)} {language} lexicon entries")
             return True
 
         except Exception as e:
-            logger.error(f"✗ Failed to parse {language} lexicon: {e}")
+            logger.error(f"Failed to parse {language} lexicon: {e}")
             return False
 
     def parse_stepbible_morphology(self, language: str, db_manager) -> bool:
@@ -604,10 +581,10 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         else:
             logger.debug("Using sequential processing")
 
-        # Parse lexicons
+        # Parse lexicons (OpenScriptures Hebrew + Abbott-Smith Greek)
         lexicon_files = [
-            ("lexicon", "tbesh.txt"),  # Hebrew lexicon
-            ("lexicon", "tbesg.txt"),  # Greek lexicon
+            ("lexicon", "hebrew_strongs.xml"),
+            ("lexicon", "abbott_smith.xml"),
         ]
 
         for file_type, filename in lexicon_files:
@@ -615,10 +592,8 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 logger.debug(f"  Skipping {filename} - already imported")
                 continue
 
-            if filename.startswith("tbesh"):
-                success = self.parse_stepbible_lexicon("hebrew", db_manager)
-            else:
-                success = self.parse_stepbible_lexicon("greek", db_manager)
+            language = "hebrew" if "hebrew" in filename else "greek"
+            success = self.parse_lexicon(language, db_manager)
 
             if success and tracker:
                 tracker.mark_stepbible_file_imported(file_type, filename)
@@ -716,11 +691,13 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id, name, englishName, language
                 FROM Translation
                 ORDER BY language, englishName
-            """)
+            """
+            )
 
             translations = []
             for trans_id, name, english_name, language in cursor.fetchall():
