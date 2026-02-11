@@ -316,13 +316,96 @@ ABBA_CONNECTION_POOL_SIZE=10
 - [x] Store validation metadata and reasons
 - [x] Enable traceability of mapping decisions
 
-## Phase 5: Enhanced Features
+## Phase 5: FastAPI Foundation + Enrichment Data Layer
 
-### Advanced Analysis
-- [ ] Implement cross-reference analysis
-- [ ] Add translation comparison features
-- [ ] Create word frequency analysis
-- [ ] Add grammatical pattern detection
+> **Rationale:** Expert review (see `claude/EXPERT_REVIEW_SYNTHESIS.md`) identified that
+> user-facing accessibility must be prioritized alongside technical completeness. The backend
+> has no HTTP layer, no cultural context, no literary metadata, and no progressive disclosure.
+> These are prerequisites for making scholar-level knowledge accessible to everyday readers.
+
+### FastAPI Application Setup
+- [ ] Add `fastapi` and `uvicorn` dependencies via `poetry add`
+- [ ] Create FastAPI app factory (`abba/api/app.py`) with CORS middleware
+- [ ] Create Pydantic response models (`abba/api/models.py`):
+  - [ ] `DepthLevel` enum: basic, standard, deep, scholarly
+  - [ ] `VerseResponse` with depth-conditional fields
+  - [ ] `WordDetail`, `RichnessFlag`, `CulturalNote`, `CrossRef` models
+  - [ ] `TopicalResult`, `ThemeGroup`, `BookInfo`, `PassageInfo` models
+- [ ] Create FastAPI routes (`abba/api/routes.py`):
+  - [ ] `GET /api/v1/verses/{translation}/{book}/{chapter}/{verse}?depth=` — depth-aware verse
+  - [ ] `GET /api/v1/verses/{translation}/{book}/{chapter}?depth=` — chapter endpoint
+  - [ ] `GET /api/v1/compare/{book}/{chapter}/{verse}?translations=` — translation comparison
+  - [ ] `GET /api/v1/search/semantic?q=` — semantic search
+  - [ ] `GET /api/v1/search/text?q=` — full-text search
+  - [ ] `GET /api/v1/search/strongs/{number}` — Strong's lookup
+  - [ ] `GET /api/v1/lexicon/{strongs_number}` — lexicon entry
+  - [ ] `GET /api/v1/words/{book}/{chapter}/{verse}/{word_num}` — word detail
+  - [ ] `GET /api/v1/topics` — list available topics/concepts
+  - [ ] `GET /api/v1/topics/search?q=` — natural-language topic search
+  - [ ] `GET /api/v1/topics/{concept_name}` — concept detail with themed verse groups
+  - [ ] `GET /api/v1/books/{book_id}` — book metadata with genre/context
+  - [ ] `GET /api/v1/passages/{book_id}/{chapter}` — pericope boundaries
+- [ ] Wire existing `SearchAPI` and `AnalysisAPI` into FastAPI route handlers
+
+### Enrichment Schema Additions (all additive — zero changes to existing tables)
+- [ ] `book_metadata` table — genre, author, audience, date range, literary features, reading context, canonical section per book
+- [ ] `passages` table — pericope definitions with title, genre, literary type, structural features, parent passage support
+- [ ] `literary_structures` table — chiasmus, parallelism, acrostic, inclusio annotations with element data
+- [ ] `cultural_context` table — scope-flexible (book → verse) with type, summary, detailed content, time period, confidence, sources, priority
+- [ ] `cross_references` table — source/target verse pairs with type (quotation, allusion, parallel, thematic, prophecy_fulfillment, typology, contrast)
+- [ ] `word_richness` table — precomputed gloss_coverage, morphology_significance, untranslatable_nuances, richness_score per word occurrence
+- [ ] `life_topics` table — everyday topic names/categories (emotions, relationships, struggles, life stages)
+- [ ] `life_topic_concepts` table — mapping life topics to existing concept definitions
+- [ ] `topic_study_steps` table — curated verse sequences per topic with step types (comfort, understanding, guidance, hope)
+- [ ] Add all tables via migration framework (extend `migrations.py`)
+
+### Enrichment Data Population
+- [ ] **Book metadata curation**: Genre, author, audience, features for all 66 books (curated YAML → DB import)
+- [ ] **Cross-reference import**: Treasury of Scripture Knowledge (~340K refs, public domain)
+- [ ] **Meaning-richness computation**: Build-time comparison of lexicon gloss vs. definition for all entries
+- [ ] **Passage/pericope boundaries**: Import SBL pericope data (NT); define major OT passage units
+- [ ] **Initial cultural context**: Book-level introductions for all 66 books (build-time LLM generation, curated)
+- [ ] **Life topic mappings**: Map ~30 everyday topics to existing concepts with curated study steps
+
+### Lexicon Expansion (scholarly quality improvement)
+- [ ] Integrate Thayer's Greek Lexicon (1889, public domain) — more detail than Abbott-Smith
+- [ ] Integrate full BDB Hebrew Lexicon (1906, public domain) — resolve current abridged version licensing
+- [ ] Consider LEH (Lust-Eynikel-Hauspie) for Septuagint coverage
+- [ ] Add source attribution to all lexicon entries (which lexicon provided each definition)
+
+### Concept Definition Quality Review
+- [ ] Add temporal tags to concept definitions (OT concept / NT concept / post-biblical systematization)
+- [ ] Add semantic range warnings for high-frequency polysemous words (e.g., H430 elohim, H7307 ruach)
+- [ ] Review "Trinity" concept — flag as confessional reading, reduce false-positive surface area
+- [ ] Review high-frequency mapped Strong's numbers for over-matching risk (e.g., H6213 asah appears 2,627x)
+- [ ] Document LLM validation methodology: model versions used, theological limitations, reproducibility notes
+
+## Phase 6: Literary and Contextual Intelligence
+
+### Literary Genre and Structure
+- [ ] Literary genre indicators at book and passage level
+- [ ] Well-established literary structure annotations (~50-100 passages):
+  - [ ] Chiastic structures (e.g., Flood narrative Gen 6-9, Psalm 8)
+  - [ ] Acrostic poems (Psalm 119, Lamentations, Proverbs 31:10-31)
+  - [ ] Hebrew parallelism (synonymous, antithetic, synthetic) in Psalms and Proverbs
+  - [ ] Inclusio patterns
+  - [ ] NT discourse structures (Sermon on the Mount, Upper Room Discourse)
+- [ ] Genre-shift detection within books (e.g., narrative → poetry in Exodus 15, Judges 5)
+
+### Anti-Proof-Texting Safeguards
+- [ ] Always return surrounding context with verse results (min: previous and next verse)
+- [ ] Speaker attribution for quoted speech (God, Satan, Job's friends, Pharisees, etc.)
+- [ ] Genre tags on all verse results (narrative, law, poetry, wisdom, prophecy, epistle, apocalyptic)
+- [ ] Descriptive vs. prescriptive flag for narrative passages
+- [ ] Passage summary / reading context note for major sections
+
+### Translation Insight Features
+- [ ] Meaning-richness indicator computation using word_richness table
+- [ ] Translation divergence detection for compare endpoint
+- [ ] Plain-English explanations for top 500 Hebrew + top 500 Greek words where meaning is lost
+- [ ] Frame all indicators as "the original adds richness" — never "your Bible is wrong"
+
+## Phase 7: Performance + Testing
 
 ### Performance Configuration
 - [ ] Add performance settings to `config.py`:
@@ -337,32 +420,25 @@ ABBA_CONNECTION_POOL_SIZE=10
   - [ ] `--benchmark` - Run performance tests
 
 ### Performance Optimization
-- [ ] Profile database queries
-- [ ] Optimize indexes for common queries
-- [ ] Implement connection pooling
+- [ ] Connection pooling for FastAPI concurrent requests
+- [ ] Precomputed verse annotation cache (materialized `verse_annotations_cache` table)
+- [ ] Profile and optimize database queries
 - [ ] Add query result pagination
-- [ ] Create performance benchmarks
+- [ ] Create performance benchmarks (targets: <5ms basic, <30ms standard, <100ms deep, <200ms scholarly)
 
-### User Interface Enhancements
-- [ ] Update CLI with new search capabilities
-- [ ] Add interactive mode for exploration
-- [ ] Create example scripts for common tasks
-- [ ] Add export functionality for results
-
-## Phase 6: Testing and Documentation
-
-### Testing Infrastructure
-- [ ] Create unit tests for database operations
-- [ ] Add integration tests for search functions
+### Testing
+- [ ] Create unit tests for database operations (80% min, goal 95%)
+- [ ] Add integration tests for all FastAPI endpoints
 - [ ] Test embedding generation accuracy
-- [ ] Validate concept mappings
+- [ ] Validate concept mappings against known scholarly references
 - [ ] Performance testing for large queries
+- [ ] Test progressive depth responses at all four levels
 
 ### Documentation
-- [ ] Update API documentation
+- [ ] Update API documentation (OpenAPI/Swagger auto-generated from FastAPI)
 - [ ] Create user guide for semantic search
-- [ ] Document concept taxonomy
-- [ ] Add code examples for common use cases
+- [ ] Document concept taxonomy and life topic mappings
+- [ ] Add code examples for common API use cases
 - [ ] Create troubleshooting guide
 
 ### Deployment Preparation
@@ -372,14 +448,42 @@ ABBA_CONNECTION_POOL_SIZE=10
 - [ ] Add configuration validation
 - [ ] Prepare distribution package
 
-## Phase 7: Future Enhancements (Post-MVP)
+## Phase 8: User Experience Layer
+
+### Guided Study Features
+- [ ] Reading plans / guided study paths for new Christians
+- [ ] Passage summaries for major sections (book intros, pericope summaries)
+- [ ] "What do I do with this?" reflective application questions per passage
+- [ ] Beginner onboarding flow with "Start Here" guidance
+
+### Interactive Features
+- [ ] Note-taking and verse saving/collections
+- [ ] Sharing functionality (passages, study notes, topic collections)
+- [ ] Interactive mode for exploration via CLI
+- [ ] Export functionality for study results (JSON, Markdown)
+
+### Frontend Foundation
+- [ ] Vue.js project setup with mobile-responsive design
+- [ ] Clean reading pane (Level 1: just text, no clutter)
+- [ ] Translation Lens component (subtle richness indicators with progressive disclosure)
+- [ ] Context Sidebar component (collapsible, scope-aware cultural notes)
+- [ ] Depth Dial control (Read → Understand → Study → Analyze)
+- [ ] Life Topic Navigator (problem-first search entry point)
+- [ ] Literary Mode Indicator (ambient visual genre shifts)
+- [ ] Word Journey cards (expandable word study with tabs: meaning, occurrences, word family, this verse)
+
+## Phase 9: Future Enhancements (Post-MVP)
 
 ### Extended Capabilities
 - [ ] Multi-language semantic search
-- [ ] Real-time text analysis API
-- [ ] Concept discovery from user queries
-- [ ] Integration with commentary databases
-- [ ] Visualization tools for semantic relationships
-- [ ] Mobile app API endpoints
+- [ ] MACULA treebank integration for clause-level syntax (discourse analysis)
+- [ ] OpenText.org discourse annotation integration
+- [ ] Louw-Nida semantic domain classification system
+- [ ] Manuscript variant surfacing with explanations
+- [ ] Community contribution system for cultural context
+- [ ] Concept discovery from natural-language user queries
+- [ ] Audio integration for listening
 - [ ] Collaborative concept editing
 - [ ] Machine learning for concept refinement
+- [ ] Visualization tools for semantic relationships
+- [ ] Mobile native app API endpoints
