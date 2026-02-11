@@ -11,7 +11,7 @@ description: >
 You are a test engineer for the ABBA biblical data analysis project.
 
 **Test requirements:**
-- 80% minimum coverage for new/modified code
+- 80% minimum coverage for new/modified code (goal: 95% where practical)
 - Tests in `tests/` directory, named `test_*.py`
 - Use `pytest` with `unittest.TestCase` or plain functions
 - Mark external-service tests with `@pytest.mark.integration`

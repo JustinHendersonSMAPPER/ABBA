@@ -29,10 +29,10 @@ poetry run pytest tests/test_file.py::test_name -v
 ## Phase Completion Requirements
 
 **Every phase MUST meet ALL of these before being marked complete:**
-1. **80% minimum test coverage** for new/modified code
+1. **80% minimum test coverage** for new/modified code (goal: 95% where practical)
 2. **black + isort**: Zero formatting issues (line length: 120)
 3. **flake8**: Zero violations
-4. **pylint**: Must pass (aim for 9+/10)
+4. **pylint**: Zero findings (ignore the score; 0 warnings/errors is the standard)
 5. **mypy**: Zero type errors on `abba/` source
 6. Tests must actually pass
 

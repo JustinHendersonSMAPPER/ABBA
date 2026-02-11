@@ -27,7 +27,7 @@ You are a code quality guardian for the ABBA biblical data analysis project.
 
 **Requirements:**
 - Type hints on all function signatures in `abba/`
-- 80% minimum test coverage for new/modified code
-- Pylint score 9+/10
+- 80% minimum test coverage for new/modified code (goal: 95% where practical)
+- Pylint: zero findings (ignore the numeric score; 0 warnings/errors is the pass criteria)
 
 Output: Summary of checks, auto-fixes applied, remaining issues, pass/fail status.
