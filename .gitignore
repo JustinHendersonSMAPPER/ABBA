@@ -2,7 +2,11 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=python
 logs/*
 claude_scripts/*
+claude/*.db
 bible_data/*
+data/
+reports/
+.badges/
 .vscode/*
 
 ### Python ###
