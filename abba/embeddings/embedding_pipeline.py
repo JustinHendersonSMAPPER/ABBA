@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 from tqdm import tqdm
 
 from .chroma_manager import ChromaManager
@@ -48,7 +47,7 @@ class EmbeddingPipeline:
         # Log GPU status at initialization
         self._log_gpu_status()
 
-    def embed_verses(
+    def embed_verses(  # noqa: C901
         self, translation_ids: Optional[List[str]] = None, batch_size: int = 100, force_reembed: bool = False
     ) -> Dict[str, Any]:
         """Generate embeddings for verses.
@@ -78,13 +77,13 @@ class EmbeddingPipeline:
                 cursor.execute("SELECT DISTINCT translation_id FROM verses")
                 translation_ids = [row[0] for row in cursor.fetchall()]
 
-        results = {"translations_processed": 0, "verses_embedded": 0, "errors": []}
+        results: Dict[str, Any] = {"translations_processed": 0, "verses_embedded": 0, "errors": []}
 
         for translation_id in translation_ids:
             try:
                 # Check if already embedded
                 if not force_reembed and self._is_translation_embedded(translation_id):
-                    logger.info(f"Skipping {translation_id} - already embedded")
+                    logger.info("Skipping %s - already embedded", translation_id)
                     continue
 
                 # Check if partially embedded (interrupted)
@@ -93,15 +92,15 @@ class EmbeddingPipeline:
                     progress_info = self.progress.get("verses", {}).get(translation_id, {})
                     if "last_count" in progress_info and not progress_info.get("complete", False):
                         start_offset = progress_info["last_count"]
-                        logger.info(f"Resuming {translation_id} from verse {start_offset}...")
+                        logger.info("Resuming %s from verse %d...", translation_id, start_offset)
 
-                logger.info(f"Embedding verses for {translation_id}...")
+                logger.info("Embedding verses for %s...", translation_id)
 
                 # Get all verses for translation
                 verses = self._get_verses_for_translation(translation_id)
 
                 if not verses:
-                    logger.warning(f"No verses found for {translation_id}")
+                    logger.warning("No verses found for %s", translation_id)
                     continue
 
                 # Process in batches
@@ -130,7 +129,7 @@ class EmbeddingPipeline:
                                 existing = verses_collection.get(ids=[verse_id])
                                 if existing and existing["ids"]:
                                     continue
-                            except:
+                            except Exception:
                                 pass  # Continue if error checking
 
                         # Build enhanced context
@@ -168,7 +167,11 @@ class EmbeddingPipeline:
                             retry_count = 0
                             while retry_count < max_retries:
                                 try:
-                                    verses_collection.add(embeddings=embeddings.tolist(), ids=ids, metadatas=metadatas)
+                                    verses_collection.add(
+                                        embeddings=embeddings.tolist(),
+                                        ids=ids,
+                                        metadatas=metadatas,  # type: ignore[arg-type]
+                                    )
                                     results["verses_embedded"] += len(contexts)
                                     break
                                 except Exception as e:
@@ -176,7 +179,10 @@ class EmbeddingPipeline:
                                     if retry_count >= max_retries:
                                         raise
                                     logger.warning(
-                                        f"ChromaDB add failed (attempt {retry_count}/{max_retries}): {str(e)}"
+                                        "ChromaDB add failed (attempt %d/%d): %s",
+                                        retry_count,
+                                        max_retries,
+                                        str(e),
                                     )
                                     # Wait briefly before retry
                                     import time
@@ -197,7 +203,7 @@ class EmbeddingPipeline:
                 self._mark_translation_embedded(translation_id)
                 results["translations_processed"] += 1
 
-                logger.info(f"✓ Embedded {len(verses)} verses for {translation_id}")
+                logger.info("Embedded %d verses for %s", len(verses), translation_id)
 
             except Exception as e:
                 error_msg = f"Error embedding {translation_id}: {str(e)}"
@@ -240,9 +246,9 @@ class EmbeddingPipeline:
             logger.warning("No words found to embed")
             return {"status": "no_words"}
 
-        logger.info(f"Embedding {len(unique_words)} unique word forms...")
+        logger.info("Embedding %d unique word forms...", len(unique_words))
 
-        results = {"words_embedded": 0, "errors": []}
+        results: Dict[str, Any] = {"words_embedded": 0, "errors": []}
 
         # Process in batches
         for i in tqdm(range(0, len(unique_words), batch_size), desc="Embedding words"):
@@ -285,7 +291,11 @@ class EmbeddingPipeline:
                     )
 
                     # Add to ChromaDB
-                    words_collection.add(embeddings=embeddings.tolist(), ids=ids, metadatas=metadatas)
+                    words_collection.add(
+                        embeddings=embeddings.tolist(),
+                        ids=ids,
+                        metadatas=metadatas,  # type: ignore[arg-type]
+                    )
 
                     results["words_embedded"] += len(contexts)
 
@@ -300,7 +310,7 @@ class EmbeddingPipeline:
         # Mark words as complete
         self._mark_words_embedded()
 
-        logger.info(f"✓ Embedded {results['words_embedded']} unique word forms")
+        logger.info("Embedded %d unique word forms", results["words_embedded"])
 
         return results
 
@@ -335,7 +345,7 @@ class EmbeddingPipeline:
             cursor = conn.cursor()
 
             query = """
-                SELECT 
+                SELECT
                     v.translation_id,
                     v.book_id,
                     v.chapter,
@@ -343,7 +353,7 @@ class EmbeddingPipeline:
                     v.text,
                     b.name as book_name
                 FROM verses v
-                LEFT JOIN books b ON v.translation_id = b.translation_id 
+                LEFT JOIN books b ON v.translation_id = b.translation_id
                                   AND v.book_id = b.book_id
                 WHERE v.translation_id = ?
                 ORDER BY v.book_id, v.chapter, v.verse
@@ -423,10 +433,10 @@ class EmbeddingPipeline:
         """Load progress from file."""
         if self.progress_file.exists():
             try:
-                with open(self.progress_file, "r") as f:
-                    return json.load(f)
+                with open(self.progress_file, "r", encoding="utf-8") as f:
+                    return json.load(f)  # type: ignore[no-any-return]
             except Exception as e:
-                logger.error(f"Error loading progress: {e}")
+                logger.error("Error loading progress: %s", e)
 
         return {"verses": {}, "words": {}, "concepts": {}}
 
@@ -434,14 +444,15 @@ class EmbeddingPipeline:
         """Save progress to file."""
         try:
             self.progress_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.progress_file, "w") as f:
+            with open(self.progress_file, "w", encoding="utf-8") as f:
                 json.dump(self.progress, f, indent=2)
         except Exception as e:
-            logger.error(f"Error saving progress: {e}")
+            logger.error("Error saving progress: %s", e)
 
     def _is_translation_embedded(self, translation_id: str) -> bool:
         """Check if translation is already embedded."""
-        return self.progress.get("verses", {}).get(translation_id, {}).get("complete", False)
+        result: bool = self.progress.get("verses", {}).get(translation_id, {}).get("complete", False)
+        return result
 
     def _mark_translation_embedded(self, translation_id: str):
         """Mark translation as complete."""
@@ -458,7 +469,7 @@ class EmbeddingPipeline:
 
     def _are_words_embedded(self) -> bool:
         """Check if words are already embedded."""
-        return self.progress.get("words", {}).get("complete", False)
+        return self.progress.get("words", {}).get("complete", False)  # type: ignore[no-any-return]
 
     def _mark_words_embedded(self):
         """Mark words as complete."""
@@ -486,7 +497,7 @@ class EmbeddingPipeline:
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM verses WHERE translation_id = ?", (translation_id,))
-            return cursor.fetchone()[0]
+            return cursor.fetchone()[0]  # type: ignore[no-any-return]
 
     def _log_gpu_status(self):
         """Log GPU availability and status information."""
@@ -495,7 +506,7 @@ class EmbeddingPipeline:
         if torch.cuda.is_available():
             gpu_name = torch.cuda.get_device_name()
             gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
-            logger.info(f"GPU detected: {gpu_name} ({gpu_memory:.1f}GB)")
+            logger.info("GPU detected: %s (%.1fGB)", gpu_name, gpu_memory)
             logger.info("Embeddings will be generated using GPU acceleration")
         else:
             logger.info("No GPU detected - using CPU for embedding generation")

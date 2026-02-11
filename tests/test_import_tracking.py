@@ -3,7 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -29,18 +29,31 @@ class TestImportTracker:
     def test_initialization_new_file(self):
         """Test tracker initialization with new file."""
         assert self.tracker.tracker_file == self.tracker_file
-        assert self.tracker.status == {"translations": {}, "stepbible_files": {}, "last_update": None}
+        # Verify nested structure
+        assert "imports" in self.tracker.status
+        assert self.tracker.status["imports"]["translations"] == {}
+        assert "stepbible" in self.tracker.status["imports"]
+        assert self.tracker.status["metadata"]["last_update"] is None
 
     def test_initialization_existing_file(self):
         """Test tracker initialization with existing file."""
-        # Create existing file
+        # Create existing file matching the current nested format
         existing_data = {
-            "translations": {"eng_kjv": {"imported": True, "timestamp": "2024-01-01T12:00:00"}},
-            "stepbible_files": {"test_file": {"imported": True, "timestamp": "2024-01-01T12:00:00"}},
-            "last_update": "2024-01-01T12:00:00",
+            "schema_version": "1.0",
+            "created_at": "2024-01-01T12:00:00",
+            "imports": {
+                "translations": {"eng_kjv": "2024-01-01T12:00:00"},
+                "stepbible": {
+                    "tahot": {"TAHOT.txt": "2024-01-01T12:00:00"},
+                    "tagnt": {},
+                    "lexicon": {},
+                    "morphology": {},
+                },
+            },
+            "metadata": {"last_update": "2024-01-01T12:00:00", "total_imports": 2},
         }
 
-        with open(self.tracker_file, "w") as f:
+        with open(self.tracker_file, "w", encoding="utf-8") as f:
             json.dump(existing_data, f)
 
         tracker = ImportTracker(self.tracker_file)
@@ -63,10 +76,10 @@ class TestImportTracker:
 
         # File should be saved
         assert self.tracker_file.exists()
-        with open(self.tracker_file, "r") as f:
+        with open(self.tracker_file, "r", encoding="utf-8") as f:
             data = json.load(f)
-        assert "eng_kjv" in data["translations"]
-        assert data["translations"]["eng_kjv"]["imported"] is True
+        assert "eng_kjv" in data["imports"]["translations"]
+        assert isinstance(data["imports"]["translations"]["eng_kjv"], str)  # Timestamp
 
     def test_stepbible_file_tracking(self):
         """Test STEPBible file tracking."""
@@ -84,9 +97,9 @@ class TestImportTracker:
 
         # File should be saved
         assert self.tracker_file.exists()
-        with open(self.tracker_file, "r") as f:
+        with open(self.tracker_file, "r", encoding="utf-8") as f:
             data = json.load(f)
-        assert f"{file_type}:{file_name}" in data["stepbible_files"]
+        assert file_name in data["imports"]["stepbible"][file_type]
 
     def test_reset_tracking(self):
         """Test resetting tracking data."""
@@ -99,21 +112,19 @@ class TestImportTracker:
         assert self.tracker.is_stepbible_file_imported("tahot", "TAHOT.txt")
 
         # Reset with confirmation
-        with patch("builtins.input", return_value="yes"):
-            self.tracker.reset(confirm=True)
+        self.tracker.reset(confirm=True)
 
         # Should be cleared
         assert not self.tracker.is_translation_imported("eng_kjv")
         assert not self.tracker.is_stepbible_file_imported("tahot", "TAHOT.txt")
 
     def test_reset_tracking_no_confirm(self):
-        """Test resetting without confirmation."""
+        """Test resetting without confirmation flag - should not clear."""
         # Add some data
         self.tracker.mark_translation_imported("eng_kjv")
 
-        # Reset without confirmation - should not clear
-        with patch("builtins.input", return_value="no"):
-            self.tracker.reset(confirm=True)
+        # Reset with confirm=False - should not clear
+        self.tracker.reset(confirm=False)
 
         # Should still exist
         assert self.tracker.is_translation_imported("eng_kjv")
@@ -134,12 +145,15 @@ class TestImportTracker:
     def test_file_corruption_handling(self):
         """Test handling of corrupted tracker file."""
         # Create corrupted JSON file
-        with open(self.tracker_file, "w") as f:
+        with open(self.tracker_file, "w", encoding="utf-8") as f:
             f.write("invalid json content")
 
-        # Should handle gracefully and reset
+        # Should handle gracefully and reset to empty nested structure
         tracker = ImportTracker(self.tracker_file)
-        assert tracker.status == {"translations": {}, "stepbible_files": {}, "last_update": None}
+        assert "imports" in tracker.status
+        assert tracker.status["imports"]["translations"] == {}
+        assert "stepbible" in tracker.status["imports"]
+        assert tracker.status["metadata"]["last_update"] is None
 
     def test_save_error_handling(self):
         """Test error handling during save operations."""

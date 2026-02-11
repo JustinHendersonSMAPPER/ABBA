@@ -7,7 +7,7 @@ import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class SemanticSchemaManager:
@@ -22,7 +22,8 @@ class SemanticSchemaManager:
             cursor = conn.cursor()
 
             # Core concept definitions
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concepts (
                     concept_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE NOT NULL,
@@ -36,10 +37,12 @@ class SemanticSchemaManager:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     processing_version TEXT
                 )
-            """)
+            """
+            )
 
             # Enhanced verse-concept relationships with full context
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS verse_concepts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     verse_id TEXT NOT NULL,
@@ -47,37 +50,39 @@ class SemanticSchemaManager:
                     book TEXT NOT NULL,
                     chapter INTEGER NOT NULL,
                     verse INTEGER NOT NULL,
-                    
+
                     -- Match information
                     match_type TEXT CHECK(match_type IN ('lexical', 'semantic', 'thematic')),
                     confidence REAL DEFAULT 0.0,
                     semantic_score REAL,
-                    
+
                     -- Original language data
                     original_text TEXT,
                     strongs_matched TEXT,      -- JSON array of matched Strong's numbers
                     word_positions TEXT,       -- JSON array of word position data
-                    
+
                     -- Ollama validation
                     ollama_validated BOOLEAN DEFAULT 0,
                     ollama_confidence REAL,
                     ollama_reasoning TEXT,
-                    
+
                     -- Context
                     verse_text TEXT,           -- Full verse text for quick access
                     previous_verse_id TEXT,
                     next_verse_id TEXT,
-                    
+
                     -- Metadata
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    
+
                     UNIQUE(verse_id, concept_id, match_type),
                     FOREIGN KEY (concept_id) REFERENCES concepts(concept_id)
                 )
-            """)
+            """
+            )
 
             # Concept themes for organizing study materials
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concept_themes (
                     theme_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     concept_id INTEGER NOT NULL,
@@ -88,48 +93,54 @@ class SemanticSchemaManager:
                     theological_significance TEXT,
                     practical_application TEXT,
                     display_order INTEGER DEFAULT 0,
-                    
+
                     UNIQUE(concept_id, theme_name),
                     FOREIGN KEY (concept_id) REFERENCES concepts(concept_id)
                 )
-            """)
+            """
+            )
 
             # Cross-concept relationships
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concept_relationships (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     concept_id INTEGER NOT NULL,
                     related_concept_id INTEGER NOT NULL,
-                    relationship_type TEXT CHECK(relationship_type IN 
-                        ('related', 'contrasting', 'foundation', 'expression', 
+                    relationship_type TEXT CHECK(relationship_type IN
+                        ('related', 'contrasting', 'foundation', 'expression',
                          'result', 'synonym', 'antonym', 'progression')),
                     strength REAL DEFAULT 0.5,
                     description TEXT,
-                    
+
                     UNIQUE(concept_id, related_concept_id, relationship_type),
                     FOREIGN KEY (concept_id) REFERENCES concepts(concept_id),
                     FOREIGN KEY (related_concept_id) REFERENCES concepts(concept_id)
                 )
-            """)
+            """
+            )
 
             # Study notes and insights
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concept_study_notes (
                     note_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     concept_id INTEGER NOT NULL,
-                    note_type TEXT CHECK(note_type IN 
+                    note_type TEXT CHECK(note_type IN
                         ('hebrew_perspective', 'greek_perspective', 'historical_context',
                          'theological_significance', 'practical_application', 'word_study')),
                     content TEXT NOT NULL,
                     references TEXT,           -- JSON array of supporting references
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    
+
                     FOREIGN KEY (concept_id) REFERENCES concepts(concept_id)
                 )
-            """)
+            """
+            )
 
             # Processing statistics for tracking
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concept_processing_stats (
                     stat_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     concept_id INTEGER NOT NULL,
@@ -142,26 +153,30 @@ class SemanticSchemaManager:
                     ollama_calls_made INTEGER DEFAULT 0,
                     embedding_searches_performed INTEGER DEFAULT 0,
                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    
+
                     UNIQUE(concept_id),
                     FOREIGN KEY (concept_id) REFERENCES concepts(concept_id)
                 )
-            """)
+            """
+            )
 
             # Semantic clusters for grouping related concepts
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS semantic_clusters (
                     cluster_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     cluster_name TEXT UNIQUE NOT NULL,
                     description TEXT,
                     concept_ids TEXT,          -- JSON array of concept IDs
-                    cluster_type TEXT CHECK(cluster_type IN 
+                    cluster_type TEXT CHECK(cluster_type IN
                         ('virtue', 'emotion', 'action', 'theological', 'relational', 'moral'))
                 )
-            """)
+            """
+            )
 
             # Cache for expensive computations
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concept_cache (
                     cache_key TEXT PRIMARY KEY,
                     cache_value TEXT,
@@ -169,7 +184,8 @@ class SemanticSchemaManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     expires_at TIMESTAMP
                 )
-            """)
+            """
+            )
 
             # Create comprehensive indexes for fast lookups
             indexes = [
@@ -185,16 +201,18 @@ class SemanticSchemaManager:
                 "CREATE INDEX IF NOT EXISTS idx_study_notes_concept ON concept_study_notes(concept_id)",
                 "CREATE INDEX IF NOT EXISTS idx_study_notes_type ON concept_study_notes(note_type)",
                 "CREATE INDEX IF NOT EXISTS idx_cache_expires ON concept_cache(expires_at)",
-                "CREATE INDEX IF NOT EXISTS idx_verse_concepts_semantic_score ON verse_concepts(semantic_score DESC) WHERE semantic_score IS NOT NULL",
+                "CREATE INDEX IF NOT EXISTS idx_verse_concepts_semantic_score"
+                " ON verse_concepts(semantic_score DESC) WHERE semantic_score IS NOT NULL",
             ]
 
             for index in indexes:
                 cursor.execute(index)
 
             # Create useful views for common queries
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE VIEW IF NOT EXISTS concept_summary AS
-                SELECT 
+                SELECT
                     c.name,
                     c.description,
                     COUNT(DISTINCT vc.verse_id) as total_verses,
@@ -205,11 +223,13 @@ class SemanticSchemaManager:
                 LEFT JOIN verse_concepts vc ON c.concept_id = vc.concept_id
                 LEFT JOIN concept_processing_stats ps ON c.concept_id = ps.concept_id
                 GROUP BY c.concept_id
-            """)
+            """
+            )
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE VIEW IF NOT EXISTS high_confidence_semantic AS
-                SELECT 
+                SELECT
                     c.name as concept_name,
                     vc.verse_id,
                     vc.verse_text,
@@ -218,15 +238,16 @@ class SemanticSchemaManager:
                     vc.ollama_reasoning
                 FROM verse_concepts vc
                 JOIN concepts c ON vc.concept_id = c.concept_id
-                WHERE vc.match_type = 'semantic' 
+                WHERE vc.match_type = 'semantic'
                 AND vc.ollama_validated = 1
                 AND vc.ollama_confidence >= 0.7
                 ORDER BY vc.semantic_score DESC
-            """)
+            """
+            )
 
             conn.commit()
 
-    def export_concept_to_json(self, concept_name: str, output_path: Path) -> Dict:
+    def export_concept_to_json(self, concept_name: str, output_path: Path) -> Optional[Dict[str, Any]]:  # noqa: C901
         """Export a concept's complete data to JSON for portability."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -283,7 +304,7 @@ class SemanticSchemaManager:
             for match_type in ["lexical", "semantic", "thematic"]:
                 cursor.execute(
                     """
-                    SELECT * FROM verse_concepts 
+                    SELECT * FROM verse_concepts
                     WHERE concept_id = ? AND match_type = ?
                     ORDER BY confidence DESC
                 """,
@@ -320,8 +341,8 @@ class SemanticSchemaManager:
             # Get themes
             cursor.execute(
                 """
-                SELECT * FROM concept_themes 
-                WHERE concept_id = ? 
+                SELECT * FROM concept_themes
+                WHERE concept_id = ?
                 ORDER BY display_order
             """,
                 (concept_id,),
@@ -376,7 +397,7 @@ class SemanticSchemaManager:
             return export_data
 
     def get_verses_for_concept(
-        self, concept_name: str, min_confidence: float = 0.5, match_types: List[str] = None
+        self, concept_name: str, min_confidence: float = 0.5, match_types: Optional[List[str]] = None
     ) -> List[Dict]:
         """Quick lookup for verses related to a concept."""
         with sqlite3.connect(self.db_path) as conn:
@@ -417,7 +438,7 @@ class SemanticSchemaManager:
                 (concept_name,),
             )
 
-            relationships = {}
+            relationships: Dict[str, List[str]] = {}
             for row in cursor.fetchall():
                 rel_type = row[0]
                 if rel_type not in relationships:
@@ -434,7 +455,7 @@ class SemanticSchemaManager:
 
             cursor.execute(
                 """
-                SELECT c.name, vc.match_type, vc.confidence, 
+                SELECT c.name, vc.match_type, vc.confidence,
                        vc.semantic_score, vc.ollama_confidence
                 FROM verse_concepts vc
                 JOIN concepts c ON vc.concept_id = c.concept_id

@@ -2,7 +2,7 @@
 
 import logging
 import sqlite3
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import mmh3  # MurmurHash3
 
@@ -106,8 +106,8 @@ class HashValidator:
                     # Stream verses from source
                     source_cursor.execute(
                         """
-                        SELECT book_id, chapter, verse, text 
-                        FROM verses 
+                        SELECT book_id, chapter, verse, text
+                        FROM verses
                         WHERE translation_id = ?
                         ORDER BY book_id, chapter, verse
                     """,
@@ -125,11 +125,11 @@ class HashValidator:
                         # Check destination
                         dest_cursor.execute(
                             """
-                            SELECT text, content_hash 
-                            FROM verses 
-                            WHERE translation_id = ? 
-                            AND book_id = ? 
-                            AND chapter = ? 
+                            SELECT text, content_hash
+                            FROM verses
+                            WHERE translation_id = ?
+                            AND book_id = ?
+                            AND chapter = ?
                             AND verse = ?
                         """,
                             (translation_id, row["book_id"], row["chapter"], row["verse"]),
@@ -213,27 +213,29 @@ class HashValidator:
                 cursor = conn.cursor()
 
                 # Check if content_hash column exists
-                cursor.execute("""
-                    SELECT COUNT(*) FROM pragma_table_info('verses') 
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) FROM pragma_table_info('verses')
                     WHERE name='content_hash'
-                """)
+                """
+                )
                 has_hash_column = cursor.fetchone()[0] > 0
 
                 if has_hash_column:
                     # Use stored hashes (fastest)
                     cursor.execute(
                         """
-                        SELECT 
+                        SELECT
                             COALESCE(
-                                (SELECT 
+                                (SELECT
                                     CAST(SUM(content_hash) AS INTEGER) & 0xFFFFFFFF
-                                FROM verses 
+                                FROM verses
                                 WHERE translation_id = ?
                                 AND content_hash IS NOT NULL),
                                 0
                             ) as checksum,
                             COUNT(*) as verse_count
-                        FROM verses 
+                        FROM verses
                         WHERE translation_id = ?
                     """,
                         (translation_id, translation_id),
@@ -243,7 +245,7 @@ class HashValidator:
                     cursor.execute(
                         """
                         SELECT book_id, chapter, verse, text
-                        FROM verses 
+                        FROM verses
                         WHERE translation_id = ?
                         ORDER BY book_id, chapter, verse
                     """,
@@ -266,7 +268,7 @@ class HashValidator:
                 return result[0] or 0, result[1] or 0
 
         except Exception as e:
-            logger.error(f"Error calculating checksum: {e}")
+            logger.error("Error calculating checksum: %s", e)
             return None, 0
 
     def validate_embeddings(
@@ -292,7 +294,7 @@ class HashValidator:
                 cursor.execute(
                     """
                     SELECT book_id, chapter, verse, text
-                    FROM verses 
+                    FROM verses
                     WHERE translation_id = ?
                 """,
                     (translation_id,),
@@ -338,7 +340,7 @@ class HashValidator:
 
             # Check for missing embeddings
             embedded_ids = set(results["ids"])
-            missing_embeddings = [vid for vid in expected_hashes.keys() if vid not in embedded_ids]
+            missing_embeddings = [vid for vid in expected_hashes if vid not in embedded_ids]
 
             # Prepare results
             if missing_in_db or hash_mismatches or missing_embeddings:

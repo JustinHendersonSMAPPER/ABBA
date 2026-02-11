@@ -6,11 +6,9 @@ This module extends the Strong's-centric concordance with semantic search
 capabilities using embeddings and LLM validation to reduce false positives.
 """
 
-import json
-import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
@@ -51,7 +49,7 @@ class SemanticConcordance:
         """Initialize with database, embeddings, and Ollama."""
         self.strongs_concordance = StrongsConcordance(db_path)
         self.db_manager = SQLiteManager(db_path)
-        self.chroma_manager = ChromaManager(chroma_path)
+        self.chroma_manager = ChromaManager(str(chroma_path))
         self.ollama = OllamaAnalyzer(
             host=ollama_config.get("host", "http://localhost:11434"),
             models=ollama_config.get("models", ["llama3"]),
@@ -131,7 +129,7 @@ class SemanticConcordance:
         For verses with multiple matches (e.g., multiple Strong's numbers from same concept),
         creates a single match with combined evidence and highest confidence.
         """
-        verse_groups = {}
+        verse_groups: Dict[str, List[SemanticMatch]] = {}
 
         # Group matches by verse_id
         for match in matches:
@@ -142,7 +140,7 @@ class SemanticConcordance:
 
         deduplicated = []
 
-        for verse_id, verse_matches in verse_groups.items():
+        for _verse_id, verse_matches in verse_groups.items():
             if len(verse_matches) == 1:
                 # No duplicates, keep as-is
                 deduplicated.append(verse_matches[0])
@@ -298,7 +296,7 @@ class SemanticConcordance:
         except (ValueError, AttributeError):
             return verse_id  # Return original if conversion fails
 
-    def _build_concept_prototypes(
+    def _build_concept_prototypes(  # noqa: C901
         self, seed_matches: List[ConcordanceMatch]
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """Build prototype embeddings from high-confidence matches."""
@@ -314,8 +312,8 @@ class SemanticConcordance:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
-                    SELECT DISTINCT language 
-                    FROM stepbible_verses 
+                    SELECT DISTINCT language
+                    FROM stepbible_verses
                     WHERE book = ? AND chapter = ? AND verse = ?
                 """,
                     (match.book, match.chapter, match.verse),
@@ -327,20 +325,22 @@ class SemanticConcordance:
                 if "hebrew" in languages:
                     try:
                         collection = self.chroma_manager.get_collection("original_verses")
-                        embedding_id = self._convert_verse_id_to_embedding_format(match.verse_id)
-                        result = collection.get(ids=[embedding_id], include=["embeddings"])
-                        if result["embeddings"]:
-                            hebrew_embeddings.append(np.array(result["embeddings"][0]))
+                        if collection is not None:
+                            embedding_id = self._convert_verse_id_to_embedding_format(match.verse_id)
+                            result = collection.get(ids=[embedding_id], include=["embeddings"])
+                            if result["embeddings"]:
+                                hebrew_embeddings.append(np.array(result["embeddings"][0]))
                     except Exception as e:
                         logger.warning(f"Failed to get Hebrew embedding for {match.verse_id}: {e}")
 
                 if "greek" in languages:
                     try:
                         collection = self.chroma_manager.get_collection("original_verses")
-                        embedding_id = self._convert_verse_id_to_embedding_format(match.verse_id)
-                        result = collection.get(ids=[embedding_id], include=["embeddings"])
-                        if result["embeddings"]:
-                            greek_embeddings.append(np.array(result["embeddings"][0]))
+                        if collection is not None:
+                            embedding_id = self._convert_verse_id_to_embedding_format(match.verse_id)
+                            result = collection.get(ids=[embedding_id], include=["embeddings"])
+                            if result["embeddings"]:
+                                greek_embeddings.append(np.array(result["embeddings"][0]))
                     except Exception as e:
                         logger.warning(f"Failed to get Greek embedding for {match.verse_id}: {e}")
 
@@ -360,9 +360,11 @@ class SemanticConcordance:
         exclude_verse_ids: Set[str],
     ) -> List[Dict]:
         """Find verses semantically similar to concept prototypes."""
-        semantic_candidates = []
+        semantic_candidates: List[Dict[str, Any]] = []
 
         collection = self.chroma_manager.get_collection("original_verses")
+        if collection is None:
+            return semantic_candidates
 
         # Search with Hebrew prototype
         if hebrew_prototype is not None:
@@ -372,13 +374,15 @@ class SemanticConcordance:
                 include=["metadatas", "distances"],
             )
 
+            distances = results["distances"]
+            metadatas = results["metadatas"]
             for i, verse_id in enumerate(results["ids"][0]):
                 if verse_id not in exclude_verse_ids:
                     semantic_candidates.append(
                         {
                             "verse_id": verse_id,
-                            "distance": results["distances"][0][i],
-                            "metadata": results["metadatas"][0][i],
+                            "distance": distances[0][i] if distances else 0.0,
+                            "metadata": metadatas[0][i] if metadatas else {},
                             "language": "hebrew",
                         }
                     )
@@ -391,19 +395,21 @@ class SemanticConcordance:
                 include=["metadatas", "distances"],
             )
 
+            distances = results["distances"]
+            metadatas = results["metadatas"]
             for i, verse_id in enumerate(results["ids"][0]):
                 if verse_id not in exclude_verse_ids and verse_id not in [c["verse_id"] for c in semantic_candidates]:
                     semantic_candidates.append(
                         {
                             "verse_id": verse_id,
-                            "distance": results["distances"][0][i],
-                            "metadata": results["metadatas"][0][i],
+                            "distance": distances[0][i] if distances else 0.0,
+                            "metadata": metadatas[0][i] if metadatas else {},
                             "language": "greek",
                         }
                     )
 
         # Sort by distance and limit
-        semantic_candidates.sort(key=lambda x: x["distance"])
+        semantic_candidates.sort(key=lambda x: float(x["distance"]))  # type: ignore[arg-type]
         return semantic_candidates[:max_results]
 
     def _validate_semantic_matches(self, concept: ConceptDefinition, candidates: List[Dict]) -> List[SemanticMatch]:
@@ -591,7 +597,7 @@ class SemanticConcordance:
                 # Get all words in the verse
                 cursor.execute(
                     """
-                    SELECT 
+                    SELECT
                         original_word,
                         strongs_lexical,
                         morphology,
@@ -644,9 +650,9 @@ class SemanticConcordance:
         """Generate a detailed report including semantic matches."""
         report = []
         report.append(f"# Semantic Concordance Report: {concept.name}")
-        report.append(f"\n## Methodology")
+        report.append("\n## Methodology")
         report.append(f"- Primary Strong's numbers: {', '.join(concept.primary_strongs)}")
-        report.append(f"- Semantic search: Original language embeddings")
+        report.append("- Semantic search: Original language embeddings")
         report.append(f"- Validation: Ollama LLM ({', '.join(self.ollama_models)})")
 
         # Separate match types
@@ -654,7 +660,7 @@ class SemanticConcordance:
         semantic_matches = [m for m in matches if m.is_semantic_only]
 
         # Statistics
-        report.append(f"\n## Statistics")
+        report.append("\n## Statistics")
         report.append(f"- Total matches: {len(matches)}")
         report.append(f"- Lexical matches: {len(lexical_matches)}")
         report.append(f"- Semantic matches: {len(semantic_matches)}")
@@ -665,7 +671,7 @@ class SemanticConcordance:
             report.append(f"- Semantic validation: {validated_yes} YES, {validated_maybe} MAYBE")
 
         # Sample matches
-        report.append(f"\n## Top Lexical Matches")
+        report.append("\n## Top Lexical Matches")
         for match in lexical_matches[:5]:
             report.append(
                 f"- {match.verse_id} - {match.original_text[:50]}... "
@@ -673,7 +679,7 @@ class SemanticConcordance:
             )
 
         if semantic_matches:
-            report.append(f"\n## Top Semantic Matches")
+            report.append("\n## Top Semantic Matches")
             for match in semantic_matches[:5]:
                 report.append(
                     f"- {match.verse_id} - {match.original_text[:50]}... "

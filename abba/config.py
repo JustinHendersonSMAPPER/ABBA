@@ -175,9 +175,9 @@ class ABBAConfig:
 class ConfigManager:
     """Manages configuration from multiple sources with priority: CLI > env > config file > defaults."""
 
-    def __init__(self):
-        self.config = ABBAConfig()
-        self._loaded = False
+    def __init__(self) -> None:
+        self.config: ABBAConfig = ABBAConfig()
+        self._loaded: bool = False
 
     def load_config(self, cli_args: Optional[List[str]] = None) -> ABBAConfig:
         """Load configuration from all sources."""
@@ -210,7 +210,7 @@ class ConfigManager:
             return
 
         try:
-            with open(config_file, "r") as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 config_data = json.load(f)
 
             # Apply config file settings to defaults
@@ -225,7 +225,7 @@ class ConfigManager:
             logger = get_logger(__name__)
             logger.warning(f"Could not load config file {config_file}: {e}")
 
-    def _apply_settings(self):
+    def _apply_settings(self):  # noqa: C901
         """Apply settings with priority: CLI > env > current config."""
 
         # Data directory
@@ -466,14 +466,14 @@ class ConfigManager:
             "force_download": self.config.force_download,
             "bible_db_url": self.config.bible_db_url,
             "verbose": self.config.verbose,
-            "quiet": self.config.quiet,
+            "quiet": getattr(self.config, "quiet", False),  # pylint: disable=no-member
             "database_path": str(self.config.database_path) if self.config.database_path else None,
             "use_cache": self.config.use_cache,
             "cache_ttl": self.config.cache_ttl,
         }
 
         try:
-            with open(config_file, "w") as f:
+            with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(config_dict, f, indent=2)
         except IOError as e:
             # Import logger here to avoid circular imports

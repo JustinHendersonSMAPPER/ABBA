@@ -7,8 +7,6 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-import requests
-
 from .bible_extractor import BibleExtractor
 
 logger = logging.getLogger(__name__)
@@ -25,7 +23,7 @@ class STEPBibleUpdater:
         """
         self.data_dir = Path(data_dir)
         self.stepbible_dir = self.data_dir / "stepbible"
-        self.temp_dir = None
+        self.temp_dir: Optional[Path] = None
 
     def check_for_updates(self) -> Tuple[bool, Dict[str, bool]]:
         """Check if STEPBible files have been updated.
@@ -61,7 +59,7 @@ class STEPBibleUpdater:
             file_changes = {}
             has_updates = False
 
-            logger.info(f"Comparing {len(current_hashes)} STEPBible files...")
+            logger.info("Comparing %s STEPBible files...", len(current_hashes))
 
             for filename, current_hash in current_hashes.items():
                 new_hash = new_hashes.get(filename)
@@ -69,7 +67,7 @@ class STEPBibleUpdater:
                 if new_hash and new_hash != current_hash:
                     file_changes[filename] = True
                     has_updates = True
-                    logger.debug(f"Update detected for {filename}")
+                    logger.debug("Update detected for %s", filename)
                 else:
                     file_changes[filename] = False
 
@@ -78,7 +76,7 @@ class STEPBibleUpdater:
                 if filename not in current_hashes:
                     file_changes[filename] = True
                     has_updates = True
-                    logger.debug(f"New file detected: {filename}")
+                    logger.debug("New file detected: %s", filename)
 
             if has_updates:
                 # Keep the temporary files for update
@@ -95,7 +93,7 @@ class STEPBibleUpdater:
         Returns:
             Dict mapping filename to SHA256 hash
         """
-        hashes = {}
+        hashes: Dict[str, str] = {}
 
         if not directory.exists():
             return hashes
@@ -107,11 +105,14 @@ class STEPBibleUpdater:
             try:
                 sha256_hash = hashlib.sha256()
                 with open(file_path, "rb") as f:
-                    for chunk in iter(lambda: f.read(4096), b""):
+                    while True:
+                        chunk = f.read(4096)
+                        if not chunk:
+                            break
                         sha256_hash.update(chunk)
                 hashes[file_path.name] = sha256_hash.hexdigest()
             except Exception as e:
-                logger.error(f"Error hashing {file_path}: {e}")
+                logger.error("Error hashing %s: %s", file_path, e)
 
         return hashes
 
@@ -130,7 +131,7 @@ class STEPBibleUpdater:
 
         try:
             # Backup current files
-            logger.info(f"Backing up current STEPBible files to {backup_dir}")
+            logger.info("Backing up current STEPBible files to %s", backup_dir)
             for file_path in self.stepbible_dir.glob("*.txt"):
                 shutil.copy2(file_path, backup_dir)
 
@@ -142,17 +143,17 @@ class STEPBibleUpdater:
                     dst = self.stepbible_dir / filename
 
                     if src.exists():
-                        logger.info(f"Updating {filename}")
+                        logger.info("Updating %s", filename)
                         shutil.copy2(src, dst)
                         updated_count += 1
 
-            logger.info(f"Successfully updated {updated_count} files")
+            logger.info("Successfully updated %s files", updated_count)
 
             # Update the tracking to force re-import
             self._mark_stepbible_for_reimport()
 
         except Exception as e:
-            logger.error(f"Error updating files: {e}")
+            logger.error("Error updating files: %s", e)
             # Restore from backup
             logger.info("Restoring from backup...")
             for file_path in backup_dir.glob("*.txt"):
@@ -172,7 +173,7 @@ class STEPBibleUpdater:
             import json
 
             try:
-                with open(import_status_file, "r") as f:
+                with open(import_status_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
 
                 # Remove STEPBible import tracking
@@ -180,11 +181,11 @@ class STEPBibleUpdater:
                     data["stepbible_files"] = {}
                     logger.info("Cleared STEPBible import tracking")
 
-                with open(import_status_file, "w") as f:
+                with open(import_status_file, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2)
 
             except Exception as e:
-                logger.error(f"Error updating import status: {e}")
+                logger.error("Error updating import status: %s", e)
 
     def get_update_summary(self, file_changes: Dict[str, bool]) -> str:
         """Get a human-readable summary of updates.

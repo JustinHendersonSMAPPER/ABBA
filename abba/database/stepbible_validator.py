@@ -1,11 +1,10 @@
 """STEPBible data validator with hash-based integrity checking."""
 
 import json
-import logging
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import mmh3
 
@@ -41,7 +40,7 @@ class STEPBibleValidator:
     """Validates STEPBible data integrity and completeness."""
 
     # Expected files and their purposes
-    EXPECTED_FILES = {
+    EXPECTED_FILES: Dict[str, Dict[str, Any]] = {
         "tahot_gen_deu.txt": {"type": "hebrew_text", "books": ["Gen", "Exo", "Lev", "Num", "Deu"]},
         "tahot_jos_est.txt": {
             "type": "hebrew_text",
@@ -214,7 +213,10 @@ class STEPBibleValidator:
                 STEPBibleValidationResult(
                     check_name="hebrew_word_count",
                     passed=False,
-                    message=f"Hebrew word count too low: {hebrew_count:,} (expected >= {self.MIN_EXPECTED_COUNTS['hebrew_words']:,})",
+                    message=(
+                        f"Hebrew word count too low: {hebrew_count:,} "
+                        f"(expected >= {self.MIN_EXPECTED_COUNTS['hebrew_words']:,})"
+                    ),
                     details={"actual": hebrew_count, "expected": self.MIN_EXPECTED_COUNTS["hebrew_words"]},
                 )
             )
@@ -234,7 +236,10 @@ class STEPBibleValidator:
                 STEPBibleValidationResult(
                     check_name="greek_word_count",
                     passed=False,
-                    message=f"Greek word count too low: {greek_count:,} (expected >= {self.MIN_EXPECTED_COUNTS['greek_words']:,})",
+                    message=(
+                        f"Greek word count too low: {greek_count:,} "
+                        f"(expected >= {self.MIN_EXPECTED_COUNTS['greek_words']:,})"
+                    ),
                     details={"actual": greek_count, "expected": self.MIN_EXPECTED_COUNTS["greek_words"]},
                 )
             )
@@ -250,8 +255,8 @@ class STEPBibleValidator:
             if "books" in info:
                 cursor.execute(
                     """
-                    SELECT DISTINCT book 
-                    FROM stepbible_verses 
+                    SELECT DISTINCT book
+                    FROM stepbible_verses
                     WHERE source_file = ?
                 """,
                     (filename,),
@@ -287,7 +292,10 @@ class STEPBibleValidator:
                 STEPBibleValidationResult(
                     check_name="hebrew_lexicon_count",
                     passed=False,
-                    message=f"Hebrew lexicon entries too low: {hebrew_lex_count:,} (expected >= {self.MIN_EXPECTED_COUNTS['hebrew_lexicon']:,})",
+                    message=(
+                        f"Hebrew lexicon entries too low: {hebrew_lex_count:,} "
+                        f"(expected >= {self.MIN_EXPECTED_COUNTS['hebrew_lexicon']:,})"
+                    ),
                     details={"actual": hebrew_lex_count, "expected": self.MIN_EXPECTED_COUNTS["hebrew_lexicon"]},
                 )
             )
@@ -309,7 +317,10 @@ class STEPBibleValidator:
                 STEPBibleValidationResult(
                     check_name="greek_lexicon_count",
                     passed=False,
-                    message=f"Greek lexicon entries too low: {greek_lex_count:,} (expected >= {self.MIN_EXPECTED_COUNTS['greek_lexicon']:,})",
+                    message=(
+                        f"Greek lexicon entries too low: {greek_lex_count:,} "
+                        f"(expected >= {self.MIN_EXPECTED_COUNTS['greek_lexicon']:,})"
+                    ),
                     details={"actual": greek_lex_count, "expected": self.MIN_EXPECTED_COUNTS["greek_lexicon"]},
                 )
             )
@@ -377,8 +388,8 @@ class STEPBibleValidator:
 
     def _validate_data_integrity(self, conn: sqlite3.Connection) -> Tuple[List[STEPBibleValidationResult], List[Dict]]:
         """Validate data integrity using hashes."""
-        results = []
-        hash_mismatches = []
+        results: List[STEPBibleValidationResult] = []
+        hash_mismatches: List[Dict[str, Any]] = []
         cursor = conn.cursor()
 
         # Check if we have hash data
@@ -397,14 +408,16 @@ class STEPBibleValidator:
             return results, hash_mismatches
 
         # Validate hashes for a sample of verses
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT source_file, book, chapter, verse, word_number,
                    original_word, strongs_raw, morphology, data_hash
             FROM stepbible_verses
             WHERE data_hash IS NOT NULL
             ORDER BY RANDOM()
             LIMIT 10000
-        """)
+        """
+        )
 
         sample_words = cursor.fetchall()
         corrupt_count = 0
@@ -430,13 +443,15 @@ class STEPBibleValidator:
                 )
 
         # Also check for missing critical data
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*)
             FROM stepbible_verses
             WHERE (original_word IS NULL OR original_word = '')
             AND (strongs_raw IS NULL OR strongs_raw = '')
             AND (morphology IS NULL OR morphology = '')
-        """)
+        """
+        )
 
         empty_words = cursor.fetchone()[0]
 
@@ -477,16 +492,18 @@ class STEPBibleValidator:
 
         # Check Strong's numbers in verses have lexicon entries
         # Note: Strong's numbers should already be cleaned during import
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(DISTINCT sv.strongs_primary)
             FROM stepbible_verses sv
-            WHERE sv.strongs_primary IS NOT NULL 
+            WHERE sv.strongs_primary IS NOT NULL
             AND sv.strongs_primary != ''
             AND NOT EXISTS (
-                SELECT 1 FROM lexicon l 
+                SELECT 1 FROM lexicon l
                 WHERE l.strongs_number = sv.strongs_primary
             )
-        """)
+        """
+        )
 
         missing_lexicon = cursor.fetchone()[0]
 
@@ -516,12 +533,14 @@ class STEPBibleValidator:
         cursor = conn.cursor()
 
         # Check for verses with too many words
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT source_file, book, chapter, verse, COUNT(*) as word_count
             FROM stepbible_verses
             GROUP BY source_file, book, chapter, verse
             HAVING COUNT(*) > 100
-        """)
+        """
+        )
 
         anomalies = cursor.fetchall()
 
@@ -536,11 +555,13 @@ class STEPBibleValidator:
             )
 
         # Check for empty original words
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*)
             FROM stepbible_verses
             WHERE original_word IS NULL OR original_word = ''
-        """)
+        """
+        )
 
         empty_words = cursor.fetchone()[0]
 
@@ -610,7 +631,8 @@ def validate_stepbible_import(db_path: Path) -> bool:
             cursor = conn.cursor()
 
             # Create table if it doesn't exist
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS stepbible_validation (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     validation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -620,7 +642,8 @@ def validate_stepbible_import(db_path: Path) -> bool:
                     success_rate REAL,
                     details TEXT
                 )
-            """)
+            """
+            )
 
             # Store results
             details = {
@@ -635,7 +658,7 @@ def validate_stepbible_import(db_path: Path) -> bool:
 
             cursor.execute(
                 """
-                INSERT INTO stepbible_validation 
+                INSERT INTO stepbible_validation
                 (total_checks, passed_checks, failed_checks, success_rate, details)
                 VALUES (?, ?, ?, ?, ?)
             """,

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from .hash_validator import HashValidator
-from .state_tracker import OperationStatus, StateTracker
+from .state_tracker import StateTracker
 
 logger = logging.getLogger(__name__)
 
@@ -67,14 +67,14 @@ class OperationManager:
 
         # Check if cleanup is needed for this job
         if self.tracker.should_cleanup_job(operation_name, job_name):
-            logger.info(f"Cleaning up interrupted job: {operation_name}/{job_name}")
+            logger.info("Cleaning up interrupted job: %s/%s", operation_name, job_name)
 
             cleanup_handler = self.cleanup_handlers.get(operation_name)
             if cleanup_handler:
                 try:
                     cleanup_handler(db_manager, chroma_manager, job_name)
                 except Exception as e:
-                    logger.error(f"Cleanup failed for {operation_name}/{job_name}: {e}")
+                    logger.error("Cleanup failed for %s/%s: %s", operation_name, job_name, e)
                     self.tracker.fail_job(operation_name, job_name, str(e))
                     return False
 
@@ -119,14 +119,14 @@ class OperationManager:
                     validation_result["details"] = details
 
                 if not is_valid:
-                    logger.error(f"Validation failed for {operation_name}/{job_name}: {message}")
+                    logger.error("Validation failed for %s/%s: %s", operation_name, job_name, message)
                     self.tracker.fail_job(operation_name, job_name, message)
                     return False
 
-                logger.info(f"Validation passed for {operation_name}/{job_name}: {message}")
+                logger.info("Validation passed for %s/%s: %s", operation_name, job_name, message)
 
             except Exception as e:
-                logger.error(f"Validation error for {operation_name}/{job_name}: {e}")
+                logger.error("Validation error for %s/%s: %s", operation_name, job_name, e)
                 self.tracker.fail_job(operation_name, job_name, str(e))
                 return False
 
@@ -134,14 +134,14 @@ class OperationManager:
         self.tracker.complete_job(operation_name, job_name, validation_result)
         return True
 
-    def _cleanup_translation_import(self, db_manager, chroma_manager, job_name: str):
+    def _cleanup_translation_import(self, db_manager, _chroma_manager, job_name: str):
         """Clean up partial translation import for a specific translation."""
         if not db_manager:
             logger.warning("No db_manager provided for translation cleanup")
             return
 
         translation_id = job_name
-        logger.info(f"Cleaning up partial import for translation: {translation_id}")
+        logger.info("Cleaning up partial import for translation: %s", translation_id)
 
         with db_manager.get_connection() as conn:
             cursor = conn.cursor()
@@ -154,17 +154,17 @@ class OperationManager:
             cursor.execute("DELETE FROM words WHERE translation_id = ?", (translation_id,))
             deleted_words = cursor.rowcount
 
-            logger.info(f"Cleaned up {translation_id}: {deleted_verses} verses, {deleted_words} words")
+            logger.info("Cleaned up %s: %s verses, %s words", translation_id, deleted_verses, deleted_words)
 
             conn.commit()
 
-    def _cleanup_stepbible_import(self, db_manager, chroma_manager, job_name: str):
+    def _cleanup_stepbible_import(self, db_manager, _chroma_manager, job_name: str):
         """Clean up partial STEPBible import for a specific file."""
         if not db_manager:
             return
 
         file_name = job_name
-        logger.info(f"Cleaning up partial STEPBible import for file: {file_name}")
+        logger.info("Cleaning up partial STEPBible import for file: %s", file_name)
 
         with db_manager.get_connection() as conn:
             cursor = conn.cursor()
@@ -173,36 +173,36 @@ class OperationManager:
             cursor.execute("DELETE FROM stepbible_verses WHERE source_file = ?", (file_name,))
             deleted_verses = cursor.rowcount
 
-            logger.info(f"Cleaned up {file_name}: {deleted_verses} STEPBible verses")
+            logger.info("Cleaned up %s: %s STEPBible verses", file_name, deleted_verses)
 
             conn.commit()
 
-    def _cleanup_verse_embeddings(self, db_manager, chroma_manager, job_name: str):
+    def _cleanup_verse_embeddings(self, _db_manager, chroma_manager, job_name: str):
         """Clean up partial verse embeddings for a specific translation."""
         if not chroma_manager:
             logger.warning("No chroma_manager provided for verse embedding cleanup")
             return
 
         translation_id = job_name
-        logger.info(f"Cleaning up embeddings for translation: {translation_id}")
+        logger.info("Cleaning up embeddings for translation: %s", translation_id)
 
         try:
             verses_collection = chroma_manager.get_collection("verses")
 
             # Delete embeddings for this translation
             verses_collection.delete(where={"translation_id": translation_id})
-            logger.info(f"Cleaned up verse embeddings for {translation_id}")
+            logger.info("Cleaned up verse embeddings for %s", translation_id)
 
         except Exception as e:
-            logger.error(f"Error cleaning verse embeddings: {e}")
+            logger.error("Error cleaning verse embeddings: %s", e)
             raise
 
-    def _cleanup_word_embeddings(self, db_manager, chroma_manager, job_name: str):
+    def _cleanup_word_embeddings(self, _db_manager, chroma_manager, job_name: str):
         """Clean up partial word embeddings."""
         if not chroma_manager:
             return
 
-        logger.info(f"Cleaning up word embeddings for job: {job_name}")
+        logger.info("Cleaning up word embeddings for job: %s", job_name)
 
         try:
             words_collection = chroma_manager.get_collection("words")
@@ -213,16 +213,16 @@ class OperationManager:
                 # Clear entire collection for full re-embedding
                 count = words_collection.count()
                 if count > 0:
-                    logger.info(f"Clearing {count} word embeddings for full re-embedding")
+                    logger.info("Clearing %s word embeddings for full re-embedding", count)
                     # Note: ChromaDB doesn't have a clear all method
                     # Would need to implement batch deletion
 
         except Exception as e:
-            logger.error(f"Error cleaning word embeddings: {e}")
+            logger.error("Error cleaning word embeddings: %s", e)
             raise
 
     def _validate_translation_import(
-        self, db_manager, chroma_manager, job_name: str, validation_params: Optional[Dict[str, Any]] = None
+        self, db_manager, _chroma_manager, job_name: str, validation_params: Optional[Dict[str, Any]] = None
     ) -> tuple[bool, str, Optional[Dict[str, Any]]]:
         """Validate translation import using hash validation."""
         if not db_manager:
@@ -248,7 +248,7 @@ class OperationManager:
         return is_valid, message, details
 
     def _validate_stepbible_import(
-        self, db_manager, chroma_manager, job_name: str, validation_params: Optional[Dict[str, Any]] = None
+        self, db_manager, _chroma_manager, job_name: str, validation_params: Optional[Dict[str, Any]] = None
     ) -> tuple[bool, str, Optional[Dict[str, Any]]]:
         """Validate STEPBible import."""
         if not db_manager:
@@ -285,7 +285,7 @@ class OperationManager:
             )
 
     def _validate_verse_embeddings(
-        self, db_manager, chroma_manager, job_name: str, validation_params: Optional[Dict[str, Any]] = None
+        self, db_manager, chroma_manager, job_name: str, _validation_params: Optional[Dict[str, Any]] = None
     ) -> tuple[bool, str, Optional[Dict[str, Any]]]:
         """Validate verse embeddings using hash validation."""
         if not chroma_manager:
@@ -304,7 +304,7 @@ class OperationManager:
         return is_valid, message, details
 
     def _validate_word_embeddings(
-        self, db_manager, chroma_manager, job_name: str, validation_params: Optional[Dict[str, Any]] = None
+        self, db_manager, chroma_manager, _job_name: str, _validation_params: Optional[Dict[str, Any]] = None
     ) -> tuple[bool, str, Optional[Dict[str, Any]]]:
         """Validate word embeddings."""
         if not chroma_manager:

@@ -45,7 +45,7 @@ class SemanticAnalysisPipeline:
         self,
         db_path: Path,
         ollama_host: str = "http://localhost:11434",
-        ollama_models: List[str] = None,
+        ollama_models: Optional[List[str]] = None,
         consensus_threshold: float = 0.7,
         batch_size: int = 100,
     ):
@@ -67,7 +67,7 @@ class SemanticAnalysisPipeline:
         )
 
         # Cache for verse data to avoid repeated database queries
-        self._verse_cache = {}
+        self._verse_cache: Dict[str, Dict[str, Any]] = {}
 
     def map_concept_to_verses(self, concept: ConceptDefinition) -> ConceptMappingResult:
         """Map a concept to biblical verses using traditional + LLM approach.
@@ -84,7 +84,7 @@ class SemanticAnalysisPipeline:
             ConceptMappingResult with all mappings and analysis
         """
         start_time = time.time()
-        logger.info(f"Starting concept mapping for: {concept.name}")
+        logger.info("Starting concept mapping for: %s", concept.name)
 
         result = ConceptMappingResult(concept=concept)
 
@@ -92,7 +92,7 @@ class SemanticAnalysisPipeline:
             # Phase 1: Traditional mapping
             logger.info("Phase 1: Traditional mapping using Strong's numbers and keywords")
             result.traditional_matches = self._get_traditional_matches(concept)
-            logger.info(f"Found {len(result.traditional_matches)} traditional matches")
+            logger.info("Found %d traditional matches", len(result.traditional_matches))
 
             # Phase 2: LLM validation of traditional matches
             logger.info("Phase 2: LLM validation of traditional matches")
@@ -102,25 +102,25 @@ class SemanticAnalysisPipeline:
                 result.false_positives = false_positives
                 result.total_verses_analyzed += len(result.traditional_matches)
 
-                logger.info(f"LLM validated {len(validated)} matches, rejected {len(false_positives)}")
+                logger.info("LLM validated %d matches, rejected %d", len(validated), len(false_positives))
 
             # Phase 3: Comprehensive LLM scanning
             logger.info("Phase 3: Comprehensive LLM scanning for additional matches")
             additional_matches = self._comprehensive_verse_scan(concept, exclude_verses=set(result.traditional_matches))
             result.llm_discovered_matches = additional_matches
-            logger.info(f"LLM discovered {len(additional_matches)} additional matches")
+            logger.info("LLM discovered %d additional matches", len(additional_matches))
 
         except Exception as e:
-            logger.error(f"Error in concept mapping for {concept.name}: {e}")
+            logger.error("Error in concept mapping for %s: %s", concept.name, e)
             raise
 
         finally:
             result.processing_time = time.time() - start_time
-            logger.info(f"Concept mapping completed in {result.processing_time:.1f}s")
+            logger.info("Concept mapping completed in %.1fs", result.processing_time)
 
             # Log summary
             total_matches = len(result.llm_validated_matches) + len(result.llm_discovered_matches)
-            logger.info(f"Final mapping for {concept.name}: {total_matches} relevant verses")
+            logger.info("Final mapping for %s: %d relevant verses", concept.name, total_matches)
 
         return result
 
@@ -218,17 +218,17 @@ class SemanticAnalysisPipeline:
 
         # Categorize results
         for result in results:
-            verse_id = result.verse_reference
+            result_verse_id = result.verse_reference or ""
 
             # Consider relevant if high relevance score and consensus reached
             if result.relevance_score >= 0.5 and result.consensus_reached and not result.error:
-                validated.append(verse_id)
+                validated.append(result_verse_id)
             else:
-                false_positives.append(verse_id)
+                false_positives.append(result_verse_id)
 
         return validated, false_positives
 
-    def _comprehensive_verse_scan(self, concept: ConceptDefinition, exclude_verses: set = None) -> List[str]:
+    def _comprehensive_verse_scan(self, concept: ConceptDefinition, exclude_verses: Optional[set] = None) -> List[str]:
         """Scan all verses for additional concept matches.
 
         This is the most time-intensive phase, scanning every verse
@@ -251,12 +251,14 @@ class SemanticAnalysisPipeline:
             cursor = conn.cursor()
 
             # Get all unique verses
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT DISTINCT book, chapter, verse
                 FROM stepbible_verses
                 WHERE original_word IS NOT NULL AND original_word != ''
                 ORDER BY book, chapter, verse
-            """)
+            """
+            )
 
             all_verses = []
             for row in cursor.fetchall():
@@ -270,7 +272,7 @@ class SemanticAnalysisPipeline:
                         if verse_data:
                             all_verses.append((verse_data["text"], verse_id))
 
-        logger.info(f"Scanning {len(all_verses)} verses for concept {concept.name}")
+        logger.info("Scanning %d verses for concept %s", len(all_verses), concept.name)
 
         if all_verses:
             # Batch analyze all verses
@@ -282,6 +284,7 @@ class SemanticAnalysisPipeline:
                     result.relevance_score >= 0.6  # Higher threshold for discovery
                     and result.consensus_reached
                     and not result.error
+                    and result.verse_reference is not None
                 ):
                     additional_matches.append(result.verse_reference)
 
@@ -334,7 +337,7 @@ class SemanticAnalysisPipeline:
                     return verse_data
 
         except Exception as e:
-            logger.warning(f"Error getting verse data for {verse_id}: {e}")
+            logger.warning("Error getting verse data for %s: %s", verse_id, e)
 
         return None
 
@@ -432,7 +435,8 @@ class SemanticAnalysisPipeline:
                 cursor = conn.cursor()
 
                 # Create tables if they don't exist
-                cursor.execute("""
+                cursor.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS concept_definitions (
                         concept_id TEXT PRIMARY KEY,
                         name TEXT NOT NULL,
@@ -443,9 +447,11 @@ class SemanticAnalysisPipeline:
                         keywords TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
-                """)
+                """
+                )
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS concept_verse_mappings (
                         concept_id TEXT,
                         verse_id TEXT,
@@ -457,7 +463,8 @@ class SemanticAnalysisPipeline:
                         PRIMARY KEY (concept_id, verse_id),
                         FOREIGN KEY (concept_id) REFERENCES concept_definitions(concept_id)
                     )
-                """)
+                """
+                )
 
                 # Insert/update concept definition
                 concept_id = result.concept.name.lower().replace(" ", "_")
@@ -525,9 +532,9 @@ class SemanticAnalysisPipeline:
                     )
 
                 conn.commit()
-                logger.info(f"Saved concept mapping for {result.concept.name} to database")
+                logger.info("Saved concept mapping for %s to database", result.concept.name)
                 return True
 
         except Exception as e:
-            logger.error(f"Error saving concept mapping: {e}")
+            logger.error("Error saving concept mapping: %s", e)
             return False

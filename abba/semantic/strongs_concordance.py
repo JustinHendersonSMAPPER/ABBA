@@ -15,11 +15,9 @@ This approach prioritizes accuracy and scholarly defensibility over
 algorithmic complexity.
 """
 
-import logging
-import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 
 from ..database.sqlite_manager import SQLiteManager
 from ..logging_setup import logger
@@ -106,8 +104,8 @@ class StrongsConcordance:
             ConceptDefinition object
         """
         # Validate Strong's numbers exist in database
-        all_strongs = primary_strongs + (extended_strongs or [])
         # Disable validation for now since it's causing issues
+        # all_strongs = primary_strongs + (extended_strongs or [])
         # self._validate_strongs_numbers(all_strongs)
 
         return ConceptDefinition(
@@ -192,7 +190,7 @@ class StrongsConcordance:
 
                 cursor.execute(
                     f"""
-                    SELECT 
+                    SELECT
                         sv.id,
                         sv.book,
                         sv.chapter,
@@ -241,9 +239,9 @@ class StrongsConcordance:
 
                 for strongs in pattern["strongs"]:
                     strongs_conditions.append(
-                        f"EXISTS (SELECT 1 FROM stepbible_verses sv2 "
-                        f"WHERE sv2.book = sv.book AND sv2.chapter = sv.chapter "
-                        f"AND sv2.verse = sv.verse AND sv2.strongs_lexical = ?)"
+                        "EXISTS (SELECT 1 FROM stepbible_verses sv2 "
+                        "WHERE sv2.book = sv.book AND sv2.chapter = sv.chapter "
+                        "AND sv2.verse = sv.verse AND sv2.strongs_lexical = ?)"
                     )
                     params.append(strongs)
 
@@ -277,7 +275,7 @@ class StrongsConcordance:
 
         return matches
 
-    def _find_lemma_variants(self, strongs_list: List[str]) -> List[ConcordanceMatch]:
+    def _find_lemma_variants(self, strongs_list: Set[str]) -> List[ConcordanceMatch]:
         """Find other Strong's numbers with the same lemma (using original_word as lemma)."""
         matches = []
 
@@ -296,7 +294,7 @@ class StrongsConcordance:
                 tuple(strongs_list),
             )
 
-            lemma_map = {}
+            lemma_map: Dict[str, List[str]] = {}
             for lemma, strongs in cursor.fetchall():
                 if lemma not in lemma_map:
                     lemma_map[lemma] = []
@@ -331,7 +329,7 @@ class StrongsConcordance:
 
     def _deduplicate_matches(self, matches: List[ConcordanceMatch]) -> List[ConcordanceMatch]:
         """Remove duplicate matches, keeping highest confidence."""
-        unique_matches = {}
+        unique_matches: Dict[tuple, ConcordanceMatch] = {}
 
         for match in matches:
             key = (match.verse_id, match.strongs_matched[0] if match.strongs_matched else "")
@@ -346,27 +344,27 @@ class StrongsConcordance:
         """Generate a human-readable concordance report."""
         report = []
         report.append(f"# Concordance Report: {concept.name}")
-        report.append(f"\n## Methodology")
+        report.append("\n## Methodology")
         report.append(f"- Primary Strong's numbers: {', '.join(concept.primary_strongs)}")
         if concept.extended_strongs:
             report.append(f"- Extended Strong's numbers: {', '.join(concept.extended_strongs)}")
         report.append(f"- Validation source: {concept.validation_source}")
 
         # Group matches by type
-        by_type = {}
+        by_type: Dict[str, List[ConcordanceMatch]] = {}
         for match in matches:
             if match.match_type not in by_type:
                 by_type[match.match_type] = []
             by_type[match.match_type].append(match)
 
         # Report statistics
-        report.append(f"\n## Statistics")
+        report.append("\n## Statistics")
         report.append(f"- Total matches: {len(matches)}")
         for match_type, type_matches in by_type.items():
             report.append(f"- {match_type.capitalize()} matches: {len(type_matches)}")
 
         # Sample matches by type
-        report.append(f"\n## Sample Matches by Type")
+        report.append("\n## Sample Matches by Type")
         for match_type in ["primary", "extended", "phrase", "lemma"]:
             if match_type in by_type:
                 report.append(f"\n### {match_type.capitalize()} Matches")

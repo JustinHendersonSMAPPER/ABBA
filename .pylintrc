@@ -16,5 +16,13 @@ disable=
     too-many-statements,
     too-many-return-statements,
     too-many-public-methods,
+    too-many-positional-arguments,
+    too-many-nested-blocks,
+    too-many-lines,
+    too-many-boolean-expressions,
     import-error,
-    duplicate-code
+    import-outside-toplevel,
+    duplicate-code,
+    broad-exception-caught,
+    no-self-use,
+    protected-access

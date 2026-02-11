@@ -25,7 +25,7 @@ class TestBibleExtractor(unittest.TestCase):
     def test_data_dir_creation(self):
         """Test data directory is created."""
         new_dir = Path(self.temp_dir) / "new_data"
-        extractor = BibleExtractor(str(new_dir))
+        _extractor = BibleExtractor(str(new_dir))  # noqa: F841
 
         # Directory should be created during initialization
         self.assertTrue(new_dir.exists())

@@ -11,12 +11,10 @@ This module handles:
 
 import csv
 import json
-import logging
-import sqlite3
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import yaml
 
@@ -58,7 +56,8 @@ class ConceptMapper:
             cursor = conn.cursor()
 
             # Table for concept mappings
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concept_mappings (
                     concept_name TEXT NOT NULL,
                     verse_id TEXT NOT NULL,
@@ -76,10 +75,12 @@ class ConceptMapper:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (concept_name, verse_id)
                 )
-            """)
+            """
+            )
 
             # Table for concept statistics
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concept_stats (
                     concept_name TEXT PRIMARY KEY,
                     total_matches INTEGER NOT NULL,
@@ -91,18 +92,23 @@ class ConceptMapper:
                     coverage_books INTEGER NOT NULL,
                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
+            """
+            )
 
             # Create indexes for performance
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_concept_verse 
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_concept_verse
                 ON concept_mappings(verse_id)
-            """)
+            """
+            )
 
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_concept_confidence 
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_concept_confidence
                 ON concept_mappings(concept_name, confidence DESC)
-            """)
+            """
+            )
 
             conn.commit()
 
@@ -231,37 +237,39 @@ class ConceptMapper:
 
             for concept_data in data.get("concepts", []):
                 if concept_data["name"].lower() == concept_name.lower():
-                    logger.info(f"Found concept definition, processing...")
-                    stats = self.process_concept(concept_data)
+                    logger.info("Found concept definition, processing...")
+                    self.process_concept(concept_data)
                     return self._get_cached_matches(concept_name)
 
         logger.warning(f"Concept '{concept_name}' not found")
         return []
 
-    def export_mappings(self, output_path: str, format: str = "json"):
+    def export_mappings(self, output_path: str, output_format: str = "json"):
         """
         Export all concept mappings to file.
 
         Args:
             output_path: Output file path
-            format: Export format ('json' or 'csv')
+            output_format: Export format ('json' or 'csv')
         """
-        logger.info(f"Exporting concept mappings to {output_path} as {format}")
+        logger.info(f"Exporting concept mappings to {output_path} as {output_format}")
 
         with self.db_manager.get_connection() as conn:
             cursor = conn.cursor()
 
-            if format.lower() == "json":
+            if output_format.lower() == "json":
                 # Export as JSON
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT concept_name, verse_id, book, chapter, verse,
                            match_type, confidence, semantic_score,
                            ollama_validation, evidence, strongs_matched
                     FROM concept_mappings
                     ORDER BY concept_name, confidence DESC
-                """)
+                """
+                )
 
-                results = {}
+                results: Dict[str, List[Dict[str, Any]]] = {}
                 for row in cursor.fetchall():
                     concept = row[0]
                     if concept not in results:
@@ -285,15 +293,17 @@ class ConceptMapper:
                 with open(output_path, "w", encoding="utf-8") as f:
                     json.dump(results, f, indent=2, ensure_ascii=False)
 
-            elif format.lower() == "csv":
+            elif output_format.lower() == "csv":
                 # Export as CSV
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT concept_name, verse_id, book, chapter, verse,
                            match_type, confidence, semantic_score,
                            ollama_validation, evidence
                     FROM concept_mappings
                     ORDER BY concept_name, confidence DESC
-                """)
+                """
+                )
 
                 with open(output_path, "w", newline="", encoding="utf-8") as f:
                     writer = csv.writer(f)
@@ -313,7 +323,7 @@ class ConceptMapper:
                     )
                     writer.writerows(cursor.fetchall())
             else:
-                raise ValueError(f"Unsupported format: {format}")
+                raise ValueError(f"Unsupported format: {output_format}")
 
         logger.info(f"Export completed: {output_path}")
 
@@ -328,14 +338,16 @@ class ConceptMapper:
             cursor = conn.cursor()
 
             # Overall statistics
-            cursor.execute("""
-                SELECT 
+            cursor.execute(
+                """
+                SELECT
                     COUNT(DISTINCT concept_name) as concepts,
                     COUNT(*) as total_mappings,
                     AVG(confidence) as avg_confidence,
                     COUNT(DISTINCT verse_id) as unique_verses
                 FROM concept_mappings
-            """)
+            """
+            )
 
             stats = cursor.fetchone()
             report.append(f"\n- Total Concepts: {stats[0]}")
@@ -346,10 +358,12 @@ class ConceptMapper:
             # Per-concept statistics
             report.append("\n## Concept Details")
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT * FROM concept_stats
                 ORDER BY total_matches DESC
-            """)
+            """
+            )
 
             for row in cursor.fetchall():
                 name = row[0]
@@ -424,7 +438,7 @@ class ConceptMapper:
         semantic = [m for m in matches if m.is_semantic_only]
 
         # Ollama validation counts
-        ollama_validations = {}
+        ollama_validations: Dict[str, int] = {}
         for match in semantic:
             if match.ollama_validation:
                 ollama_validations[match.ollama_validation] = ollama_validations.get(match.ollama_validation, 0) + 1

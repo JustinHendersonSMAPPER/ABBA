@@ -4,9 +4,9 @@ import logging
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from ..parallel_import import ALL_KNOWN_EXTENDED_BOOKS, BOOK_ID_MAP, Canon, get_translation_canon
+from ..parallel_import import ALL_KNOWN_EXTENDED_BOOKS, BOOK_ID_MAP, get_translation_canon
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class ValidationSummary:
     percentage: float
     failures: List[ValidationResult]
     warnings: List[ValidationResult]
-    info_messages: List[ValidationResult] = None
+    info_messages: Optional[List[ValidationResult]] = None
 
 
 class PostImportValidator:
@@ -60,12 +60,14 @@ class PostImportValidator:
             cursor = abba_conn.cursor()
 
             # Get translations that actually have verses imported (not just metadata)
-            cursor.execute("""
-                SELECT DISTINCT t.id 
-                FROM translations t 
-                INNER JOIN verses v ON t.id = v.translation_id 
+            cursor.execute(
+                """
+                SELECT DISTINCT t.id
+                FROM translations t
+                INNER JOIN verses v ON t.id = v.translation_id
                 ORDER BY t.id
-            """)
+            """
+            )
             translation_ids = [row[0] for row in cursor.fetchall()]
 
             if not translation_ids:
@@ -218,8 +220,8 @@ class PostImportValidator:
             # Count verses in mapped books only
             source_cursor.execute(
                 """
-                SELECT COUNT(*) 
-                FROM ChapterVerse 
+                SELECT COUNT(*)
+                FROM ChapterVerse
                 WHERE translationId = ?
             """,
                 (trans_id,),
@@ -230,7 +232,7 @@ class PostImportValidator:
             source_cursor.execute(
                 """
                 SELECT bookId, COUNT(*) as count
-                FROM ChapterVerse 
+                FROM ChapterVerse
                 WHERE translationId = ?
                 GROUP BY bookId
             """,
@@ -274,8 +276,8 @@ class PostImportValidator:
         # Get imported books
         cursor.execute(
             """
-            SELECT DISTINCT book_id 
-            FROM verses 
+            SELECT DISTINCT book_id
+            FROM verses
             WHERE translation_id = ?
             ORDER BY book_id
         """,
@@ -289,7 +291,7 @@ class PostImportValidator:
             source_cursor.execute(
                 """
                 SELECT DISTINCT bookId
-                FROM ChapterVerse 
+                FROM ChapterVerse
                 WHERE translationId = ?
             """,
                 (trans_id,),
@@ -342,7 +344,7 @@ class PostImportValidator:
 
         return results
 
-    def _validate_canon_association(self, trans_id: str, conn: sqlite3.Connection) -> List[ValidationResult]:
+    def _validate_canon_association(self, trans_id: str, _conn: sqlite3.Connection) -> List[ValidationResult]:
         """Validate canon detection and association."""
         results = []
 
@@ -355,7 +357,7 @@ class PostImportValidator:
             source_cursor.execute(
                 """
                 SELECT DISTINCT bookId
-                FROM ChapterVerse 
+                FROM ChapterVerse
                 WHERE translationId = ?
             """,
                 (trans_id,),
@@ -424,7 +426,7 @@ class PostImportValidator:
                     check_name="duplicate_verses",
                     passed=False,
                     message=f"Found {len(duplicates)} duplicate verse entries",
-                    details={"duplicates": [(b, c, v, cnt) for b, c, v, cnt in duplicates[:10]]},  # First 10
+                    details={"duplicates": list(duplicates[:10])},  # First 10
                 )
             )
 
@@ -490,7 +492,7 @@ class PostImportValidator:
                 # Record these failures in the database
                 cursor.executemany(
                     """
-                    INSERT OR IGNORE INTO failed_imports 
+                    INSERT OR IGNORE INTO failed_imports
                     (translation_id, book_id, chapter, verse, reason)
                     VALUES (?, ?, ?, ?, 'Import failed')
                 """,
@@ -500,7 +502,7 @@ class PostImportValidator:
                 # Update translation record
                 cursor.execute(
                     """
-                    UPDATE translations 
+                    UPDATE translations
                     SET has_import_failures = 1, failed_verse_count = ?
                     WHERE id = ?
                 """,
@@ -520,7 +522,7 @@ class PostImportValidator:
 
                 empty_imported = cursor.fetchone()[0]
                 if empty_imported > 0:
-                    logger.debug(f"{trans_id}: Has {empty_imported} empty verses (also empty in source)")
+                    logger.debug("%s: Has %s empty verses (also empty in source)", trans_id, empty_imported)
 
         # If no issues found
         if not any(not r.passed for r in results):
@@ -539,31 +541,31 @@ class PostImportValidator:
         """Print a formatted summary of validation results."""
         from ..logging_setup import get_logger
 
-        logger = get_logger(__name__)
+        local_logger = get_logger(__name__)
 
-        logger.info("\n" + "=" * 70)
-        logger.info("POST-IMPORT VALIDATION SUMMARY")
-        logger.info("=" * 70)
+        local_logger.info("\n" + "=" * 70)
+        local_logger.info("POST-IMPORT VALIDATION SUMMARY")
+        local_logger.info("=" * 70)
 
-        logger.info(f"\nTotal translations validated: {summary.total_translations}")
-        logger.info(f"Passed: {summary.passed_translations}")
-        logger.info(f"Failed: {summary.failed_translations}")
-        logger.info(f"Success rate: {summary.percentage:.1f}%")
+        local_logger.info("\nTotal translations validated: %s", summary.total_translations)
+        local_logger.info("Passed: %s", summary.passed_translations)
+        local_logger.info("Failed: %s", summary.failed_translations)
+        local_logger.info("Success rate: %.1f%%", summary.percentage)
 
         if summary.failures:
-            logger.error(f"\n❌ FAILURES ({len(summary.failures)}):")
-            logger.error("-" * 70)
+            local_logger.error("\nFAILURES (%s):", len(summary.failures))
+            local_logger.error("-" * 70)
             for failure in summary.failures:
-                logger.error(f"  {failure.translation_id}: {failure.message}")
+                local_logger.error("  %s: %s", failure.translation_id, failure.message)
                 if failure.details:
-                    logger.error(f"    Details: {failure.details}")
+                    local_logger.error("    Details: %s", failure.details)
 
-        logger.info("\n" + "=" * 70)
+        local_logger.info("\n" + "=" * 70)
 
         if summary.percentage < 100:
-            logger.error("❌ VALIDATION FAILED - Not all translations passed validation")
-            logger.error("Please review the failures above before continuing.")
+            local_logger.error("VALIDATION FAILED - Not all translations passed validation")
+            local_logger.error("Please review the failures above before continuing.")
         else:
-            logger.info("✅ ALL VALIDATIONS PASSED - Safe to continue")
+            local_logger.info("ALL VALIDATIONS PASSED - Safe to continue")
 
-        logger.info("=" * 70 + "\n")
+        local_logger.info("=" * 70 + "\n")

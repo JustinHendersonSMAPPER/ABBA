@@ -3,20 +3,18 @@
 import logging
 import multiprocessing as mp
 import time
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from tqdm import tqdm
 
-from .hash_validator import HashValidator
-
 logger = logging.getLogger(__name__)
 
 
 def _clean_strongs_number(strongs: str) -> str:
-    """Clean Strong's number to base form.
+    r"""Clean Strong's number to base form.
 
     Examples:
         {H0001G} -> H0001
@@ -94,7 +92,9 @@ class ParallelStepBibleImporter:
         self.dest_db_path = Path(dest_db_path)
         self.max_workers = max_workers or mp.cpu_count()
 
-    def parse_file_parallel(self, filename: str, file_type: str, show_progress: bool = True) -> Tuple[bool, int]:
+    def parse_file_parallel(  # noqa: C901
+        self, filename: str, file_type: str, show_progress: bool = True
+    ) -> Tuple[bool, int]:
         """Parse a STEPBible file using parallel processing.
 
         Args:
@@ -108,7 +108,7 @@ class ParallelStepBibleImporter:
         filepath = self.stepbible_dir / filename
 
         if not filepath.exists():
-            logger.error(f"File not found: {filepath}")
+            logger.error("File not found: %s", filepath)
             return False, 0
 
         # Determine language
@@ -136,12 +136,12 @@ class ParallelStepBibleImporter:
                 data_lines.append((i, line))
 
         if not data_lines:
-            logger.warning(f"No data lines found in {filename}")
+            logger.warning("No data lines found in %s", filename)
             return True, 0
 
         # Calculate chunk size for parallel processing
         chunk_size = max(1000, len(data_lines) // (self.max_workers * 4))
-        chunks = []
+        chunks: List[Dict[str, Any]] = []
 
         for i in range(0, len(data_lines), chunk_size):
             chunk_data = data_lines[i : i + chunk_size]
@@ -155,10 +155,12 @@ class ParallelStepBibleImporter:
             )
 
         if show_progress:
-            from .logging_setup import get_logger
-
-            logger = get_logger(__name__)
-            logger.debug(f"  Processing {filename}: {len(data_lines):,} data lines in {len(chunks)} chunks...")
+            logger.debug(
+                "  Processing %s: %s data lines in %s chunks...",
+                filename,
+                f"{len(data_lines):,}",
+                len(chunks),
+            )
 
         # Process chunks in parallel
         total_words = 0
@@ -204,7 +206,7 @@ class ParallelStepBibleImporter:
                         pbar.set_postfix({"words": f"{total_words:,}"})
 
                 except Exception as e:
-                    logger.error(f"Error processing chunk {chunk_id}: {e}")
+                    logger.error("Error processing chunk %s: %s", chunk_id, e)
                     if show_progress:
                         pbar.update(1)
 
@@ -214,19 +216,15 @@ class ParallelStepBibleImporter:
         # Summary
         success = len([r for r in results if r.success]) == len(chunks)
 
-        from .logging_setup import get_logger
-
-        logger = get_logger(__name__)
-
         if total_words > 0:
-            logger.debug(f"✓ Parsed {total_words:,} {language} words from {filename}")
+            logger.debug("Parsed %s %s words from %s", f"{total_words:,}", language, filename)
         else:
-            logger.warning(f"✗ No words parsed from {filename}")
+            logger.warning("No words parsed from %s", filename)
 
         return success, total_words
 
     @staticmethod
-    def _parse_chunk(job: StepBibleJob, chunk_id: int) -> StepBibleResult:
+    def _parse_chunk(job: StepBibleJob, chunk_id: int) -> StepBibleResult:  # noqa: C901
         """Parse a chunk of STEPBible data (runs in separate process).
 
         Args:
@@ -406,7 +404,7 @@ class ParallelStepBibleImporter:
             # Batch insert
             cursor.executemany(
                 """
-                INSERT OR REPLACE INTO stepbible_verses 
+                INSERT OR REPLACE INTO stepbible_verses
                 (source_file, book, chapter, verse, word_number, original_word,
                  transliteration, english, strongs_raw, strongs_primary,
                  morphology, language, data_hash)

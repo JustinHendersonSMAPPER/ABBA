@@ -70,7 +70,10 @@ Examples:
         parser.add_argument(
             "--purge-all",
             action="store_true",
-            help="Remove all data, databases, embeddings, and tracking files before starting (WARNING: This deletes everything!)",
+            help=(
+                "Remove all data, databases, embeddings, and tracking files "
+                "before starting (WARNING: This deletes everything!)"
+            ),
         )
 
         parser.add_argument("--no-cache", action="store_true", help="Disable query caching")
@@ -158,7 +161,8 @@ Examples:
     def parse_args(self, args: Optional[List[str]] = None) -> argparse.Namespace:
         """Parse command line arguments."""
         self.args = self.parser.parse_args(args)
-        return self.args
+        result: argparse.Namespace = self.args
+        return result
 
     def get_data_dir(self) -> Optional[Path]:
         """Get data directory from CLI args."""
@@ -187,10 +191,9 @@ Examples:
 
         if self.args.no_download:
             return False
-        elif self.args.force_download:
+        if self.args.force_download:
             return True
-        else:
-            return None  # Use default logic
+        return None  # Use default logic
 
     def is_verbose(self) -> bool:
         """Check if verbose mode is enabled."""
@@ -253,7 +256,8 @@ Examples:
     def get_parallel_workers(self) -> Optional[int]:
         """Get number of parallel workers."""
         if self.args and hasattr(self.args, "parallel_workers"):
-            return self.args.parallel_workers
+            result: Optional[int] = self.args.parallel_workers
+            return result
         return None
 
     def should_use_parallel(self) -> bool:
@@ -265,7 +269,8 @@ Examples:
     def should_use_processes(self) -> bool:
         """Check if processes should be used instead of threads."""
         if self.args and hasattr(self.args, "use_processes"):
-            return self.args.use_processes
+            result: bool = self.args.use_processes
+            return result
         return False  # Default to threads
 
     def get_log_level(self) -> str:
@@ -276,8 +281,8 @@ Examples:
         # --verbose overrides --log-level
         if self.args.verbose:
             return "DEBUG"
-        else:
-            return self.args.log_level
+        level: str = self.args.log_level
+        return level
 
     def get_ollama_host(self) -> Optional[str]:
         """Get Ollama host from CLI args."""

@@ -10,7 +10,7 @@ import logging
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import chromadb
 from chromadb.config import Settings
@@ -27,7 +27,7 @@ class EmbeddingValidationResult:
     check_name: str
     passed: bool
     message: str
-    details: Dict[str, Any] = None
+    details: Optional[Dict[str, Any]] = None
 
     @property
     def is_warning(self) -> bool:
@@ -115,7 +115,10 @@ class EmbeddingValidator:
                     EmbeddingValidationResult(
                         check_name="verse_count_warning",
                         passed=False,
-                        message=f"Verse embedding count mismatch: {collection_count:,} embeddings vs {db_verse_count:,} verses",
+                        message=(
+                            f"Verse embedding count mismatch: "
+                            f"{collection_count:,} embeddings vs {db_verse_count:,} verses"
+                        ),
                         details={
                             "embeddings": collection_count,
                             "verses": db_verse_count,
@@ -156,11 +159,13 @@ class EmbeddingValidator:
 
             # Count unique words in database
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(DISTINCT strongs_primary || '|' || COALESCE(morphology, ''))
                 FROM stepbible_verses
                 WHERE strongs_primary IS NOT NULL AND strongs_primary != ''
-            """)
+            """
+            )
             db_word_count = cursor.fetchone()[0]
 
             # Check count match
@@ -178,7 +183,10 @@ class EmbeddingValidator:
                     EmbeddingValidationResult(
                         check_name="word_count_warning",
                         passed=False,
-                        message=f"Word embedding count differs: {collection_count:,} embeddings vs ~{db_word_count:,} expected",
+                        message=(
+                            f"Word embedding count differs: "
+                            f"{collection_count:,} embeddings vs ~{db_word_count:,} expected"
+                        ),
                         details={
                             "embeddings": collection_count,
                             "expected": db_word_count,
@@ -206,7 +214,7 @@ class EmbeddingValidator:
 
     def _validate_verse_hashes(self, conn: sqlite3.Connection, collection) -> List[EmbeddingValidationResult]:
         """Validate verse content using hashes."""
-        results = []
+        results: List[EmbeddingValidationResult] = []
 
         cursor = conn.cursor()
 
@@ -219,7 +227,7 @@ class EmbeddingValidator:
 
             mismatches = 0
             for i, embed_id in enumerate(sample_data["ids"]):
-                metadata = sample_data["metadatas"][i]
+                _metadata = sample_data["metadatas"][i]  # noqa: F841
 
                 # Parse ID to get verse reference
                 # ID format: "translation_id:book_id:chapter:verse"
@@ -235,7 +243,7 @@ class EmbeddingValidator:
                     """
                     SELECT text, data_hash
                     FROM verses
-                    WHERE translation_id = ? AND book_id = ? 
+                    WHERE translation_id = ? AND book_id = ?
                     AND chapter = ? AND verse = ?
                 """,
                     (translation_id, int(book_id), int(chapter), int(verse)),
@@ -250,7 +258,10 @@ class EmbeddingValidator:
 
                 # Verify hash
                 if stored_hash:
-                    computed_hash = self.hash_validator.compute_hash(text or "")
+                    hash_fn = (
+                        self.hash_validator.compute_hash  # type: ignore[attr-defined]  # pylint: disable=no-member
+                    )
+                    computed_hash = hash_fn(text or "")
                     if computed_hash != stored_hash:
                         mismatches += 1
 
@@ -273,11 +284,11 @@ class EmbeddingValidator:
                 )
 
         except Exception as e:
-            logger.error(f"Error during hash validation: {str(e)}")
+            logger.error("Error during hash validation: %s", str(e))
 
         return results
 
-    def _validate_orphaned_embeddings(self, conn: sqlite3.Connection) -> List[EmbeddingValidationResult]:
+    def _validate_orphaned_embeddings(self, _conn: sqlite3.Connection) -> List[EmbeddingValidationResult]:
         """Check for embeddings without corresponding source data."""
         results = []
 
@@ -297,7 +308,8 @@ class EmbeddingValidator:
         cursor = conn.cursor()
 
         # Check translations with verses but no embeddings
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT t.translation_id, t.name, COUNT(v.id) as verse_count
             FROM translations t
             JOIN verses v ON t.translation_id = v.translation_id
@@ -305,7 +317,8 @@ class EmbeddingValidator:
             GROUP BY t.translation_id, t.name
             ORDER BY verse_count DESC
             LIMIT 10
-        """)
+        """
+        )
 
         translations = cursor.fetchall()
         missing_embeddings = []
@@ -340,54 +353,54 @@ class EmbeddingValidator:
                 )
 
         except Exception as e:
-            logger.error(f"Error checking completeness: {str(e)}")
+            logger.error("Error checking completeness: %s", str(e))
 
         return results
 
-    def print_summary(self, results: List[EmbeddingValidationResult], success: bool):
+    def print_summary(self, results: List[EmbeddingValidationResult], success: bool):  # noqa: C901
         """Print validation summary.
 
         Args:
             results: List of validation results
             success: Overall success status
         """
-        logger.info("\n" + "=" * 70)
+        logger.info("\n%s", "=" * 70)
         logger.info("EMBEDDING VALIDATION SUMMARY")
-        logger.info("=" * 70)
+        logger.info("%s", "=" * 70)
 
         passed_count = sum(1 for r in results if r.passed)
         warning_count = sum(1 for r in results if not r.passed and r.is_warning)
         failed_count = sum(1 for r in results if not r.passed and not r.is_warning)
 
-        logger.info(f"\nTotal checks: {len(results)}")
-        logger.info(f"Passed: {passed_count}")
-        logger.info(f"Failed: {failed_count}")
+        logger.info("\nTotal checks: %d", len(results))
+        logger.info("Passed: %d", passed_count)
+        logger.info("Failed: %d", failed_count)
 
         if warning_count > 0:
-            logger.warning(f"\n⚠️  WARNINGS ({warning_count}):")
+            logger.warning("\nWARNINGS (%d):", warning_count)
             logger.warning("-" * 70)
             for result in results:
                 if not result.passed and result.is_warning:
-                    logger.warning(f"  {result.message}")
+                    logger.warning("  %s", result.message)
                     if result.details:
                         for key, value in result.details.items():
-                            logger.warning(f"    {key}: {value}")
+                            logger.warning("    %s: %s", key, value)
 
         if failed_count > 0:
-            logger.error(f"\n❌ FAILURES ({failed_count}):")
+            logger.error("\nFAILURES (%d):", failed_count)
             logger.error("-" * 70)
             for result in results:
                 if not result.passed and not result.is_warning:
-                    logger.error(f"  {result.message}")
+                    logger.error("  %s", result.message)
                     if result.details:
                         for key, value in result.details.items():
-                            logger.error(f"    {key}: {value}")
+                            logger.error("    %s: %s", key, value)
 
-        logger.info("\n" + "=" * 70)
+        logger.info("\n%s", "=" * 70)
 
         if success:
-            logger.info("✅ EMBEDDING VALIDATION PASSED")
+            logger.info("EMBEDDING VALIDATION PASSED")
         else:
-            logger.error("❌ EMBEDDING VALIDATION FAILED")
+            logger.error("EMBEDDING VALIDATION FAILED")
 
-        logger.info("=" * 70 + "\n")
+        logger.info("%s\n", "=" * 70)

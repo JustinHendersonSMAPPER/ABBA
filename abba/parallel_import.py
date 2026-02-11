@@ -11,9 +11,8 @@ from enum import Enum
 from pathlib import Path
 from queue import Queue
 from threading import Lock
-from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
-import mmh3
 from loguru import logger
 from tqdm import tqdm
 
@@ -95,6 +94,8 @@ BOOK_ID_MAP = {
 
 # Canon types for biblical texts
 class Canon(Enum):
+    """Canon types for biblical texts."""
+
     BOOKS_39 = "hebrew"  # Hebrew Bible/Tanakh only
     BOOKS_66 = "protestant"  # Protestant canon
     BOOKS_73 = "catholic"  # Catholic canon
@@ -205,7 +206,7 @@ EXTENDED_CANON_BOOKS: Dict[Canon, Set[str]] = {
 }
 
 
-def get_translation_canon(translation_id: str, source_db_path: str = None) -> Canon:
+def get_translation_canon(translation_id: str, source_db_path: Optional[str] = None) -> Canon:  # noqa: C901
     """Determine which canon a translation follows.
 
     First tries pattern matching on the translation ID. If that yields Protestant
@@ -263,15 +264,13 @@ def get_translation_canon(translation_id: str, source_db_path: str = None) -> Ca
     # check if the translation actually contains deuterocanonical books
     if source_db_path and Path(source_db_path).exists():
         try:
-            import sqlite3
-
             with sqlite3.connect(source_db_path) as conn:
                 cursor = conn.cursor()
                 # Check for any Catholic apocryphal book
                 cursor.execute(
                     """
-                    SELECT COUNT(*) FROM ChapterVerse 
-                    WHERE translationId = ? 
+                    SELECT COUNT(*) FROM ChapterVerse
+                    WHERE translationId = ?
                     AND bookId IN ('TOB', 'JDT', 'WIS', 'SIR', 'BAR', '1MA', '2MA')
                     LIMIT 1
                 """,
@@ -283,8 +282,8 @@ def get_translation_canon(translation_id: str, source_db_path: str = None) -> Ca
                     # Check if it also has Orthodox-specific books
                     cursor.execute(
                         """
-                        SELECT COUNT(*) FROM ChapterVerse 
-                        WHERE translationId = ? 
+                        SELECT COUNT(*) FROM ChapterVerse
+                        WHERE translationId = ?
                         AND bookId IN ('1ES', '3MA', 'MAN', 'PS2')
                         LIMIT 1
                     """,
@@ -293,8 +292,7 @@ def get_translation_canon(translation_id: str, source_db_path: str = None) -> Ca
 
                     if cursor.fetchone()[0] > 0:
                         return Canon.BOOKS_76_PLUS
-                    else:
-                        return Canon.BOOKS_73
+                    return Canon.BOOKS_73
         except Exception as e:
             logger.debug(f"Could not check actual books for {translation_id}: {e}")
 
@@ -359,10 +357,12 @@ class ParallelImporter:
             cursor = conn.cursor()
 
             # Check if content_hash column exists
-            cursor.execute("""
-                SELECT COUNT(*) FROM pragma_table_info('verses') 
+            cursor.execute(
+                """
+                SELECT COUNT(*) FROM pragma_table_info('verses')
                 WHERE name='content_hash'
-            """)
+            """
+            )
 
             if cursor.fetchone()[0] == 0:
                 # Add hash column if missing
@@ -370,7 +370,7 @@ class ParallelImporter:
                 conn.commit()
                 logger.info("Added content_hash column to verses table")
 
-    def import_translations_parallel(
+    def import_translations_parallel(  # noqa: C901
         self, translation_ids: List[str], use_processes: bool = True, batch_size: int = 1000, show_progress: bool = True
     ) -> Dict[str, ImportResult]:
         """Import multiple translations in parallel.
@@ -410,14 +410,14 @@ class ParallelImporter:
 
                 pbar = tqdm(total=total_verses, desc=f"Importing {job.translation_id}", unit="verses")
 
-                def progress_callback(current, total):
+                def progress_callback(current, _total):
                     pbar.n = current
                     pbar.refresh()
 
-                result = self._import_single_translation(job, progress_callback, show_progress=True)
+                result = self._import_single_translation(job, progress_callback, _show_progress=True)
                 pbar.close()
             else:
-                result = self._import_single_translation(job, show_progress=show_progress)
+                result = self._import_single_translation(job, _show_progress=show_progress)
 
             results[job.translation_id] = result
             return results
@@ -476,7 +476,7 @@ class ParallelImporter:
         return results
 
     @staticmethod
-    def _import_single_translation(job: ImportJob, progress_callback=None, show_progress=True) -> ImportResult:
+    def _import_single_translation(job: ImportJob, progress_callback=None, _show_progress=True) -> ImportResult:
         """Import a single translation (runs in separate process/thread).
 
         Args:
@@ -524,7 +524,7 @@ class ParallelImporter:
                 source_cursor.execute(
                     """
                     SELECT bookId, COUNT(*) as verse_count
-                    FROM ChapterVerse 
+                    FROM ChapterVerse
                     WHERE translationId = ?
                     GROUP BY bookId
                     ORDER BY bookId
@@ -543,7 +543,8 @@ class ParallelImporter:
 
                 # Only log in debug mode
                 logger.debug(
-                    f"Translation {job.translation_id}: {total_books} total books, {mapped_books} will be imported, {extended_books} apocrypha skipped"
+                    f"Translation {job.translation_id}: {total_books} total books, "
+                    f"{mapped_books} will be imported, {extended_books} apocrypha skipped"
                 )
 
                 # Get total verse count for progress tracking
@@ -569,7 +570,7 @@ class ParallelImporter:
                     dest_cursor = dest_conn.cursor()
                     dest_cursor.execute(
                         """
-                        UPDATE translations 
+                        UPDATE translations
                         SET is_partial_canon = ?, apocrypha_count = ?
                         WHERE id = ?
                     """,
@@ -645,9 +646,8 @@ class ParallelImporter:
                     # Skip it silently - it exists in bible.db but we don't map it
                     logger.debug(f"Skipping apocryphal book {book_str} in {translation_id}")
                     continue
-                else:
-                    # Truly unknown book - this is worth warning about
-                    logger.warning(f"Unknown book ID: {book_str} in translation {translation_id}")
+                # Truly unknown book - this is worth warning about
+                logger.warning(f"Unknown book ID: {book_str} in translation {translation_id}")
                 continue
 
             # Extract values
@@ -665,7 +665,7 @@ class ParallelImporter:
             if len(batch) >= batch_size:
                 dest_cursor.executemany(
                     """
-                    INSERT OR REPLACE INTO verses 
+                    INSERT OR REPLACE INTO verses
                     (translation_id, book_id, chapter, verse, text, content_hash)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """,
@@ -678,7 +678,7 @@ class ParallelImporter:
         if batch:
             dest_cursor.executemany(
                 """
-                INSERT OR REPLACE INTO verses 
+                INSERT OR REPLACE INTO verses
                 (translation_id, book_id, chapter, verse, text, content_hash)
                 VALUES (?, ?, ?, ?, ?, ?)
             """,
@@ -732,9 +732,8 @@ class ParallelImporter:
                     # Skip it silently - it exists in bible.db but we don't map it
                     logger.debug(f"Skipping apocryphal book {book_str} in {translation_id}")
                     continue
-                else:
-                    # Truly unknown book - this is worth warning about
-                    logger.warning(f"Unknown book ID: {book_str} in translation {translation_id}")
+                # Truly unknown book - this is worth warning about
+                logger.warning(f"Unknown book ID: {book_str} in translation {translation_id}")
                 continue
 
             # Extract values
@@ -752,7 +751,7 @@ class ParallelImporter:
             if len(batch) >= batch_size:
                 dest_cursor.executemany(
                     """
-                    INSERT OR REPLACE INTO verses 
+                    INSERT OR REPLACE INTO verses
                     (translation_id, book_id, chapter, verse, text, content_hash)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """,
@@ -770,7 +769,7 @@ class ParallelImporter:
         if batch:
             dest_cursor.executemany(
                 """
-                INSERT OR REPLACE INTO verses 
+                INSERT OR REPLACE INTO verses
                 (translation_id, book_id, chapter, verse, text, content_hash)
                 VALUES (?, ?, ?, ?, ?, ?)
             """,
@@ -800,8 +799,8 @@ class ParallelImporter:
         verse_map = {}
         dest_cursor.execute(
             """
-            SELECT id, book_id, chapter, verse 
-            FROM verses 
+            SELECT id, book_id, chapter, verse
+            FROM verses
             WHERE translation_id = ?
         """,
             (translation_id,),
@@ -837,7 +836,7 @@ class ParallelImporter:
                 if len(batch) >= batch_size:
                     dest_cursor.executemany(
                         """
-                        INSERT OR REPLACE INTO words 
+                        INSERT OR REPLACE INTO words
                         (verse_id, word_id, position, word, translation_id)
                         VALUES (?, ?, ?, ?, ?)
                     """,
@@ -850,7 +849,7 @@ class ParallelImporter:
         if batch:
             dest_cursor.executemany(
                 """
-                INSERT OR REPLACE INTO words 
+                INSERT OR REPLACE INTO words
                 (verse_id, word_id, position, word, translation_id)
                 VALUES (?, ?, ?, ?, ?)
             """,
@@ -930,7 +929,7 @@ class OptimizedSQLiteManager:
         """
         self.db_path = db_path
         self.pool_size = pool_size
-        self._pool = Queue(maxsize=pool_size)
+        self._pool: Queue[sqlite3.Connection] = Queue(maxsize=pool_size)
         self._lock = Lock()
 
         # Pre-create connections
@@ -984,7 +983,7 @@ def benchmark_import_methods(source_db: Path, dest_db: Path, translation_ids: Li
     results = {}
 
     # Test different configurations
-    configs = [
+    configs: List[tuple[str, Dict[str, Any]]] = [
         ("Sequential", {"use_parallel": False}),
         ("Threads-2", {"use_processes": False, "max_workers": 2}),
         ("Threads-4", {"use_processes": False, "max_workers": 4}),

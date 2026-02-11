@@ -1,7 +1,9 @@
 """API modules for ABBA."""
 
 from .analysis import AnalysisAPI, LexicalCluster, MorphologyPattern, WordFrequency
+from .app import create_app
 from .cache import CachedAnalysisAPI, CachedSearchAPI, QueryCache, cached
+from .routes import configure_db, router
 from .search import SearchAPI, VerseResult, WordResult
 
 __all__ = [
@@ -19,4 +21,8 @@ __all__ = [
     "cached",
     "CachedSearchAPI",
     "CachedAnalysisAPI",
+    # FastAPI
+    "create_app",
+    "router",
+    "configure_db",
 ]

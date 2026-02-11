@@ -42,7 +42,7 @@ class ContextBuilder:
             cursor.execute(
                 """
                 SELECT text FROM verses
-                WHERE translation_id = ? AND book_id = ? 
+                WHERE translation_id = ? AND book_id = ?
                 AND chapter = ? AND verse = ?
             """,
                 (translation_id, book_id, chapter, verse),
@@ -50,7 +50,7 @@ class ContextBuilder:
 
             result = cursor.fetchone()
             if not result:
-                logger.warning(f"Verse not found: {translation_id} {book_id}:{chapter}:{verse}")
+                logger.warning("Verse not found: %s %d:%d:%d", translation_id, book_id, chapter, verse)
                 return ""
 
             verse_text = result[0]
@@ -80,7 +80,7 @@ class ContextBuilder:
             if book_code:
                 cursor.execute(
                     """
-                    SELECT 
+                    SELECT
                         word_num,
                         hebrew_text,
                         greek_text,
@@ -120,7 +120,7 @@ class ContextBuilder:
 
         return " | ".join(context_parts)
 
-    def build_word_context(self, word_data: Dict[str, Any]) -> str:
+    def build_word_context(self, word_data: Dict[str, Any]) -> str:  # noqa: C901
         """Build enhanced context for a word embedding.
 
         Combines the word with its lexicon definition, morphology,
@@ -341,7 +341,7 @@ class ContextBuilder:
 
         return ", ".join(key_terms)
 
-    def _get_grammar_summary(self, words: List[tuple]) -> str:
+    def _get_grammar_summary(self, words: List[tuple]) -> str:  # noqa: C901
         """Create grammatical summary from word list.
 
         Args:

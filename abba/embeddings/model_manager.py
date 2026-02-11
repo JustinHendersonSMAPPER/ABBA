@@ -2,12 +2,11 @@
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
-from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +47,7 @@ class EmbeddingModelManager:
         # Device selection
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if self.device == "cuda":
-            logger.info(f"Using GPU: {torch.cuda.get_device_name()}")
+            logger.info("Using GPU: %s", torch.cuda.get_device_name())
         else:
             logger.info("Using CPU for embeddings (GPU not available)")
 
@@ -67,7 +66,7 @@ class EmbeddingModelManager:
         # Load model if not cached
         if model_type not in self._models:
             config = self.model_configs[model_type]
-            logger.info(f"Loading {model_type} model: {config['name']}")
+            logger.info("Loading %s model: %s", model_type, config["name"])
 
             self._models[model_type] = SentenceTransformer(
                 config["name"], cache_folder=str(self.cache_dir), device=self.device
@@ -76,7 +75,7 @@ class EmbeddingModelManager:
             # Set max sequence length
             self._models[model_type].max_seq_length = config["max_length"]
 
-            logger.info(f"Loaded {model_type} model with {config['dimensions']} dimensions")
+            logger.info("Loaded %s model with %d dimensions", model_type, config["dimensions"])
 
         return self._models[model_type]
 
@@ -108,12 +107,12 @@ class EmbeddingModelManager:
 
         # Add instruction prefix for E5 models
         if config.get("instruction"):
-            prefixed_texts = [config["instruction"] + text for text in texts]
+            prefixed_texts = [str(config["instruction"]) + text for text in texts]
         else:
             prefixed_texts = texts
 
         # Log encoding details
-        logger.debug(f"Encoding {len(texts)} texts with {model_type} model")
+        logger.debug("Encoding %d texts with %s model", len(texts), model_type)
 
         # Generate embeddings
         embeddings = model.encode(
@@ -125,7 +124,7 @@ class EmbeddingModelManager:
             convert_to_numpy=True,
         )
 
-        return embeddings
+        return embeddings  # type: ignore[no-any-return]
 
     def encode_single(self, text: str, model_type: str = "english", normalize: bool = True) -> np.ndarray:
         """Encode a single text.
@@ -141,7 +140,7 @@ class EmbeddingModelManager:
         embeddings = self.encode_texts(
             [text], model_type=model_type, batch_size=1, show_progress=False, normalize=normalize
         )
-        return embeddings[0]
+        return embeddings[0]  # type: ignore[no-any-return]
 
     def encode_with_context(
         self,
@@ -219,7 +218,7 @@ class EmbeddingModelManager:
 
         return "english"
 
-    def get_model_info(self, model_type: str = "english") -> Dict[str, any]:
+    def get_model_info(self, model_type: str = "english") -> Dict[str, Any]:
         """Get information about a model.
 
         Args:
@@ -252,7 +251,7 @@ class EmbeddingModelManager:
             model_types = list(self.model_configs.keys())
 
         for model_type in model_types:
-            logger.info(f"Preloading {model_type} model...")
+            logger.info("Preloading %s model...", model_type)
             self.get_model(model_type)
 
         logger.info("All models preloaded")

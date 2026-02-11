@@ -10,13 +10,10 @@ import multiprocessing
 import sys
 import time
 
-from tqdm import tqdm
-
 from abba.bible_extractor import BibleExtractor
 from abba.cli import cli_config
 from abba.config import config_manager
 from abba.database import SQLiteManager
-from abba.database.embedding_validator import EmbeddingValidator
 from abba.database.import_tracker import ImportTracker
 from abba.database.original_embedding_validator import OriginalEmbeddingValidator
 from abba.database.post_import_validator import PostImportValidator
@@ -27,7 +24,7 @@ from abba.operation_manager import OperationManager
 from abba.stepbible_updater import STEPBibleUpdater
 
 
-def main():
+def main():  # noqa: C901
     """Main application entry point."""
     try:
         # Load configuration from all sources
@@ -43,7 +40,7 @@ def main():
         if cli_config.should_purge_all():
             if config.should_show_output():
                 logger.warning("⚠️  WARNING: This will delete ALL data, embeddings, and tracking files!")
-                logger.info(f"The following will be removed:")
+                logger.info("The following will be removed:")
                 logger.info(f"  - {config.abba_db_path}")
                 logger.info(f"  - {config.vectors_path}/")
                 logger.info(f"  - {config.data_dir}/.import_status.json")
@@ -55,7 +52,7 @@ def main():
                     response = input("\nAre you sure you want to continue? Type 'yes' to confirm: ")
                     if response.lower() != "yes":
                         logger.info("Purge cancelled.")
-                        return
+                        return None
                 else:
                     logger.info("Skipping confirmation (--yes flag used)")
 
@@ -111,7 +108,7 @@ def main():
                 # If we can't get stats, the schema might be missing
             except Exception:
                 if config.should_show_output():
-                    logger.info(f"Database exists but schema missing, reinitializing...")
+                    logger.info("Database exists but schema missing, reinitializing...")
                 db_manager.initialize_database()
 
         # Initialize operation manager for state tracking
@@ -146,7 +143,7 @@ def main():
         if cli_config.should_list():
             if not config.db_path.exists():
                 logger.error("bible.db not found. Please download it first with --force-download.")
-                return
+                return None
 
             translations = extractor.list_translations()
             if translations:
@@ -165,7 +162,7 @@ def main():
                     logger.info(f"Lexicon entries: {stats.get('lexicon', 0):,}")
             else:
                 logger.error("No translations found. Please download bible.db first.")
-            return
+            return None
 
         # Handle concept data validation command
         if cli_config.should_validate_concept_data():
@@ -225,12 +222,12 @@ def main():
             # Handle export
             if cli_config.get_export_concept_mappings():
                 output_path = cli_config.get_export_concept_mappings()
-                format = "json" if output_path.endswith(".json") else "csv"
+                fmt = "json" if output_path.endswith(".json") else "csv"
 
-                mapper.export_mappings(output_path, format=format)
+                mapper.export_mappings(output_path, output_format=fmt)
                 logger.info(f"✅ Exported concept mappings to {output_path}")
 
-            return
+            return None
 
         # Handle concept validation commands
         if (
@@ -239,19 +236,21 @@ def main():
             or cli_config.should_map_concepts()
         ):
 
-            from abba.concept_validator import ConceptValidationPipeline
+            from abba.concept_validator import (  # type: ignore[import-untyped]  # noqa: E501, pylint: disable=no-name-in-module
+                ConceptValidationPipeline,
+            )
 
             concept_pipeline = ConceptValidationPipeline(config)
 
             # Test Ollama connection first
             if not concept_pipeline.test_ollama_connection():
                 logger.error("Concept validation requires working Ollama connection")
-                return
+                return None
 
             # Validate setup
             if not concept_pipeline.validate_setup():
                 logger.error("Concept validation setup failed - see errors above")
-                return
+                return None
 
             # Handle concept mapping with semantic concordance
             if cli_config.should_map_concepts():
@@ -317,7 +316,7 @@ def main():
                 else:
                     logger.info("✅ All concept definitions are valid")
 
-            return
+            return None
 
         # Download bible.db if needed
         if config.should_download():
@@ -377,9 +376,8 @@ def main():
             if missing:
                 logger.warning(f"Requested translations not found: {', '.join(missing)}")
                 available_ids = [t["id"] for t in extractor.list_translations()]
-                logger.info(
-                    f"Available translations include: {', '.join(available_ids[:10])}{'...' if len(available_ids) > 10 else ''}"
-                )
+                suffix = "..." if len(available_ids) > 10 else ""
+                logger.info(f"Available translations include: {', '.join(available_ids[:10])}{suffix}")
 
         # Check which translations need importing
         translations_to_import = []
@@ -419,7 +417,7 @@ def main():
             if config.should_show_output():
                 if use_parallel:
                     logger.info(f"Using parallel import with {config.get_parallel_workers()} workers...")
-                    logger.info(f"Parallelism: threads (I/O bound task)")
+                    logger.info("Parallelism: threads (I/O bound task)")
                 else:
                     logger.info("Using sequential import...")
                 logger.info(f"\nImporting {len(translation_ids_to_import)} translation(s)...")
@@ -541,7 +539,7 @@ def main():
         # Print import summary
         if config.should_show_output():
             summary = tracker.get_import_summary()
-            logger.info(f"\nImport summary:")
+            logger.info("\nImport summary:")
             logger.info(f"  Translations: {summary['translations_imported']}")
             logger.info(f"  STEPBible files: {sum(summary['stepbible_files'].values())}")
             if summary["last_update"]:
@@ -571,11 +569,13 @@ def main():
             # Count unique canonical verses from stepbible data
             with db_manager.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT COUNT(DISTINCT book || ':' || chapter || ':' || verse) 
-                    FROM stepbible_verses 
+                cursor.execute(
+                    """
+                    SELECT COUNT(DISTINCT book || ':' || chapter || ':' || verse)
+                    FROM stepbible_verses
                     WHERE original_word IS NOT NULL AND original_word != ''
-                """)
+                """
+                )
                 canonical_verse_count = cursor.fetchone()[0]
 
             original_verse_embeddings_count = (
@@ -597,7 +597,9 @@ def main():
                         else 0
                     )
                     logger.info(
-                        f"\n✓ Detected incomplete original verse embeddings ({original_verse_embeddings_count:,}/{canonical_verse_count:,} = {coverage:.1f}%) - will generate automatically"
+                        f"\n✓ Detected incomplete original verse embeddings "
+                        f"({original_verse_embeddings_count:,}/{canonical_verse_count:,} "
+                        f"= {coverage:.1f}%) - will generate automatically"
                     )
 
             # For words, check if embeddings exist at all
@@ -654,7 +656,7 @@ def main():
                     if results.get("status") == "already_embedded":
                         logger.info("  Original verses already embedded (use --force-reembed to regenerate)")
                     else:
-                        logger.info(f"\nOriginal verse embedding results:")
+                        logger.info("\nOriginal verse embedding results:")
                         logger.info(f"  Canonical verses embedded: {results.get('verses_embedded', 0):,}")
                         if results.get("errors"):
                             logger.warning(f"  Errors: {len(results['errors'])}")
@@ -679,7 +681,7 @@ def main():
                 )
 
                 if config.should_show_output():
-                    logger.info(f"\nWord embedding results:")
+                    logger.info("\nWord embedding results:")
                     if results.get("status") == "already_embedded":
                         logger.info("  Words already embedded (use --force-reembed to regenerate)")
                     else:
@@ -736,6 +738,8 @@ def main():
         # Close ChromaDB connection properly
         if "chroma_manager" in locals() and chroma_manager:
             chroma_manager.close()
+
+        return None
 
     except KeyboardInterrupt:
         logger.info("\nOperation cancelled by user")

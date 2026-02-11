@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 
 class ImportTracker:
@@ -24,8 +24,8 @@ class ImportTracker:
         """Load status from file or create new."""
         if self.tracker_file.exists():
             try:
-                with open(self.tracker_file, "r") as f:
-                    return json.load(f)
+                with open(self.tracker_file, "r", encoding="utf-8") as f:
+                    return cast(Dict[str, Any], json.load(f))
             except (json.JSONDecodeError, IOError):
                 # If file is corrupted, start fresh
                 return self._create_empty_status()
@@ -57,7 +57,7 @@ class ImportTracker:
         self.status["metadata"]["last_update"] = datetime.now().isoformat()
 
         # Write with pretty formatting
-        with open(self.tracker_file, "w") as f:
+        with open(self.tracker_file, "w", encoding="utf-8") as f:
             json.dump(self.status, f, indent=2)
 
     def is_translation_imported(self, translation_id: str) -> bool:
@@ -155,7 +155,8 @@ class ImportTracker:
         Returns:
             ISO timestamp or None if not imported
         """
-        return self.status["imports"]["translations"].get(translation_id)
+        result: Optional[str] = self.status["imports"]["translations"].get(translation_id)
+        return result
 
     def clear_stepbible_tracking(self):
         """Clear all STEPBible import tracking records."""

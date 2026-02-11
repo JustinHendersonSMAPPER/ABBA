@@ -20,7 +20,10 @@ def setup_logging(log_level: str = "INFO") -> None:
     # Add custom handler with clean formatting
     logger.add(
         sys.stderr,
-        format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>",
+        format=(
+            "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | "
+            "<cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>"
+        ),
         level=effective_level,
         colorize=True,
         backtrace=True,
@@ -39,7 +42,7 @@ def setup_logging(log_level: str = "INFO") -> None:
             getattr(logger, level.lower())(message)
 
     # Add the tqdm_write method to logger
-    logger.tqdm_write = tqdm_write
+    logger.tqdm_write = tqdm_write  # type: ignore[attr-defined]
 
 
 def get_logger(name: Optional[str] = None):

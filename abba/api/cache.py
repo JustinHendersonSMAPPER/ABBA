@@ -73,9 +73,8 @@ class QueryCache:
             value, timestamp = self._cache[key]
             if time.time() - timestamp < self.ttl:
                 return value
-            else:
-                # Remove expired entry
-                del self._cache[key]
+            # Remove expired entry
+            del self._cache[key]
 
         return None
 
@@ -144,8 +143,8 @@ def cached(cache_instance: Optional[QueryCache] = None):
             return result
 
         # Add cache management methods to wrapper
-        wrapper.clear_cache = lambda: cache_instance.clear() if cache_instance else None
-        wrapper.cache_info = lambda: {
+        wrapper.clear_cache = lambda: cache_instance.clear() if cache_instance else None  # type: ignore[attr-defined]
+        wrapper.cache_info = lambda: {  # type: ignore[attr-defined]
             "enabled": cache_instance.enabled if cache_instance else False,
             "size": len(cache_instance._cache) if cache_instance else 0,
             "ttl": cache_instance.ttl if cache_instance else 0,

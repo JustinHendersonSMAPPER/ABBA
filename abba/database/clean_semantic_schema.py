@@ -5,9 +5,8 @@ Removes bloat and handles verse ranges properly.
 
 import json
 import sqlite3
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 class CleanSemanticSchema:
@@ -22,7 +21,8 @@ class CleanSemanticSchema:
             cursor = conn.cursor()
 
             # Core concept definitions (unchanged - this is good)
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concepts (
                     concept_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE NOT NULL,
@@ -33,40 +33,44 @@ class CleanSemanticSchema:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
+            """
+            )
 
             # CLEAN verse-concept relationships - handles ranges efficiently
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS verse_concepts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     concept_id INTEGER NOT NULL,
-                    
+
                     -- Range support: start = end for single verses
-                    start_verse_id TEXT NOT NULL,  -- "1Co:13:1" 
+                    start_verse_id TEXT NOT NULL,  -- "1Co:13:1"
                     end_verse_id TEXT NOT NULL,    -- "1Co:13:13" for ranges, same as start for single
-                    
+
                     -- Match information
                     match_type TEXT CHECK(match_type IN ('lexical', 'semantic', 'thematic')),
                     confidence REAL DEFAULT 0.0,
                     semantic_score REAL,
-                    
+
                     -- Evidence (lean)
                     strongs_matched TEXT,          -- JSON array of matched Strong's
                     ollama_validated BOOLEAN DEFAULT 0,
                     ollama_confidence REAL,
                     ollama_reasoning TEXT,
-                    
+
                     -- Optional range description
                     range_description TEXT,        -- "Love Chapter", null for single verses
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    
+
                     UNIQUE(start_verse_id, end_verse_id, concept_id, match_type),
                     FOREIGN KEY (concept_id) REFERENCES concepts(concept_id)
                 )
-            """)
+            """
+            )
 
             # Concept themes - for study organization
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concept_themes (
                     theme_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     concept_id INTEGER NOT NULL,
@@ -74,72 +78,80 @@ class CleanSemanticSchema:
                     description TEXT,
                     key_insights TEXT,
                     display_order INTEGER DEFAULT 0,
-                    
+
                     UNIQUE(concept_id, theme_name),
                     FOREIGN KEY (concept_id) REFERENCES concepts(concept_id)
                 )
-            """)
+            """
+            )
 
             # Theme verses - which verses belong to which themes
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS theme_verses (
                     theme_id INTEGER NOT NULL,
                     start_verse_id TEXT NOT NULL,
                     end_verse_id TEXT NOT NULL,
-                    
+
                     PRIMARY KEY(theme_id, start_verse_id, end_verse_id),
                     FOREIGN KEY (theme_id) REFERENCES concept_themes(theme_id)
                 )
-            """)
+            """
+            )
 
             # Concept relationships
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concept_relationships (
                     concept_id INTEGER NOT NULL,
                     related_concept_id INTEGER NOT NULL,
-                    relationship_type TEXT CHECK(relationship_type IN 
+                    relationship_type TEXT CHECK(relationship_type IN
                         ('related', 'contrasting', 'foundation', 'expression', 'result')),
                     strength REAL DEFAULT 0.5,
-                    
+
                     PRIMARY KEY(concept_id, related_concept_id, relationship_type),
                     FOREIGN KEY (concept_id) REFERENCES concepts(concept_id),
                     FOREIGN KEY (related_concept_id) REFERENCES concepts(concept_id)
                 )
-            """)
+            """
+            )
 
             # Biblical stories related to concepts - narrative dimension for education
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concept_stories (
                     story_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     concept_id INTEGER NOT NULL,
-                    
+
                     story_title TEXT NOT NULL,
                     start_verse_id TEXT NOT NULL,
                     end_verse_id TEXT NOT NULL,
                     confidence_score REAL NOT NULL,
-                    
+
                     -- LLM discovery metadata (future-proofed field names)
                     discovery_question TEXT NOT NULL,     -- Question asked to find this story
                     discovery_model TEXT,                 -- Which model found it (ollama, openai, etc.)
                     discovery_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    
+
                     -- Story classification
-                    story_type TEXT CHECK(story_type IN 
+                    story_type TEXT CHECK(story_type IN
                         ('parable', 'historical', 'prophecy', 'teaching', 'miracle', 'biography')),
                     testament TEXT CHECK(testament IN ('old', 'new')),
-                    
+
                     -- Additional context for study guides
                     story_summary TEXT,                   -- Brief summary
                     teaching_points TEXT,                 -- Key lessons (JSON array)
                     character_focus TEXT,                 -- Main characters (JSON array)
-                    
+
                     UNIQUE(concept_id, story_title, start_verse_id),
                     FOREIGN KEY (concept_id) REFERENCES concepts(concept_id)
                 )
-            """)
+            """
+            )
 
             # Story discovery sessions - track iterative LLM querying
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS story_discovery_sessions (
                     session_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     concept_id INTEGER NOT NULL,
@@ -149,13 +161,15 @@ class CleanSemanticSchema:
                     stories_found INTEGER DEFAULT 0,
                     iterations_performed INTEGER DEFAULT 0,
                     session_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    
+
                     FOREIGN KEY (concept_id) REFERENCES concepts(concept_id)
                 )
-            """)
+            """
+            )
 
             # Processing stats
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS concept_stats (
                     concept_id INTEGER PRIMARY KEY,
                     total_matches INTEGER DEFAULT 0,
@@ -164,10 +178,11 @@ class CleanSemanticSchema:
                     stories_found INTEGER DEFAULT 0,
                     books_covered INTEGER DEFAULT 0,
                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    
+
                     FOREIGN KEY (concept_id) REFERENCES concepts(concept_id)
                 )
-            """)
+            """
+            )
 
             # Essential indexes only
             indexes = [
@@ -187,9 +202,10 @@ class CleanSemanticSchema:
                 cursor.execute(index)
 
             # Useful views that JOIN with existing verse tables
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE VIEW IF NOT EXISTS concept_verse_details AS
-                SELECT 
+                SELECT
                     c.name as concept_name,
                     vc.start_verse_id,
                     vc.end_verse_id,
@@ -201,7 +217,8 @@ class CleanSemanticSchema:
                     vc.ollama_confidence
                 FROM verse_concepts vc
                 JOIN concepts c ON vc.concept_id = c.concept_id
-            """)
+            """
+            )
 
             conn.commit()
 
@@ -211,9 +228,9 @@ class CleanSemanticSchema:
         verse_id: str,
         match_type: str,
         confidence: float,
-        strongs_matched: List[str] = None,
-        semantic_score: float = None,
-        ollama_data: Dict = None,
+        strongs_matched: Optional[List[str]] = None,
+        semantic_score: Optional[float] = None,
+        ollama_data: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Add a single verse match to a concept."""
         return self.add_concept_range(
@@ -227,10 +244,10 @@ class CleanSemanticSchema:
         end_verse_id: str,
         match_type: str,
         confidence: float,
-        strongs_matched: List[str] = None,
-        semantic_score: float = None,
-        ollama_data: Dict = None,
-        range_description: str = None,
+        strongs_matched: Optional[List[str]] = None,
+        semantic_score: Optional[float] = None,
+        ollama_data: Optional[Dict[str, Any]] = None,
+        range_description: Optional[str] = None,
     ) -> bool:
         """Add a verse range match to a concept."""
         with sqlite3.connect(self.db_path) as conn:
@@ -248,9 +265,9 @@ class CleanSemanticSchema:
             try:
                 cursor.execute(
                     """
-                    INSERT OR REPLACE INTO verse_concepts 
+                    INSERT OR REPLACE INTO verse_concepts
                     (concept_id, start_verse_id, end_verse_id, match_type, confidence,
-                     semantic_score, strongs_matched, ollama_validated, 
+                     semantic_score, strongs_matched, ollama_validated,
                      ollama_confidence, ollama_reasoning, range_description)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -284,7 +301,7 @@ class CleanSemanticSchema:
             # If your verse table has different structure, adjust accordingly
             cursor.execute(
                 """
-                SELECT 
+                SELECT
                     vc.start_verse_id,
                     vc.end_verse_id,
                     vc.match_type,
@@ -294,19 +311,19 @@ class CleanSemanticSchema:
                     vc.ollama_validated,
                     vc.strongs_matched,
                     c.name as concept_name,
-                    
+
                     -- Get verse text via JOIN (adjust table name as needed)
                     v1.text as start_verse_text,
-                    CASE 
+                    CASE
                         WHEN vc.start_verse_id = vc.end_verse_id THEN NULL
-                        ELSE v2.text 
+                        ELSE v2.text
                     END as end_verse_text
-                    
+
                 FROM verse_concepts vc
                 JOIN concepts c ON vc.concept_id = c.concept_id
                 LEFT JOIN verses v1 ON vc.start_verse_id = v1.verse_id
                 LEFT JOIN verses v2 ON vc.end_verse_id = v2.verse_id
-                
+
                 WHERE c.name = ? AND vc.confidence >= ?
                 ORDER BY vc.confidence DESC
             """,
@@ -337,8 +354,8 @@ class CleanSemanticSchema:
             cursor.execute(
                 """
                 SELECT verse_id, text
-                FROM verses 
-                WHERE book = ? AND chapter = ? 
+                FROM verses
+                WHERE book = ? AND chapter = ?
                 AND verse BETWEEN ? AND ?
                 ORDER BY verse
             """,
@@ -347,7 +364,7 @@ class CleanSemanticSchema:
 
             return [dict(row) for row in cursor.fetchall()]
 
-    def export_concept_to_json(self, concept_name: str, output_path: Path) -> Dict:
+    def export_concept_to_json(self, concept_name: str, output_path: Path) -> Optional[Dict[str, Any]]:  # noqa: C901
         """Export concept data to JSON without the bloat."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -362,7 +379,7 @@ class CleanSemanticSchema:
             concept_id = concept_row["concept_id"]
 
             # Build lean export
-            export_data = {
+            export_data: Dict[str, Any] = {
                 "concept": {
                     "name": concept_row["name"],
                     "description": concept_row["description"],
@@ -378,7 +395,7 @@ class CleanSemanticSchema:
             # Get matches (using the view that JOINs with verses)
             cursor.execute(
                 """
-                SELECT * FROM concept_verse_details 
+                SELECT * FROM concept_verse_details
                 WHERE concept_name = ?
                 ORDER BY confidence DESC
             """,
@@ -438,7 +455,7 @@ class CleanSemanticSchema:
                 SELECT story_title, start_verse_id, end_verse_id, confidence_score,
                        story_type, story_summary, teaching_points, character_focus,
                        discovery_question, discovery_model
-                FROM concept_stories 
+                FROM concept_stories
                 WHERE concept_id = ?
                 ORDER BY confidence_score DESC
             """,
@@ -477,7 +494,7 @@ class CleanSemanticSchema:
     def discover_stories_for_concept(
         self,
         concept_name: str,
-        discovery_question: str = None,
+        discovery_question: Optional[str] = None,
         model_name: str = "ollama",
         confidence_threshold: float = 0.70,
         max_iterations: int = 5,
@@ -513,7 +530,7 @@ class CleanSemanticSchema:
             # Start discovery session
             cursor.execute(
                 """
-                INSERT INTO story_discovery_sessions 
+                INSERT INTO story_discovery_sessions
                 (concept_id, discovery_question, model_used, confidence_threshold)
                 VALUES (?, ?, ?, ?)
             """,
@@ -525,11 +542,13 @@ class CleanSemanticSchema:
             iterations = 0
 
             # Initial prompt with exact format specification
-            current_prompt = f"""{discovery_question}
-
-Respond with a short title of the story, followed by the Bible verses in parentheses, comma-separated. Also, after the parentheses, put a space and then a confidence score between 0.00 and 1.00. The format should look like this:
-
-The Story about Something (Genesis 39:7-10) 0.87"""
+            response_format = (
+                "Respond with a short title of the story, followed by the Bible verses "
+                "in parentheses, comma-separated. Also, after the parentheses, put a space "
+                "and then a confidence score between 0.00 and 1.00. The format should look "
+                "like this:\n\nThe Story about Something (Genesis 39:7-10) 0.87"
+            )
+            current_prompt = f"{discovery_question}\n\n{response_format}"
 
             while iterations < max_iterations:
                 iterations += 1
@@ -538,7 +557,9 @@ The Story about Something (Genesis 39:7-10) 0.87"""
                 llm_response = self._call_llm_for_stories(current_prompt, model_name)
 
                 # Parse LLM response to extract stories
-                new_stories = self._parse_story_response(llm_response, concept_id, discovery_question, model_name)
+                new_stories = self._parse_story_response(  # type: ignore[attr-defined]  # pylint: disable=no-member
+                    llm_response, concept_id, discovery_question, model_name
+                )
 
                 # Filter by confidence threshold
                 qualified_stories = [s for s in new_stories if s["confidence_score"] >= confidence_threshold]
@@ -553,8 +574,8 @@ The Story about Something (Genesis 39:7-10) 0.87"""
                     try:
                         cursor.execute(
                             """
-                            INSERT OR IGNORE INTO concept_stories 
-                            (concept_id, story_title, start_verse_id, end_verse_id, 
+                            INSERT OR IGNORE INTO concept_stories
+                            (concept_id, story_title, start_verse_id, end_verse_id,
                              confidence_score, discovery_question, discovery_model, story_type)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """,
@@ -573,12 +594,15 @@ The Story about Something (Genesis 39:7-10) 0.87"""
                         pass  # Story already exists
 
                 # Ask for more stories in subsequent iterations
-                current_prompt = f"Are there more Bible stories about {concept_name} that you can output that you haven't listed using the same format?"
+                current_prompt = (
+                    f"Are there more Bible stories about {concept_name} "
+                    "that you can output that you haven't listed using the same format?"
+                )
 
             # Update session stats
             cursor.execute(
                 """
-                UPDATE story_discovery_sessions 
+                UPDATE story_discovery_sessions
                 SET stories_found = ?, iterations_performed = ?
                 WHERE session_id = ?
             """,
@@ -588,12 +612,12 @@ The Story about Something (Genesis 39:7-10) 0.87"""
             conn.commit()
             return stories_found
 
-    def _call_llm_for_stories(self, prompt: str, model_name: str) -> str:
+    def _call_llm_for_stories(self, _prompt: str, _model_name: str) -> str:
         """
         Placeholder for LLM calls. Replace with actual implementation.
         This could call Ollama, OpenAI, Anthropic, etc.
         """
-        # TODO: Implement actual LLM calling logic based on model_name
+        # TODO: Implement actual LLM calling logic based on model_name  # pylint: disable=fixme
         # For Ollama: use requests to call http://localhost:11434/api/generate
         # For OpenAI: use openai.chat.completions.create()
         # For other cloud providers: implement respective APIs
@@ -632,18 +656,23 @@ The Story about Something (Genesis 39:7-10) 0.87"""
         # Clean up concept name for display
         display_name = concept_name.replace("_", " ").title()
 
+        # Shared response format instruction
+        response_format = (
+            "Respond with a short title of the story, followed by the Bible verses "
+            "in parentheses, comma-separated. Also, after the parentheses, put a space "
+            "and then a confidence score between 0.00 and 1.00. The format should look "
+            "like this:\n\nThe Story about Something (Genesis 39:7-10) 0.87"
+        )
+
         # Base question template
         if concept_description and len(concept_description.strip()) > 0:
-            question = f"""What Bible stories focus primarily on the concept of {display_name} ({concept_description.strip()})?
-
-Respond with a short title of the story, followed by the Bible verses in parentheses, comma-separated. Also, after the parentheses, put a space and then a confidence score between 0.00 and 1.00. The format should look like this:
-
-The Story about Something (Genesis 39:7-10) 0.87"""
+            intro = (
+                f"What Bible stories focus primarily on the concept of "
+                f"{display_name} ({concept_description.strip()})?"
+            )
+            question = f"{intro}\n\n{response_format}"
         else:
-            question = f"""What Bible stories focus primarily on the biblical concept of {display_name}?
-
-Respond with a short title of the story, followed by the Bible verses in parentheses, comma-separated. Also, after the parentheses, put a space and then a confidence score between 0.00 and 1.00. The format should look like this:
-
-The Story about Something (Genesis 39:7-10) 0.87"""
+            intro = f"What Bible stories focus primarily on the biblical " f"concept of {display_name}?"
+            question = f"{intro}\n\n{response_format}"
 
         return question

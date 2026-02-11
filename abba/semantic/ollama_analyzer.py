@@ -5,7 +5,7 @@ import logging
 import statistics
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 
 import requests
@@ -35,7 +35,7 @@ class OllamaAnalyzer:
     def __init__(
         self,
         host: str = "http://localhost:11434",
-        models: List[str] = None,
+        models: Optional[List[str]] = None,
         consensus_threshold: float = 0.7,
         timeout: int = 30,
         batch_size: int = 100,
@@ -64,7 +64,7 @@ class OllamaAnalyzer:
             response = requests.get(urljoin(self.host, "/api/tags"), timeout=self.timeout)
 
             if response.status_code != 200:
-                logger.warning(f"Ollama server not responding properly at {self.host}")
+                logger.warning("Ollama server not responding properly at %s", self.host)
                 return
 
             available_models = [model["name"] for model in response.json().get("models", [])]
@@ -73,20 +73,20 @@ class OllamaAnalyzer:
             missing_models = []
             for model in self.models:
                 # Check both exact match and base name match
-                base_name = model.split(":")[0]
+                base_name = model.split(":", maxsplit=1)[0]
                 if not any(model in available or base_name in available for available in available_models):
                     missing_models.append(model)
 
             if missing_models:
-                logger.warning(f"Missing Ollama models: {', '.join(missing_models)}")
+                logger.warning("Missing Ollama models: %s", ", ".join(missing_models))
             else:
-                logger.info(f"✅ Ollama setup validated with models: {', '.join(self.models)}")
+                logger.info("Ollama setup validated with models: %s", ", ".join(self.models))
 
         except Exception as e:
-            logger.warning(f"Could not validate Ollama setup: {e}")
+            logger.warning("Could not validate Ollama setup: %s", e)
 
     def analyze_verse_for_concept(
-        self, verse_text: str, concept_name: str, concept_description: str, verse_reference: str = None
+        self, verse_text: str, concept_name: str, concept_description: str, verse_reference: Optional[str] = None
     ) -> SemanticAnalysisResult:
         """Analyze a verse to determine if it relates to a specific concept.
 
@@ -136,14 +136,16 @@ class OllamaAnalyzer:
 
         except Exception as e:
             result.error = str(e)
-            logger.error(f"Error analyzing verse for concept {concept_name}: {e}")
+            logger.error("Error analyzing verse for concept %s: %s", concept_name, e)
 
         finally:
             result.processing_time = time.time() - start_time
 
         return result
 
-    def extract_concepts_from_verse(self, verse_text: str, verse_reference: str = None) -> SemanticAnalysisResult:
+    def extract_concepts_from_verse(
+        self, verse_text: str, verse_reference: Optional[str] = None
+    ) -> SemanticAnalysisResult:
         """Extract semantic concepts from a verse.
 
         Args:
@@ -176,12 +178,12 @@ class OllamaAnalyzer:
 
             # Parse and merge concept lists
             all_concepts = []
-            for model, response in model_responses.items():
+            for _model, response in model_responses.items():
                 concepts = self._parse_concept_list(response)
                 all_concepts.extend(concepts)
 
             # Remove duplicates and filter by frequency
-            concept_counts = {}
+            concept_counts: Dict[str, int] = {}
             for concept in all_concepts:
                 concept_counts[concept] = concept_counts.get(concept, 0) + 1
 
@@ -193,7 +195,7 @@ class OllamaAnalyzer:
 
         except Exception as e:
             result.error = str(e)
-            logger.error(f"Error extracting concepts from verse: {e}")
+            logger.error("Error extracting concepts from verse: %s", e)
 
         finally:
             result.processing_time = time.time() - start_time
@@ -216,7 +218,7 @@ class OllamaAnalyzer:
         results = []
         total_verses = len(verses)
 
-        logger.info(f"Starting batch analysis of {total_verses} verses for concept: {concept_name}")
+        logger.info("Starting batch analysis of %d verses for concept: %s", total_verses, concept_name)
 
         # Process in batches
         for i in range(0, total_verses, self.batch_size):
@@ -224,7 +226,7 @@ class OllamaAnalyzer:
             batch_num = i // self.batch_size + 1
             total_batches = (total_verses + self.batch_size - 1) // self.batch_size
 
-            logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} verses)")
+            logger.info("Processing batch %d/%d (%d verses)", batch_num, total_batches, len(batch))
 
             # Analyze each verse in the batch
             batch_results = []
@@ -236,11 +238,11 @@ class OllamaAnalyzer:
 
             # Log batch summary
             relevant_count = sum(1 for r in batch_results if r.relevance_score > 0.5)
-            logger.info(f"Batch {batch_num} complete: {relevant_count}/{len(batch)} verses relevant")
+            logger.info("Batch %d complete: %d/%d verses relevant", batch_num, relevant_count, len(batch))
 
         # Overall summary
         total_relevant = sum(1 for r in results if r.relevance_score > 0.5)
-        logger.info(f"Batch analysis complete: {total_relevant}/{total_verses} verses relevant to {concept_name}")
+        logger.info("Batch analysis complete: %d/%d verses relevant to %s", total_relevant, total_verses, concept_name)
 
         return results
 
@@ -306,12 +308,12 @@ JSON Response:"""
 
             if response.status_code == 200:
                 data = response.json()
-                return data.get("response", "").strip()
-            else:
-                logger.warning(f"Model {model} returned status {response.status_code}")
+                return str(data.get("response", "")).strip()
+
+            logger.warning("Model %s returned status %d", model, response.status_code)
 
         except Exception as e:
-            logger.warning(f"Error querying model {model}: {e}")
+            logger.warning("Error querying model %s: %s", model, e)
 
         return None
 
@@ -329,9 +331,10 @@ JSON Response:"""
             start_idx = response.find("{")
             end_idx = response.rfind("}") + 1
 
-            if start_idx >= 0 and end_idx > start_idx:
+            if 0 <= start_idx < end_idx:
                 json_str = response[start_idx:end_idx]
-                return json.loads(json_str)
+                result: Dict[str, Any] = json.loads(json_str)
+                return result
 
         except json.JSONDecodeError:
             pass
@@ -357,12 +360,12 @@ JSON Response:"""
                 concepts = parsed["concepts"]
                 if not isinstance(concepts, list):
                     concepts = [concepts]
-        except:
+        except Exception:
             pass
 
         return [str(c).strip() for c in concepts if c]
 
-    def _calculate_consensus(
+    def _calculate_consensus(  # noqa: C901
         self, result: SemanticAnalysisResult, parsed_responses: Dict[str, Dict[str, Any]]
     ) -> SemanticAnalysisResult:
         """Calculate consensus from multiple model responses.
@@ -420,7 +423,7 @@ JSON Response:"""
 
         # Merge concepts (keep those mentioned by multiple models)
         if all_concepts:
-            concept_counts = {}
+            concept_counts: Dict[str, int] = {}
             for concept in all_concepts:
                 concept_counts[concept] = concept_counts.get(concept, 0) + 1
 

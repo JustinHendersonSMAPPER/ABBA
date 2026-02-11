@@ -2,7 +2,7 @@
 
 import json
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -30,18 +30,10 @@ class JobState:
     completed_at: Optional[str] = None
     failed_at: Optional[str] = None
     last_update: Optional[str] = None
-    progress: Dict[str, Any] = None
+    progress: Dict[str, Any] = field(default_factory=dict)
     error_message: Optional[str] = None
-    validation: Dict[str, Any] = None
-    metadata: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.progress is None:
-            self.progress = {}
-        if self.metadata is None:
-            self.metadata = {}
-        if self.validation is None:
-            self.validation = {}
+    validation: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -52,14 +44,8 @@ class OperationState:
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     last_update: Optional[str] = None
-    jobs: Dict[str, JobState] = None
-    metadata: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.jobs is None:
-            self.jobs = {}
-        if self.metadata is None:
-            self.metadata = {}
+    jobs: Dict[str, JobState] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class StateTracker:
@@ -82,10 +68,10 @@ class StateTracker:
             return {}
 
         try:
-            with open(self.state_file, "r") as f:
+            with open(self.state_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 # Convert dict back to dataclass objects
-                state = {}
+                state: Dict[str, Any] = {}
 
                 if "operations" in data:
                     # New hierarchical format
@@ -110,7 +96,7 @@ class StateTracker:
 
                 return state
         except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"Error loading state file: {e}")
+            logger.error("Error loading state file: %s", e)
             return {"operations": {}}
 
     def _save_state(self):
@@ -131,10 +117,10 @@ class StateTracker:
                 else:
                     data["operations"][op_name] = op_state
 
-            with open(self.state_file, "w") as f:
+            with open(self.state_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, default=str)
         except IOError as e:
-            logger.error(f"Error saving state file: {e}")
+            logger.error("Error saving state file: %s", e)
 
     def _check_interrupted_operations(self):
         """Check for operations and jobs that were in progress and mark as interrupted."""
@@ -148,7 +134,7 @@ class StateTracker:
             if isinstance(op_state, OperationState):
                 # Check operation status
                 if op_state.status == OperationStatus.IN_PROGRESS:
-                    logger.warning(f"Found interrupted operation: {op_name}")
+                    logger.warning("Found interrupted operation: %s", op_name)
                     op_state.status = OperationStatus.INTERRUPTED
                     op_state.last_update = datetime.now().isoformat()
                     modified = True
@@ -157,7 +143,7 @@ class StateTracker:
                 for job_name, job_state in op_state.jobs.items():
                     if isinstance(job_state, JobState):
                         if job_state.status == OperationStatus.IN_PROGRESS:
-                            logger.warning(f"Found interrupted job: {op_name}/{job_name}")
+                            logger.warning("Found interrupted job: %s/%s", op_name, job_name)
                             job_state.status = OperationStatus.INTERRUPTED
                             job_state.last_update = datetime.now().isoformat()
                             modified = True
@@ -167,7 +153,7 @@ class StateTracker:
 
     def _migrate_old_format(self, old_data: Dict) -> Dict:
         """Migrate old format to new hierarchical format."""
-        new_state = {"operations": {}}
+        new_state: Dict[str, Any] = {"operations": {}}
 
         # Convert old category/operation structure to new format
         for category, operations in old_data.items():
@@ -200,7 +186,7 @@ class StateTracker:
         # Check if operation exists
         existing = self.get_operation_state(operation_name)
         if existing and existing.status == OperationStatus.INTERRUPTED:
-            logger.info(f"Resuming interrupted operation: {operation_name}")
+            logger.info("Resuming interrupted operation: %s", operation_name)
             existing.status = OperationStatus.IN_PROGRESS
             existing.last_update = datetime.now().isoformat()
             self._save_state()
@@ -231,10 +217,12 @@ class StateTracker:
             self.start_operation(operation_name)
             op_state = self.get_operation_state(operation_name)
 
+        assert op_state is not None
+
         # Check if job exists and is interrupted
         existing = op_state.jobs.get(job_name)
         if existing and existing.status == OperationStatus.INTERRUPTED:
-            logger.info(f"Resuming interrupted job: {operation_name}/{job_name}")
+            logger.info("Resuming interrupted job: %s/%s", operation_name, job_name)
             existing.status = OperationStatus.IN_PROGRESS
             existing.last_update = datetime.now().isoformat()
             self._save_state()
@@ -259,12 +247,12 @@ class StateTracker:
         """
         op_state = self.get_operation_state(operation_name)
         if not op_state:
-            logger.error(f"Cannot update progress for non-existent operation: {operation_name}")
+            logger.error("Cannot update progress for non-existent operation: %s", operation_name)
             return
 
         job_state = op_state.jobs.get(job_name)
         if not job_state:
-            logger.error(f"Cannot update progress for non-existent job: {operation_name}/{job_name}")
+            logger.error("Cannot update progress for non-existent job: %s/%s", operation_name, job_name)
             return
 
         job_state.progress.update(progress)
@@ -289,12 +277,12 @@ class StateTracker:
         """
         op_state = self.get_operation_state(operation_name)
         if not op_state:
-            logger.error(f"Cannot complete job for non-existent operation: {operation_name}")
+            logger.error("Cannot complete job for non-existent operation: %s", operation_name)
             return
 
         job_state = op_state.jobs.get(job_name)
         if not job_state:
-            logger.error(f"Cannot complete non-existent job: {operation_name}/{job_name}")
+            logger.error("Cannot complete non-existent job: %s/%s", operation_name, job_name)
             return
 
         job_state.status = OperationStatus.COMPLETED
@@ -315,7 +303,7 @@ class StateTracker:
 
         op_state.last_update = datetime.now().isoformat()
         self._save_state()
-        logger.info(f"Job completed: {operation_name}/{job_name}")
+        logger.info("Job completed: %s/%s", operation_name, job_name)
 
     def fail_job(self, operation_name: str, job_name: str, error_message: str):
         """Mark a job as failed.
@@ -327,12 +315,12 @@ class StateTracker:
         """
         op_state = self.get_operation_state(operation_name)
         if not op_state:
-            logger.error(f"Cannot fail job for non-existent operation: {operation_name}")
+            logger.error("Cannot fail job for non-existent operation: %s", operation_name)
             return
 
         job_state = op_state.jobs.get(job_name)
         if not job_state:
-            logger.error(f"Cannot fail non-existent job: {operation_name}/{job_name}")
+            logger.error("Cannot fail non-existent job: %s/%s", operation_name, job_name)
             return
 
         job_state.status = OperationStatus.FAILED
@@ -342,7 +330,7 @@ class StateTracker:
 
         op_state.last_update = datetime.now().isoformat()
         self._save_state()
-        logger.error(f"Job failed: {operation_name}/{job_name} - {error_message}")
+        logger.error("Job failed: %s/%s - %s", operation_name, job_name, error_message)
 
     def get_operation_state(self, operation_name: str) -> Optional[OperationState]:
         """Get the state of an operation.
@@ -414,7 +402,7 @@ class StateTracker:
             del op_state.jobs[job_name]
             op_state.last_update = datetime.now().isoformat()
             self._save_state()
-            logger.info(f"Reset job: {operation_name}/{job_name}")
+            logger.info("Reset job: %s/%s", operation_name, job_name)
 
     def get_summary(self) -> Dict[str, Dict[str, Any]]:
         """Get summary of all operations and their jobs.
@@ -422,11 +410,11 @@ class StateTracker:
         Returns:
             Dictionary with operation and job statuses
         """
-        summary = {"operations": {}}
+        summary: Dict[str, Any] = {"operations": {}}
 
         for op_name, op_state in self.state.get("operations", {}).items():
             if isinstance(op_state, OperationState):
-                op_summary = {"status": op_state.status.value, "jobs": {}}
+                op_summary: Dict[str, Any] = {"status": op_state.status.value, "jobs": {}}
 
                 for job_name, job_state in op_state.jobs.items():
                     if isinstance(job_state, JobState):

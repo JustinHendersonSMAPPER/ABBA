@@ -20,12 +20,13 @@ class SQLiteManager:
         """
         self.db_path = Path(db_path)
         self.schema_path = Path(__file__).parent / "schema.sql"
+        self._transaction_conn = None
 
     def initialize_database(self) -> None:
         """Initialize database with schema if it doesn't exist."""
         if not self.db_path.exists():
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Creating new database at {self.db_path}")
+            logger.info("Creating new database at %s", self.db_path)
 
         self._execute_schema()
 
@@ -63,7 +64,7 @@ class SQLiteManager:
         except Exception as e:
             if conn:
                 conn.rollback()
-            logger.error(f"Database error: {e}")
+            logger.error("Database error: %s", e)
             raise
         finally:
             if conn:
@@ -85,7 +86,7 @@ class SQLiteManager:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
-            return cursor.fetchall()
+            return cursor.fetchall()  # type: ignore[no-any-return]
 
     def execute_update(self, query: str, params: Optional[tuple] = None) -> int:
         """Execute an INSERT, UPDATE, or DELETE query.
@@ -104,7 +105,7 @@ class SQLiteManager:
             else:
                 cursor.execute(query)
             conn.commit()
-            return cursor.rowcount
+            return cursor.rowcount  # type: ignore[no-any-return]
 
     def execute_many(self, query: str, params_list: List[tuple]) -> int:
         """Execute a query multiple times with different parameters.
@@ -120,7 +121,7 @@ class SQLiteManager:
             cursor = conn.cursor()
             cursor.executemany(query, params_list)
             conn.commit()
-            return cursor.rowcount
+            return cursor.rowcount  # type: ignore[no-any-return]
 
     @contextmanager
     def transaction(self):
@@ -147,7 +148,7 @@ class SQLiteManager:
         except Exception as e:
             if conn:
                 conn.execute("ROLLBACK")
-            logger.error(f"Transaction failed: {e}")
+            logger.error("Transaction failed: %s", e)
             raise
         finally:
             self._transaction_conn = None
@@ -294,7 +295,7 @@ class SQLiteManager:
             apocrypha_count: Number of apocryphal books included
         """
         query = """
-            UPDATE translations 
+            UPDATE translations
             SET is_partial_canon = ?, apocrypha_count = ?
             WHERE id = ?
         """

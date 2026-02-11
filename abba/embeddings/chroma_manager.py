@@ -2,6 +2,7 @@
 
 import logging
 import os
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -15,8 +16,6 @@ os.environ["CHROMA_SERVER_NOFILE"] = "1"
 os.environ["CHROMA_CLIENT_AUTH_PROVIDER"] = ""
 
 # Suppress all ChromaDB warnings and telemetry messages
-import warnings
-
 warnings.filterwarnings("ignore", category=UserWarning, module="chromadb")
 warnings.filterwarnings("ignore", message=".*telemetry.*")
 warnings.filterwarnings("ignore", message=".*chroma_server_nofile.*")
@@ -33,13 +32,12 @@ logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.ERROR)
 def _silence_telemetry():
     """Completely silence ChromaDB telemetry."""
     try:
-        import chromadb.telemetry.product.posthog as posthog
+        from chromadb.telemetry.product import posthog
 
         # Replace the capture method with a no-op
         if hasattr(posthog, "Posthog"):
-            original_capture = posthog.Posthog.capture
 
-            def silent_capture(self, *args, **kwargs):
+            def silent_capture(self, *args, **kwargs):  # pylint: disable=unused-argument
                 pass  # Do nothing
 
             posthog.Posthog.capture = silent_capture
@@ -75,13 +73,13 @@ class ChromaManager:
             )
         except Exception as e:
             # If telemetry error occurs, try again with minimal settings
-            logger.warning(f"Initial ChromaDB setup failed: {e}, retrying with minimal settings")
+            logger.warning("Initial ChromaDB setup failed: %s, retrying with minimal settings", e)
             self.client = chromadb.PersistentClient(path=str(self.persist_path))
 
         # Cache for collections
         self._collections: Dict[str, chromadb.Collection] = {}
 
-        logger.info(f"Initialized ChromaDB at {self.persist_path}")
+        logger.info("Initialized ChromaDB at %s", self.persist_path)
 
     def get_or_create_collection(
         self, name: str, embedding_function: Optional[Any] = None, metadata: Optional[Dict[str, Any]] = None
@@ -107,13 +105,13 @@ class ChromaManager:
         try:
             # Try to get existing collection
             collection = self.client.get_collection(name=name, embedding_function=embedding_function)
-            logger.info(f"Retrieved existing collection: {name}")
+            logger.info("Retrieved existing collection: %s", name)
         except ValueError:
             # Create new collection if doesn't exist
             collection = self.client.create_collection(
                 name=name, embedding_function=embedding_function, metadata=metadata
             )
-            logger.info(f"Created new collection: {name}")
+            logger.info("Created new collection: %s", name)
 
         # Cache the collection
         self._collections[name] = collection
@@ -137,11 +135,11 @@ class ChromaManager:
             collection = self.client.get_collection(name=name)
             # Cache the collection
             self._collections[name] = collection
-            logger.info(f"Retrieved collection: {name}")
+            logger.info("Retrieved collection: %s", name)
             return collection
         except ValueError:
             # Collection doesn't exist
-            logger.warning(f"Collection {name} does not exist")
+            logger.warning("Collection %s does not exist", name)
             return None
 
     def delete_collection(self, name: str) -> bool:
@@ -158,10 +156,10 @@ class ChromaManager:
             # Remove from cache
             if name in self._collections:
                 del self._collections[name]
-            logger.info(f"Deleted collection: {name}")
+            logger.info("Deleted collection: %s", name)
             return True
         except ValueError:
-            logger.warning(f"Collection {name} does not exist")
+            logger.warning("Collection %s does not exist", name)
             return False
 
     def list_collections(self) -> List[str]:
@@ -193,11 +191,11 @@ class ChromaManager:
             return {"name": name, "count": count, "dimensions": dimensions, "metadata": collection.metadata}
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Error getting stats for collection {name}: {error_msg}")
+            logger.error("Error getting stats for collection %s: %s", name, error_msg)
 
             # If database is corrupted, return empty stats
             if "database disk image is malformed" in error_msg:
-                logger.warning(f"Collection {name} appears corrupted - returning empty stats")
+                logger.warning("Collection %s appears corrupted - returning empty stats", name)
                 return {"name": name, "count": 0, "dimensions": 0, "error": "Database corrupted"}
 
             return {"name": name, "error": error_msg}
@@ -225,7 +223,7 @@ class ChromaManager:
             logger.info("Reset all ChromaDB collections")
             return True
         except Exception as e:
-            logger.error(f"Error resetting ChromaDB: {e}")
+            logger.error("Error resetting ChromaDB: %s", e)
             return False
 
     # ID generation methods for consistent identifiers
@@ -319,9 +317,13 @@ class ChromaManager:
         """
         collection = self.get_or_create_collection("verses")
 
-        results = collection.query(query_embeddings=[query_embedding], n_results=n_results, where=filter_metadata)
+        results = collection.query(
+            query_embeddings=[query_embedding],  # type: ignore[arg-type]
+            n_results=n_results,
+            where=filter_metadata,
+        )
 
-        return self._format_search_results(results)
+        return self._format_search_results(results)  # type: ignore[arg-type]
 
     def search_words(
         self, query_embedding: List[float], n_results: int = 10, filter_metadata: Optional[Dict[str, Any]] = None
@@ -338,9 +340,13 @@ class ChromaManager:
         """
         collection = self.get_or_create_collection("words")
 
-        results = collection.query(query_embeddings=[query_embedding], n_results=n_results, where=filter_metadata)
+        results = collection.query(
+            query_embeddings=[query_embedding],  # type: ignore[arg-type]
+            n_results=n_results,
+            where=filter_metadata,
+        )
 
-        return self._format_search_results(results)
+        return self._format_search_results(results)  # type: ignore[arg-type]
 
     def _format_search_results(self, raw_results: Dict[str, Any]) -> Dict[str, Any]:
         """Format ChromaDB search results for easier use.
@@ -376,7 +382,7 @@ class ChromaManager:
         Returns:
             Dictionary with stats for all collections
         """
-        stats = {"collections": {}, "total_embeddings": 0, "persist_path": str(self.persist_path)}
+        stats: Dict[str, Any] = {"collections": {}, "total_embeddings": 0, "persist_path": str(self.persist_path)}
 
         for collection_name in self.list_collections():
             collection_stats = self.get_collection_stats(collection_name)
@@ -399,4 +405,4 @@ class ChromaManager:
 
             logger.info("ChromaDB connection closed successfully")
         except Exception as e:
-            logger.warning(f"Error closing ChromaDB: {e}")
+            logger.warning("Error closing ChromaDB: %s", e)

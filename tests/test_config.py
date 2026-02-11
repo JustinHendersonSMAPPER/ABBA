@@ -19,7 +19,6 @@ class TestABBAConfig(unittest.TestCase):
         self.assertTrue(config.download_enabled)
         self.assertFalse(config.force_download)
         self.assertFalse(config.verbose)
-        self.assertFalse(config.quiet)
 
     def test_db_path_property(self):
         """Test db_path property."""

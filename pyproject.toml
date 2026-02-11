@@ -17,6 +17,8 @@ numpy = "^1.24.0"
 torch = "^2.0.0"
 loguru = "^0.7.0"
 pyyaml = "^6.0.2"
+fastapi = ">=0.115.0,<1.0"
+uvicorn = {version = ">=0.29.0,<0.40.0", extras = ["standard"]}
 
 [tool.poetry.scripts]
 abba = "main:main"

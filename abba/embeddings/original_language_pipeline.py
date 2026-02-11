@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 from tqdm import tqdm
 
 from .chroma_manager import ChromaManager
@@ -48,7 +47,7 @@ class OriginalLanguageEmbeddingPipeline:
         # Log GPU status at initialization
         self._log_gpu_status()
 
-    def embed_original_verses(self, batch_size: int = 100, force_reembed: bool = False) -> Dict[str, Any]:
+    def embed_original_verses(self, batch_size: int = 100, force_reembed: bool = False) -> Dict[str, Any]:  # noqa: C901
         """Generate embeddings for original language verses.
 
         This creates ONE embedding per canonical verse using the original
@@ -90,16 +89,16 @@ class OriginalLanguageEmbeddingPipeline:
                 offset = 0
                 limit = 1000
                 while True:
-                    results = verses_collection.get(
+                    existing_results = verses_collection.get(
                         limit=limit, offset=offset, include=[]  # Don't need embeddings or metadata
                     )
-                    if not results["ids"]:
+                    if not existing_results["ids"]:
                         break
-                    existing_ids.update(results["ids"])
+                    existing_ids.update(existing_results["ids"])
                     offset += limit
-                logger.info(f"Found {len(existing_ids)} existing embeddings to skip")
+                logger.info("Found %d existing embeddings to skip", len(existing_ids))
             except Exception as e:
-                logger.warning(f"Could not retrieve existing IDs: {e}")
+                logger.warning("Could not retrieve existing IDs: %s", e)
 
         logger.info("Loading unique canonical verses from original languages...")
 
@@ -110,9 +109,9 @@ class OriginalLanguageEmbeddingPipeline:
             logger.warning("No canonical verses found")
             return {"status": "no_verses"}
 
-        logger.info(f"Embedding {len(canonical_verses)} unique canonical verses...")
+        logger.info("Embedding %d unique canonical verses...", len(canonical_verses))
 
-        results = {"verses_embedded": 0, "errors": []}
+        results: Dict[str, Any] = {"verses_embedded": 0, "errors": []}
 
         # Check for resume point
         start_offset = 0
@@ -120,7 +119,7 @@ class OriginalLanguageEmbeddingPipeline:
             progress_info = self.progress.get("original_verses", {})
             if "last_count" in progress_info and not progress_info.get("complete", False):
                 start_offset = progress_info["last_count"]
-                logger.info(f"Resuming from verse {start_offset}...")
+                logger.info("Resuming from verse %d...", start_offset)
 
         # Process in batches
         for i in tqdm(
@@ -188,7 +187,7 @@ class OriginalLanguageEmbeddingPipeline:
                                 verses_collection.add(
                                     embeddings=embedding_list[j:end_idx],
                                     ids=ids[j:end_idx],
-                                    metadatas=metadatas[j:end_idx],
+                                    metadatas=metadatas[j:end_idx],  # type: ignore[arg-type]
                                 )
 
                             results["verses_embedded"] += len(contexts)
@@ -199,16 +198,18 @@ class OriginalLanguageEmbeddingPipeline:
 
                             # Skip if it's a dict callable error - likely corruption
                             if "'dict' object is not callable" in error_str:
-                                logger.error(f"ChromaDB corruption detected, skipping batch at index {i}")
+                                logger.error("ChromaDB corruption detected, skipping batch at index %d", i)
                                 results["errors"].append(f"ChromaDB corruption at batch {i}")
                                 break
 
                             if retry_count >= max_retries:
-                                logger.error(f"Failed to add batch after {max_retries} attempts: {error_str}")
+                                logger.error("Failed to add batch after %d attempts: %s", max_retries, error_str)
                                 results["errors"].append(f"Failed batch at index {i}: {error_str}")
                                 break
 
-                            logger.warning(f"ChromaDB add failed (attempt {retry_count}/{max_retries}): {error_str}")
+                            logger.warning(
+                                "ChromaDB add failed (attempt %d/%d): %s", retry_count, max_retries, error_str
+                            )
                             import time
 
                             time.sleep(2)  # Longer wait between retries
@@ -224,7 +225,7 @@ class OriginalLanguageEmbeddingPipeline:
         # Mark as complete
         self._mark_original_verses_complete()
 
-        logger.info(f"✓ Embedded {results['verses_embedded']} canonical verses")
+        logger.info("Embedded %d canonical verses", results["verses_embedded"])
 
         return results
 
@@ -240,7 +241,7 @@ class OriginalLanguageEmbeddingPipeline:
             # Get unique verses by grouping all original language data
             # Note: stepbible_verses uses book name, need to convert to book_id
             query = """
-                SELECT 
+                SELECT
                     CASE sv.book
                         WHEN 'Gen' THEN 1 WHEN 'Exo' THEN 2 WHEN 'Lev' THEN 3 WHEN 'Num' THEN 4 WHEN 'Deu' THEN 5
                         WHEN 'Jos' THEN 6 WHEN 'Jdg' THEN 7 WHEN 'Rut' THEN 8 WHEN '1Sa' THEN 9 WHEN '2Sa' THEN 10
@@ -268,7 +269,7 @@ class OriginalLanguageEmbeddingPipeline:
                     GROUP_CONCAT(sv.english || ' ', '') as english_gloss,
                     COUNT(*) as word_count,
                     sv.book as book_name,
-                    CASE 
+                    CASE
                         WHEN sv.book IN ('Gen','Exo','Lev','Num','Deu','Jos','Jdg','Rut','1Sa','2Sa',
                                         '1Ki','2Ki','1Ch','2Ch','Ezr','Neh','Est','Job','Psa','Pro',
                                         'Ecc','Sng','Isa','Jer','Lam','Ezk','Dan','Hos','Jol','Amo',
@@ -276,7 +277,7 @@ class OriginalLanguageEmbeddingPipeline:
                         ELSE 'greek'
                     END as primary_language
                 FROM stepbible_verses sv
-                WHERE sv.original_word IS NOT NULL 
+                WHERE sv.original_word IS NOT NULL
                   AND sv.original_word != ''
                 GROUP BY sv.book, sv.chapter, sv.verse
                 ORDER BY book_id, sv.chapter, sv.verse
@@ -344,7 +345,7 @@ class OriginalLanguageEmbeddingPipeline:
 
     def _are_original_verses_embedded(self) -> bool:
         """Check if original verses are already embedded."""
-        return self.progress.get("original_verses", {}).get("complete", False)
+        return self.progress.get("original_verses", {}).get("complete", False)  # type: ignore[no-any-return]
 
     def _mark_original_verses_complete(self):
         """Mark original verses as complete."""
@@ -359,10 +360,10 @@ class OriginalLanguageEmbeddingPipeline:
         """Load progress from file."""
         if self.progress_file.exists():
             try:
-                with open(self.progress_file, "r") as f:
-                    return json.load(f)
+                with open(self.progress_file, "r", encoding="utf-8") as f:
+                    return json.load(f)  # type: ignore[no-any-return]
             except Exception as e:
-                logger.error(f"Error loading progress: {e}")
+                logger.error("Error loading progress: %s", e)
 
         return {"verses": {}, "words": {}, "concepts": {}, "original_verses": {}}
 
@@ -370,10 +371,10 @@ class OriginalLanguageEmbeddingPipeline:
         """Save progress to file."""
         try:
             self.progress_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.progress_file, "w") as f:
+            with open(self.progress_file, "w", encoding="utf-8") as f:
                 json.dump(self.progress, f, indent=2)
         except Exception as e:
-            logger.error(f"Error saving progress: {e}")
+            logger.error("Error saving progress: %s", e)
 
     def _update_progress(self, category: str, key: str, count: int):
         """Update progress for a category."""
@@ -397,7 +398,7 @@ class OriginalLanguageEmbeddingPipeline:
         if torch.cuda.is_available():
             gpu_name = torch.cuda.get_device_name()
             gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
-            logger.info(f"GPU detected: {gpu_name} ({gpu_memory:.1f}GB)")
+            logger.info("GPU detected: %s (%.1fGB)", gpu_name, gpu_memory)
             logger.info("Embeddings will be generated using GPU acceleration")
         else:
             logger.info("No GPU detected - using CPU for embedding generation")

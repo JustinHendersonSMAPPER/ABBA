@@ -62,7 +62,7 @@ def typing(session):
     """Run the type checker with mypy."""
     session.install("poetry")
     session.run("poetry", "install", "--no-interaction")
-    session.run("poetry", "run", "mypy", *SOURCE_FILES)
+    session.run("poetry", "run", "mypy", "abba/")
 
 
 @nox.session(python=["3.11"])

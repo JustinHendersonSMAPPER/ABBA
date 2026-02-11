@@ -18,8 +18,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from .hash_validator import HashValidator
-from .operation_manager import OperationManager
-from .parallel_import import ImportJob, ImportResult, ParallelImporter
+from .parallel_import import ImportResult, ParallelImporter
 from .parallel_stepbible import ParallelStepBibleImporter
 
 
@@ -42,7 +41,8 @@ class BibleExtractor:
         self.stepbible_dir.mkdir(exist_ok=True)
 
         # Initialize components for parallel operations
-        self.parallel_importer = None
+        self.parallel_importer: Optional[ParallelImporter] = None
+        self.parallel_stepbible: Optional[ParallelStepBibleImporter] = None
         self.operation_manager = None
         self.hash_validator = HashValidator()
 
@@ -188,8 +188,8 @@ This folder contains data from multiple open-source projects.
 """
 
         try:
-            with open(attribution_path, "w", encoding="utf-8") as f:
-                f.write(attribution_content)
+            with open(attribution_path, "w", encoding="utf-8") as attr_f:
+                attr_f.write(attribution_content)
             logger.debug(f"✓ Created attribution file at {attribution_path}")
         except Exception as e:
             logger.error(f"✗ Failed to create attribution file: {e}")
@@ -320,7 +320,7 @@ This folder contains data from multiple open-source projects.
             logger.error(f"✗ Failed to parse {language} morphology: {e}")
             return False
 
-    def parse_stepbible_text(self, filename: str, db_manager) -> bool:
+    def parse_stepbible_text(self, filename: str, db_manager) -> bool:  # noqa: C901
         """Parse STEPBible TAHOT/TAGNT text files and import word data.
 
         Args:
@@ -345,14 +345,18 @@ This folder contains data from multiple open-source projects.
                 content = f.read()
 
             # Parse word data - STEPBible format differs between Hebrew and Greek:
-            # Hebrew (TAHOT): Book.Chapter.Verse#WordNum=Source<TAB>HebrewText<TAB>Transliteration<TAB>Translation<TAB>StrongsRaw<TAB>Morphology<TAB>...<TAB>StrongsPrimary
-            # Greek (TAGNT): Book.Chapter.Verse#WordNum=Source<TAB>GreekText (transliteration)<TAB>EnglishGloss<TAB>Strongs=Morphology<TAB>LexiconEntry<TAB>...
+            # Hebrew (TAHOT): Book.Chapter.Verse#WordNum=Source<TAB>HebrewText<TAB>
+            #   Transliteration<TAB>Translation<TAB>StrongsRaw<TAB>Morphology<TAB>...<TAB>StrongsPrimary
+            # Greek (TAGNT): Book.Chapter.Verse#WordNum=Source<TAB>GreekText (transliteration)<TAB>
+            #   EnglishGloss<TAB>Strongs=Morphology<TAB>LexiconEntry<TAB>...
             words_added = 0
             lines = content.split("\n")
 
             # Count non-empty, non-comment lines for progress
             data_lines = [
-                l for l in lines if l.strip() and not l.strip().startswith(("#", "=", "TAHOT", "TAGNT", "FIELD"))
+                text_line
+                for text_line in lines
+                if text_line.strip() and not text_line.strip().startswith(("#", "=", "TAHOT", "TAGNT", "FIELD"))
             ]
 
             # Show progress if not in quiet mode
@@ -460,8 +464,9 @@ This folder contains data from multiple open-source projects.
                         if hebrew_text:
                             # Remove common STEPBible markers like / and \
                             hebrew_text = hebrew_text.replace("/", "").replace("\\", "")
-                            # Remove trailing punctuation markers
-                            hebrew_text = hebrew_text.rstrip("׃־֑֖֥֣֖֑֣֥֛֢֣֤֥֦֧֪֭֮֔֔֗֙֜֝֞֟֠֡֨֩֫֬֯")
+                            # Remove trailing punctuation/cantillation markers (each char individually)
+                            _hebrew_marks = "׃־֑֖֥֣֖֑֣֥֛֢֣֤֥֦֧֪֭֮֔֔֗֙֜֝֞֟֠֡֨֩֫֬֯"
+                            hebrew_text = hebrew_text.rstrip(_hebrew_marks)  # noqa: B005
 
                         # Extract primary Strong's number
                         if strongs_primary:
@@ -498,7 +503,7 @@ This folder contains data from multiple open-source projects.
                         db_manager.insert_word(word_data)
                         words_added += 1
 
-                    except (ValueError, IndexError) as e:
+                    except (ValueError, IndexError):
                         # Skip lines that don't parse correctly (likely headers or metadata)
                         continue
                     except Exception as e:
@@ -516,7 +521,7 @@ This folder contains data from multiple open-source projects.
             logger.error(f"✗ Failed to parse {filename}: {e}")
             return False
 
-    def import_stepbible_data(self, db_manager, tracker=None, force_reimport=False) -> bool:
+    def import_stepbible_data(self, db_manager, tracker=None, force_reimport=False) -> bool:  # noqa: C901
         """Import all STEPBible data into the database.
 
         Args:
@@ -640,14 +645,14 @@ This folder contains data from multiple open-source projects.
 
             if use_parallel:
                 # Use parallel STEPBible importer
-                if not hasattr(self, "parallel_stepbible"):
+                if self.parallel_stepbible is None:
                     self.parallel_stepbible = ParallelStepBibleImporter(
                         stepbible_dir=self.stepbible_dir,
                         dest_db_path=db_manager.db_path,
                         max_workers=self.config.get_parallel_workers() if self.config else None,
                     )
 
-                success, word_count = self.parallel_stepbible.parse_file_parallel(
+                success, _word_count = self.parallel_stepbible.parse_file_parallel(
                     text_file, file_type, show_progress=self.config and self.config.should_show_output()
                 )
 
@@ -664,7 +669,7 @@ This folder contains data from multiple open-source projects.
 
         # Consider success if we imported at least some files
         # Count already-imported files as successful
-        total_expected = len(lexicon_files) + len(morph_files) + len(text_files)
+        _total_expected = len(lexicon_files) + len(morph_files) + len(text_files)  # noqa: F841
         imported_count = 0
 
         if tracker:
@@ -675,7 +680,7 @@ This folder contains data from multiple open-source projects.
         success = imported_count > 0 or text_success_count > 0
 
         if success:
-            logger.info(f"✓ STEPBible import complete")
+            logger.info("✓ STEPBible import complete")
         else:
             logger.error("✗ STEPBible import failed")
 
@@ -710,7 +715,7 @@ This folder contains data from multiple open-source projects.
             logger.error(f"Error listing translations: {e}")
             return []
 
-    def extract_translation(self, translation_id: str) -> bool:
+    def extract_translation(self, translation_id: str) -> bool:  # noqa: C901
         """Extract a single translation to JSON format."""
         if not self.db_path.exists():
             logger.error("bible.db not found. Please download it first.")
@@ -818,7 +823,7 @@ This folder contains data from multiple open-source projects.
             logger.error(f"✗ Failed to extract {translation_id}: {e}")
             return False
 
-    def import_translation_to_db(self, translation_id: str, db_manager) -> bool:
+    def import_translation_to_db(self, translation_id: str, db_manager) -> bool:  # noqa: C901
         """Import a translation directly into the ABBA database.
 
         Args:
@@ -851,7 +856,7 @@ This folder contains data from multiple open-source projects.
                 logger.error(f"Translation {translation_id} not found")
                 return False
 
-            name, english_name, language = result
+            _, _, _ = result
 
             # Get all books for this translation
             cursor.execute(
@@ -1006,6 +1011,8 @@ This folder contains data from multiple open-source projects.
                 max_workers=self.config.get_parallel_workers() if self.config else None,
             )
 
+        assert self.parallel_importer is not None
+
         # Determine if we should show progress (not in quiet mode)
         show_progress = True
         if self.config:
@@ -1014,7 +1021,7 @@ This folder contains data from multiple open-source projects.
         if not use_parallel or (self.config and self.config.parallel_workers == 1):
             # Sequential import - still use the parallel importer for consistency
             # It will detect single translation and show detailed progress
-            return self.parallel_importer.import_translations_parallel(
+            return self.parallel_importer.import_translations_parallel(  # type: ignore[no-any-return]
                 translation_ids=translation_ids, use_processes=False, batch_size=1000, show_progress=show_progress
             )
 
@@ -1025,11 +1032,13 @@ This folder contains data from multiple open-source projects.
             use_processes = not self.config.use_threads_for_io_bound
 
         # Run parallel import (messages are printed in main.py)
-        return self.parallel_importer.import_translations_parallel(
+        return self.parallel_importer.import_translations_parallel(  # type: ignore[no-any-return]
             translation_ids=translation_ids, use_processes=use_processes, batch_size=1000, show_progress=show_progress
         )
 
-    def verify_import_parallel(self, db_manager, translation_ids: Optional[List[str]] = None) -> Dict[str, bool]:
+    def verify_import_parallel(  # noqa: C901
+        self, db_manager, translation_ids: Optional[List[str]] = None
+    ) -> Dict[str, bool]:
         """Verify imported translations using parallel hash validation.
 
         This is CPU-bound so we use processes.
