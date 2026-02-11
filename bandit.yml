@@ -3,6 +3,8 @@ exclude_dirs:
   [
     "tests",
     "reports",
+    "claude",
+    "abba2",
     ".vscode",
     ".pytest_cache",
     ".nox",

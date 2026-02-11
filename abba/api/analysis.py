@@ -267,9 +267,7 @@ class AnalysisAPI:
 
         return results
 
-    def compare_translations(
-        self, book: str, chapter: int, verse: int, translation_ids: List[str]
-    ) -> Dict[str, Any]:
+    def compare_translations(self, book: str, chapter: int, verse: int, translation_ids: List[str]) -> Dict[str, Any]:
         """Compare verse across multiple translations with linguistic analysis.
 
         Args:
@@ -324,9 +322,7 @@ class AnalysisAPI:
             WHERE book_id = (SELECT book_id FROM books WHERE name = ? LIMIT 1)
             AND chapter = ? AND verse = ?
             AND translation_id IN ({})
-        """.format(
-            ",".join(["?"] * len(translation_ids))
-        )
+        """.format(",".join(["?"] * len(translation_ids)))
 
         params = [book, chapter, verse] + translation_ids
         verse_rows = self.db_manager.execute_query(verse_query, tuple(params))
@@ -484,9 +480,7 @@ class AnalysisAPI:
             HAVING shared_count >= ?
             ORDER BY shared_count DESC
             LIMIT 20
-        """.format(
-            ",".join(["?"] * len(source_strongs))
-        )
+        """.format(",".join(["?"] * len(source_strongs)))
 
         min_shared = int(len(source_strongs) * threshold)
         params = list(source_strongs) + [book, chapter, verse, min_shared]

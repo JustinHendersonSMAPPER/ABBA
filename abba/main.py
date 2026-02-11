@@ -6,24 +6,25 @@ Initializes database, downloads STEPBible data, and imports biblical texts
 for linguistic and semantic analysis.
 """
 
+import multiprocessing
 import sys
 import time
-import multiprocessing
+
+from tqdm import tqdm
 
 from abba.bible_extractor import BibleExtractor
 from abba.cli import cli_config
 from abba.config import config_manager
 from abba.database import SQLiteManager
-from abba.database.import_tracker import ImportTracker
-from abba.database.post_import_validator import PostImportValidator
 from abba.database.embedding_validator import EmbeddingValidator
+from abba.database.import_tracker import ImportTracker
 from abba.database.original_embedding_validator import OriginalEmbeddingValidator
-from abba.embeddings import ChromaManager, EmbeddingModelManager, ContextBuilder, EmbeddingPipeline
+from abba.database.post_import_validator import PostImportValidator
+from abba.embeddings import ChromaManager, ContextBuilder, EmbeddingModelManager, EmbeddingPipeline
 from abba.embeddings.original_language_pipeline import OriginalLanguageEmbeddingPipeline
+from abba.logging_setup import configure_standard_logging, get_logger, setup_logging
 from abba.operation_manager import OperationManager
 from abba.stepbible_updater import STEPBibleUpdater
-from abba.logging_setup import setup_logging, configure_standard_logging, get_logger
-from tqdm import tqdm
 
 
 def main():
@@ -35,7 +36,7 @@ def main():
         # Setup logging first
         setup_logging(log_level=config.log_level)
         configure_standard_logging()
-        
+
         logger = get_logger(__name__)
 
         # Handle purge-all first before any other operations
@@ -48,45 +49,45 @@ def main():
                 logger.info(f"  - {config.data_dir}/.import_status.json")
                 logger.info(f"  - {config.data_dir}/.embedding_progress.json")
                 logger.info(f"  - {config.data_dir}/.abba_state.json")
-                
+
                 # Ask for confirmation unless --yes flag is used
                 if not cli_config.skip_confirmations():
                     response = input("\nAre you sure you want to continue? Type 'yes' to confirm: ")
-                    if response.lower() != 'yes':
+                    if response.lower() != "yes":
                         logger.info("Purge cancelled.")
                         return
                 else:
                     logger.info("Skipping confirmation (--yes flag used)")
-            
+
             # Perform the purge
             import shutil
-            
+
             # Remove database
             if config.abba_db_path.exists():
                 config.abba_db_path.unlink()
                 if config.should_show_output():
                     logger.info(f"✓ Removed {config.abba_db_path}")
-            
+
             # Remove vector database directory
             if config.vectors_path.exists():
                 shutil.rmtree(config.vectors_path)
                 if config.should_show_output():
                     logger.info(f"✓ Removed {config.vectors_path}/")
-            
+
             # Remove tracking files
             tracking_files = [
                 config.data_dir / ".import_status.json",  # Import tracker
                 config.data_dir / ".import_progress.json",  # Legacy/alternate name
                 config.data_dir / ".embedding_progress.json",  # Embedding tracker
-                config.data_dir / ".abba_state.json"  # Operation state tracker
+                config.data_dir / ".abba_state.json",  # Operation state tracker
             ]
-            
+
             for tracking_file in tracking_files:
                 if tracking_file.exists():
                     tracking_file.unlink()
                     if config.should_show_output():
                         logger.info(f"✓ Removed {tracking_file}")
-            
+
             if config.should_show_output():
                 logger.info("✅ All data successfully purged. Starting fresh...")
 
@@ -116,7 +117,7 @@ def main():
         # Initialize operation manager for state tracking
         state_file = config.data_dir / ".abba_state.json"
         operation_manager = OperationManager(state_file, config.db_path)
-        
+
         # Initialize extractor with config
         extractor = BibleExtractor(str(config.data_dir), config=config)
         extractor.operation_manager = operation_manager
@@ -124,17 +125,17 @@ def main():
         # Check for STEPBible updates if requested or rebuild requested
         force_stepbible_reimport = cli_config.should_rebuild_stepbible()
         stepbible_has_updates = False  # Track if reimport is due to updates
-        
+
         if cli_config.should_check_for_updates():
             if config.should_show_output():
                 logger.info("Checking for STEPBible data updates...")
-            
+
             updater = STEPBibleUpdater(config.data_dir)
             has_updates, file_changes = updater.check_for_updates()
-            
+
             if config.should_show_output():
                 logger.info(updater.get_update_summary(file_changes))
-            
+
             if has_updates:
                 if config.should_show_output():
                     logger.info("\nSTEPBible data has been updated and will be re-imported.")
@@ -169,152 +170,153 @@ def main():
         # Handle concept data validation command
         if cli_config.should_validate_concept_data():
             from claude.scripts.concept_validator import ConceptValidator
-            
+
             logger.info("Validating concept data against databases...")
             validator = ConceptValidator(config)
             results = validator.validate_all_concepts()
             validator.print_validation_report(results)
             validator.close()
-            
+
             # Exit with appropriate code
             failed_count = sum(1 for r in results if not r.validation_passed)
             return failed_count == 0
 
         # Handle semantic search commands
-        if (cli_config.get_search_concept() or
-            cli_config.get_export_concept_mappings()):
-            
+        if cli_config.get_search_concept() or cli_config.get_export_concept_mappings():
+
             from abba.semantic.concept_mapper import ConceptMapper
-            
+
             # Setup paths
             db_path = config.data_dir / "abba.db"
             chroma_path = config.vectors_path  # Use the correct vectors path
-            
+
             # Ollama configuration
             ollama_config = {
-                'host': config.ollama_host,
-                'models': config.ollama_semantic_models,
-                'consensus_threshold': config.ollama_consensus_threshold,
-                'timeout': config.ollama_timeout
+                "host": config.ollama_host,
+                "models": config.ollama_semantic_models,
+                "consensus_threshold": config.ollama_consensus_threshold,
+                "timeout": config.ollama_timeout,
             }
-            
+
             mapper = ConceptMapper(db_path, chroma_path, ollama_config)
-            
+
             # Handle concept search
             if cli_config.get_search_concept():
                 concept_name = cli_config.get_search_concept()
                 logger.info(f"Searching for concept: {concept_name}")
-                
+
                 matches = mapper.search_concept(concept_name)
                 if matches:
                     logger.info(f"\nFound {len(matches)} matches for '{concept_name}':")
-                    
+
                     # Show top 10 matches
                     for i, match in enumerate(matches[:10], 1):
                         match_type = "Semantic" if match.is_semantic_only else "Lexical"
                         logger.info(f"\n{i}. {match.verse_id} ({match_type}, confidence: {match.confidence:.3f})")
                         logger.info(f"   {match.original_text[:60]}...")
                         logger.info(f"   Evidence: {match.evidence}")
-                    
+
                     if len(matches) > 10:
                         logger.info(f"\n... and {len(matches) - 10} more matches")
                 else:
                     logger.warning(f"No matches found for '{concept_name}'")
                     logger.info("Try running --map-concepts first to process all concepts")
-            
+
             # Handle export
             if cli_config.get_export_concept_mappings():
                 output_path = cli_config.get_export_concept_mappings()
-                format = 'json' if output_path.endswith('.json') else 'csv'
-                
+                format = "json" if output_path.endswith(".json") else "csv"
+
                 mapper.export_mappings(output_path, format=format)
                 logger.info(f"✅ Exported concept mappings to {output_path}")
-            
+
             return
-        
-        # Handle concept validation commands  
-        if (cli_config.should_validate_concepts() or 
-            cli_config.should_generate_concept_report() or 
-            cli_config.should_map_concepts()):
-            
+
+        # Handle concept validation commands
+        if (
+            cli_config.should_validate_concepts()
+            or cli_config.should_generate_concept_report()
+            or cli_config.should_map_concepts()
+        ):
+
             from abba.concept_validator import ConceptValidationPipeline
-            
+
             concept_pipeline = ConceptValidationPipeline(config)
-            
+
             # Test Ollama connection first
             if not concept_pipeline.test_ollama_connection():
                 logger.error("Concept validation requires working Ollama connection")
                 return
-            
+
             # Validate setup
             if not concept_pipeline.validate_setup():
                 logger.error("Concept validation setup failed - see errors above")
                 return
-            
+
             # Handle concept mapping with semantic concordance
             if cli_config.should_map_concepts():
                 logger.info("Starting semantic concept mapping...")
-                
+
                 from abba.semantic.concept_mapper import ConceptMapper
-                
+
                 # Setup paths
                 db_path = config.data_dir / "abba.db"
                 chroma_path = config.vectors_path  # Use the correct vectors path
-                
+
                 # Ollama configuration
                 ollama_config = {
-                    'host': config.ollama_host,
-                    'models': config.ollama_semantic_models,
-                    'consensus_threshold': config.ollama_consensus_threshold,
-                    'timeout': config.ollama_timeout
+                    "host": config.ollama_host,
+                    "models": config.ollama_semantic_models,
+                    "consensus_threshold": config.ollama_consensus_threshold,
+                    "timeout": config.ollama_timeout,
                 }
-                
+
                 mapper = ConceptMapper(db_path, chroma_path, ollama_config)
-                
+
                 # Process all concepts
                 stats = mapper.process_all_concepts(
                     config.concepts_path,
                     max_semantic_per_concept=100,
                     validate_semantic=True,
-                    force_reprocess=True  # Always reprocess to avoid constraint issues
+                    force_reprocess=True,  # Always reprocess to avoid constraint issues
                 )
-                
+
                 if stats:
                     logger.info(f"✅ Concept mapping completed for {len(stats)} concepts")
-                    
+
                     # Generate report if requested
                     if cli_config.should_generate_concept_report():
                         report = mapper.generate_report()
                         report_path = config.data_dir / f"concept_report_{time.strftime('%Y%m%d_%H%M%S')}.md"
-                        
-                        with open(report_path, 'w', encoding='utf-8') as f:
+
+                        with open(report_path, "w", encoding="utf-8") as f:
                             f.write(report)
-                        
+
                         logger.info(f"📄 Report saved to: {report_path}")
                 else:
                     logger.warning("No concepts were successfully mapped")
-            
+
             # Handle concept report only
             elif cli_config.should_generate_concept_report():
                 logger.info("Generating concept validation report...")
                 # Would need to load existing results from database
                 logger.info("Report generation from existing data not yet implemented")
-            
+
             # Handle concept validation only
             elif cli_config.should_validate_concepts():
                 logger.info("Validating concept definitions...")
                 concepts = concept_pipeline.list_concepts()
                 logger.info(f"Found {len(concepts)} concepts: {', '.join(concepts)}")
-                
+
                 # Just validate the concept definitions, don't run LLM analysis
                 validation_results = concept_pipeline.concept_manager.validate_concepts()
-                if validation_results['errors']:
+                if validation_results["errors"]:
                     logger.error("Concept validation errors:")
-                    for error in validation_results['errors']:
+                    for error in validation_results["errors"]:
                         logger.error(f"  - {error}")
                 else:
                     logger.info("✅ All concept definitions are valid")
-            
+
             return
 
         # Download bible.db if needed
@@ -344,10 +346,10 @@ def main():
 
         # Initialize import tracker
         tracker = ImportTracker()
-        
+
         # Check if we should force re-import
         force_reimport = cli_config.should_rebuild_db() or getattr(config, "rebuild_db", False)
-        
+
         if force_reimport and config.should_show_output():
             logger.info("Force rebuild requested - will re-import all data")
             tracker.reset(confirm=True)
@@ -369,13 +371,15 @@ def main():
             # Filter to requested translations only
             translation_ids = set(config.translations)
             translations = [t for t in translations if t["id"] in translation_ids]
-            
+
             # Check if all requested translations were found
             missing = translation_ids - {t["id"] for t in translations}
             if missing:
                 logger.warning(f"Requested translations not found: {', '.join(missing)}")
                 available_ids = [t["id"] for t in extractor.list_translations()]
-                logger.info(f"Available translations include: {', '.join(available_ids[:10])}{'...' if len(available_ids) > 10 else ''}")
+                logger.info(
+                    f"Available translations include: {', '.join(available_ids[:10])}{'...' if len(available_ids) > 10 else ''}"
+                )
 
         # Check which translations need importing
         translations_to_import = []
@@ -385,7 +389,7 @@ def main():
             elif config.verbose:
                 import_time = tracker.get_translation_import_time(trans["id"])
                 logger.debug(f"Skipping {trans['id']} - already imported at {import_time}")
-        
+
         if not translations_to_import:
             if config.should_show_output():
                 logger.info("All requested translations are already imported.")
@@ -405,13 +409,13 @@ def main():
                 for warning in interrupted_warnings:
                     logger.warning(f"  {warning}")
                 logger.info("")
-            
+
             # Import verses for selected translations using parallel processing
             translation_ids_to_import = [trans["id"] for trans in translations_to_import]
-            
+
             # Use parallel import if enabled
             use_parallel = config.get_parallel_workers() > 1
-            
+
             if config.should_show_output():
                 if use_parallel:
                     logger.info(f"Using parallel import with {config.get_parallel_workers()} workers...")
@@ -419,18 +423,16 @@ def main():
                 else:
                     logger.info("Using sequential import...")
                 logger.info(f"\nImporting {len(translation_ids_to_import)} translation(s)...")
-            
+
             # Run import
             import_results = extractor.extract_translations_to_db_parallel(
-                db_manager=db_manager,
-                translation_ids=translation_ids_to_import,
-                use_parallel=use_parallel
+                db_manager=db_manager, translation_ids=translation_ids_to_import, use_parallel=use_parallel
             )
-            
+
             # Process results
             success_count = 0
             failed_translations = []
-            
+
             for tid, result in import_results.items():
                 if result.success:
                     success_count += 1
@@ -440,7 +442,7 @@ def main():
                 else:
                     failed_translations.append(tid)
                     logger.error(f"✗ {tid}: {result.error}")
-            
+
             if config.should_show_output() and translations_to_import:
                 total_time = sum(r.duration for r in import_results.values())
                 total_verses = sum(r.verse_count for r in import_results.values() if r.success)
@@ -451,37 +453,33 @@ def main():
                     logger.info(f"Average rate: {total_verses/total_time:.0f} verses/second")
                 if failed_translations:
                     logger.error(f"Failed translations: {', '.join(failed_translations)}")
-            
+
             # Verify imports if requested
-            if cli_config.args and hasattr(cli_config.args, 'verify') and cli_config.args.verify:
+            if cli_config.args and hasattr(cli_config.args, "verify") and cli_config.args.verify:
                 if config.should_show_output():
                     logger.info("\nVerifying imports with hash validation...")
-                
+
                 verify_results = extractor.verify_import_parallel(
-                    db_manager=db_manager,
-                    translation_ids=translation_ids_to_import
+                    db_manager=db_manager, translation_ids=translation_ids_to_import
                 )
-                
+
                 invalid = [tid for tid, valid in verify_results.items() if not valid]
                 if invalid:
                     logger.warning(f"\n⚠️  Validation failed for: {', '.join(invalid)}")
                 else:
                     logger.info("\n✓ All imports validated successfully")
-            
+
             # Run post-import validation
             if config.should_show_output():
                 logger.info("\nRunning post-import validation...")
-            
-            validator = PostImportValidator(
-                abba_db_path=config.abba_db_path,
-                source_db_path=config.db_path
-            )
-            
+
+            validator = PostImportValidator(abba_db_path=config.abba_db_path, source_db_path=config.db_path)
+
             validation_summary = validator.validate_all_translations()
-            
+
             if config.should_show_output():
                 validator.print_summary(validation_summary)
-            
+
             # Stop if validation failed
             if validation_summary.percentage < 100:
                 logger.error("\n❌ Post-import validation failed. Stopping execution.")
@@ -519,14 +517,15 @@ def main():
                             logger.info(f"  Words: {updated_stats.get('words', 0):,}")
                             logger.info(f"  Lexicon entries: {updated_stats.get('lexicon', 0):,}")
                             logger.info(f"  Morphology codes: {updated_stats.get('morphology', 0):,}")
-                        
+
                         # Validate STEPBible data
                         from abba.database.stepbible_validator import validate_stepbible_import
+
                         if not validate_stepbible_import(config.abba_db_path):
                             logger.error("STEPBible validation failed - data may be incomplete or corrupted")
                             if not cli_config.skip_confirmations():
                                 response = input("\nContinue anyway? (y/N): ")
-                                if response.lower() != 'y':
+                                if response.lower() != "y":
                                     return 1
                     else:
                         logger.warning("STEPBible data import failed (continuing without it)")
@@ -538,38 +537,36 @@ def main():
         else:
             if config.verbose:
                 logger.debug("STEPBible data not available - skipping import")
-        
+
         # Print import summary
         if config.should_show_output():
             summary = tracker.get_import_summary()
             logger.info(f"\nImport summary:")
             logger.info(f"  Translations: {summary['translations_imported']}")
             logger.info(f"  STEPBible files: {sum(summary['stepbible_files'].values())}")
-            if summary['last_update']:
+            if summary["last_update"]:
                 logger.info(f"  Last update: {summary['last_update']}")
-        
+
         # Handle embedding generation
         # Check if embeddings should be generated (explicit CLI or automatic for missing data)
         explicit_embed_flags = (
-            cli_config.should_embed_verses() or 
-            cli_config.should_embed_words() or 
-            cli_config.should_embed_all()
+            cli_config.should_embed_verses() or cli_config.should_embed_words() or cli_config.should_embed_all()
         )
-        
+
         # Track what needs to be embedded
         auto_embed_verses = False
         auto_embed_words = False
         force_word_reembed = force_stepbible_reimport  # Re-embed words if STEPBible updated
-        
+
         # Initialize components to check embedding status (needed for both checking and generating)
         chroma_manager = None
-        
+
         # If no explicit embedding flags, check if embeddings are missing
         if not explicit_embed_flags:
             chroma_manager = ChromaManager(persist_path=str(config.vectors_path))
             db_stats = db_manager.get_database_stats()
             chroma_stats = chroma_manager.get_database_stats()
-            
+
             # Check if we have canonical verses but incomplete original verse embeddings
             # Count unique canonical verses from stepbible data
             with db_manager.get_connection() as conn:
@@ -580,159 +577,170 @@ def main():
                     WHERE original_word IS NOT NULL AND original_word != ''
                 """)
                 canonical_verse_count = cursor.fetchone()[0]
-            
-            original_verse_embeddings_count = chroma_stats.get('collections', {}).get('original_verses', {}).get('count', 0)
-            
+
+            original_verse_embeddings_count = (
+                chroma_stats.get("collections", {}).get("original_verses", {}).get("count", 0)
+            )
+
             # Check if we have words but incomplete word embeddings
-            words_count = db_stats.get('words', 0)
-            word_embeddings_count = chroma_stats.get('collections', {}).get('words', {}).get('count', 0)
-            
+            words_count = db_stats.get("words", 0)
+            word_embeddings_count = chroma_stats.get("collections", {}).get("words", {}).get("count", 0)
+
             # Automatically generate missing embeddings
             # For verses, check if original language embeddings are incomplete
             if canonical_verse_count > 0 and original_verse_embeddings_count < canonical_verse_count * 0.9:
                 auto_embed_verses = True
                 if config.should_show_output():
-                    coverage = (original_verse_embeddings_count / canonical_verse_count * 100) if canonical_verse_count > 0 else 0
-                    logger.info(f"\n✓ Detected incomplete original verse embeddings ({original_verse_embeddings_count:,}/{canonical_verse_count:,} = {coverage:.1f}%) - will generate automatically")
-            
+                    coverage = (
+                        (original_verse_embeddings_count / canonical_verse_count * 100)
+                        if canonical_verse_count > 0
+                        else 0
+                    )
+                    logger.info(
+                        f"\n✓ Detected incomplete original verse embeddings ({original_verse_embeddings_count:,}/{canonical_verse_count:,} = {coverage:.1f}%) - will generate automatically"
+                    )
+
             # For words, check if embeddings exist at all
             if words_count > 0 and word_embeddings_count == 0:
                 auto_embed_words = True
                 if config.should_show_output():
                     logger.info("✓ Detected words without embeddings - will generate automatically")
-        
+
         # Determine if any embedding generation should happen
         should_generate_embeddings = explicit_embed_flags or auto_embed_verses or auto_embed_words
-        
+
         if should_generate_embeddings:
             if config.should_show_output():
-                logger.info("\n" + "="*60)
+                logger.info("\n" + "=" * 60)
                 logger.info("Embedding Generation")
-                logger.info("="*60)
-            
+                logger.info("=" * 60)
+
             # Initialize embedding components (reuse chroma_manager if already created)
             if chroma_manager is None:
                 chroma_manager = ChromaManager(persist_path=str(config.vectors_path))
             model_manager = EmbeddingModelManager(cache_dir=str(config.models_path))
             context_builder = ContextBuilder(db_manager)
-            
+
             # Use original language pipeline for verses
             original_pipeline = OriginalLanguageEmbeddingPipeline(
                 db_manager=db_manager,
                 chroma_manager=chroma_manager,
                 model_manager=model_manager,
-                context_builder=context_builder
+                context_builder=context_builder,
             )
-            
+
             # Keep regular pipeline for words (already using original language)
             pipeline = EmbeddingPipeline(
                 db_manager=db_manager,
                 chroma_manager=chroma_manager,
                 model_manager=model_manager,
-                context_builder=context_builder
+                context_builder=context_builder,
             )
-            
+
             rebuild_embeddings = cli_config.should_rebuild_embeddings()
             batch_size = cli_config.get_embedding_batch_size()
-            
+
             # Generate verse embeddings (original language only)
             if cli_config.should_embed_verses() or cli_config.should_embed_all() or auto_embed_verses:
                 if config.should_show_output():
                     logger.info("\nGenerating original language verse embeddings...")
                     logger.info("This creates ONE embedding per canonical verse using Hebrew/Greek text")
-                
+
                 results = original_pipeline.embed_original_verses(
-                    batch_size=batch_size,
-                    force_reembed=rebuild_embeddings
+                    batch_size=batch_size, force_reembed=rebuild_embeddings
                 )
-                
+
                 if config.should_show_output():
-                    if results.get('status') == 'already_embedded':
+                    if results.get("status") == "already_embedded":
                         logger.info("  Original verses already embedded (use --force-reembed to regenerate)")
                     else:
                         logger.info(f"\nOriginal verse embedding results:")
                         logger.info(f"  Canonical verses embedded: {results.get('verses_embedded', 0):,}")
-                        if results.get('errors'):
+                        if results.get("errors"):
                             logger.warning(f"  Errors: {len(results['errors'])}")
-                            for error in results['errors'][:5]:  # Show first 5 errors
+                            for error in results["errors"][:5]:  # Show first 5 errors
                                 logger.warning(f"    - {error}")
-            
+
             # Generate word embeddings
-            if cli_config.should_embed_words() or cli_config.should_embed_all() or auto_embed_words or force_word_reembed:
+            if (
+                cli_config.should_embed_words()
+                or cli_config.should_embed_all()
+                or auto_embed_words
+                or force_word_reembed
+            ):
                 if config.should_show_output():
                     if force_word_reembed:
                         logger.info("\nRe-generating word embeddings due to STEPBible updates...")
                     else:
                         logger.info("\nGenerating word embeddings...")
-                
+
                 results = pipeline.embed_words(
-                    batch_size=batch_size,
-                    force_reembed=rebuild_embeddings or force_word_reembed
+                    batch_size=batch_size, force_reembed=rebuild_embeddings or force_word_reembed
                 )
-                
+
                 if config.should_show_output():
                     logger.info(f"\nWord embedding results:")
-                    if results.get('status') == 'already_embedded':
+                    if results.get("status") == "already_embedded":
                         logger.info("  Words already embedded (use --force-reembed to regenerate)")
                     else:
                         logger.info(f"  Words embedded: {results.get('words_embedded', 0):,}")
-                        if results.get('errors'):
+                        if results.get("errors"):
                             logger.warning(f"  Errors: {len(results['errors'])}")
-                            for error in results['errors'][:5]:  # Show first 5 errors
+                            for error in results["errors"][:5]:  # Show first 5 errors
                                 logger.warning(f"    - {error}")
-            
+
             # Show final statistics
             if config.should_show_output():
-                logger.info("\n" + "="*60)
+                logger.info("\n" + "=" * 60)
                 logger.info("Embedding Statistics")
-                logger.info("="*60)
-                
+                logger.info("=" * 60)
+
                 # Get stats from ChromaDB directly to include all collections
                 chroma_stats = chroma_manager.get_database_stats()
-                for collection_name, collection_stats in chroma_stats['collections'].items():
+                for collection_name, collection_stats in chroma_stats["collections"].items():
                     logger.info(f"\n{collection_name}:")
                     logger.info(f"  Count: {collection_stats.get('count', 0):,}")
                     logger.info(f"  Dimensions: {collection_stats.get('dimensions', 0)}")
-                    if 'metadata' in collection_stats:
+                    if "metadata" in collection_stats:
                         logger.info(f"  Model: {collection_stats['metadata'].get('model', 'N/A')}")
-                        if collection_name == 'original_verses':
+                        if collection_name == "original_verses":
                             logger.info(f"  Type: {collection_stats['metadata'].get('type', 'N/A')}")
                             logger.info(f"  Languages: {collection_stats['metadata'].get('languages', 'N/A')}")
-                
-                logger.info(f"\nTotal embeddings: {sum(c.get('count', 0) for c in chroma_stats['collections'].values()):,}")
-                
+
+                logger.info(
+                    f"\nTotal embeddings: {sum(c.get('count', 0) for c in chroma_stats['collections'].values()):,}"
+                )
+
             # Validate embeddings
             if (explicit_embed_flags or auto_embed_verses or auto_embed_words) and config.should_show_output():
                 logger.info("\n" + "=" * 60)
                 logger.info("Validating Embeddings")
                 logger.info("=" * 60)
-                
+
                 # Use original embedding validator for new structure
                 # Pass existing chroma_manager to avoid conflicts
                 embedding_validator = OriginalEmbeddingValidator(
-                    db_path=config.abba_db_path,
-                    vector_path=config.vectors_path,
-                    chroma_manager=chroma_manager
+                    db_path=config.abba_db_path, vector_path=config.vectors_path, chroma_manager=chroma_manager
                 )
-                
+
                 results, success = embedding_validator.validate_all()
                 embedding_validator.print_summary(results, success)
-                
+
                 if not success:
                     logger.error("Embedding validation failed - please check the errors above")
                     # Close ChromaDB before exiting
-                    if 'chroma_manager' in locals() and chroma_manager:
+                    if "chroma_manager" in locals() and chroma_manager:
                         chroma_manager.close()
                     sys.exit(1)
-        
+
         # Close ChromaDB connection properly
-        if 'chroma_manager' in locals() and chroma_manager:
+        if "chroma_manager" in locals() and chroma_manager:
             chroma_manager.close()
 
     except KeyboardInterrupt:
         logger.info("\nOperation cancelled by user")
         # Close ChromaDB before exiting
-        if 'chroma_manager' in locals() and chroma_manager:
+        if "chroma_manager" in locals() and chroma_manager:
             chroma_manager.close()
         sys.exit(1)
 
@@ -743,14 +751,14 @@ def main():
 
             traceback.print_exc()
         # Close ChromaDB before exiting
-        if 'chroma_manager' in locals() and chroma_manager:
+        if "chroma_manager" in locals() and chroma_manager:
             chroma_manager.close()
         sys.exit(1)
 
 
 if __name__ == "__main__":
     # Required for Windows multiprocessing support
-    if sys.platform == 'win32':
+    if sys.platform == "win32":
         multiprocessing.freeze_support()
-    
+
     main()

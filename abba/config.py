@@ -1,10 +1,10 @@
 """Configuration management for ABBA."""
 
 import json
+import multiprocessing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
-import multiprocessing
 
 from .cli import cli_config
 from .env import env_config
@@ -24,6 +24,7 @@ class ABBAConfig:
     download_enabled: bool = True
     force_download: bool = False
     bible_db_url: str = "https://bible.helloao.org/bible.db"
+    english_only: bool = False  # Use bible.eng.db (475 MB) instead of bible.db (11.8 GB)
 
     # Output settings
     verbose: bool = False
@@ -99,8 +100,17 @@ class ABBAConfig:
 
     @property
     def db_path(self) -> Path:
-        """Get path to bible.db file."""
+        """Get path to bible.db or bible.eng.db file."""
+        if self.english_only:
+            return self.data_dir / "bible.eng.db"
         return self.data_dir / "bible.db"
+
+    @property
+    def bible_db_download_url(self) -> str:
+        """Get the appropriate download URL based on english_only setting."""
+        if self.english_only:
+            return "https://bible.helloao.org/bible.eng.db"
+        return self.bible_db_url
 
     @property
     def abba_db_path(self) -> Path:
@@ -127,7 +137,7 @@ class ABBAConfig:
         if self.embedding_cache_dir:
             return self.embedding_cache_dir
         return self.data_dir / "models"
-    
+
     @property
     def concepts_path(self) -> Path:
         """Get path to concepts definition file."""
@@ -147,7 +157,7 @@ class ABBAConfig:
         """Create necessary directories."""
         self.data_dir.mkdir(exist_ok=True)
         self.translations_dir.mkdir(exist_ok=True)
-    
+
     def get_parallel_workers(self) -> int:
         """Get number of parallel workers, auto-detecting if not set."""
         if self.parallel_workers is not None:
@@ -156,7 +166,7 @@ class ABBAConfig:
         # SQLite doesn't handle high concurrency well
         cpu_count = multiprocessing.cpu_count()
         return min(cpu_count, 8)  # Cap at 8 workers to avoid database locks
-    
+
     def should_show_output(self) -> bool:
         """Check if general output should be shown (not quiet mode)."""
         return self.log_level not in ["ERROR", "CRITICAL"]
@@ -211,6 +221,7 @@ class ConfigManager:
         except (json.JSONDecodeError, IOError) as e:
             # Import logger here to avoid circular imports
             from .logging_setup import get_logger
+
             logger = get_logger(__name__)
             logger.warning(f"Could not load config file {config_file}: {e}")
 
@@ -250,6 +261,15 @@ class ConfigManager:
         if env_force_download is not None:
             self.config.force_download = env_force_download
 
+        # English-only mode (smaller database)
+        cli_english_only = cli_config.is_english_only()
+        env_english_only = env_config.get_bool("ABBA_ENGLISH_ONLY")
+
+        if cli_english_only:
+            self.config.english_only = True
+        elif env_english_only is not None:
+            self.config.english_only = env_english_only
+
         # Bible DB URL
         env_url = env_config.get_str("ABBA_BIBLE_DB_URL")
         if env_url:
@@ -259,14 +279,14 @@ class ConfigManager:
         cli_log_level = cli_config.get_log_level()
         env_log_level = env_config.get_str("ABBA_LOG_LEVEL")
         env_verbose = env_config.get_bool("ABBA_VERBOSE")
-        
+
         if cli_log_level:
             self.config.log_level = cli_log_level
         elif env_verbose:
             self.config.log_level = "DEBUG"
         elif env_log_level:
             self.config.log_level = env_log_level
-            
+
         # Set verbose based on log level for backward compatibility
         self.config.verbose = self.config.log_level in ["DEBUG", "TRACE"]
 
@@ -336,7 +356,7 @@ class ConfigManager:
         cli_ollama_host = cli_config.get_ollama_host()
         cli_ollama_models = cli_config.get_ollama_models()
         cli_ollama_consensus = cli_config.get_ollama_consensus()
-        
+
         env_ollama_host = env_config.get_str("ABBA_OLLAMA_HOST")
         env_ollama_semantic_models = env_config.get_list("ABBA_OLLAMA_SEMANTIC_MODELS")
         env_ollama_consensus_threshold = env_config.get_float("ABBA_OLLAMA_CONSENSUS_THRESHOLD")
@@ -348,17 +368,17 @@ class ConfigManager:
             self.config.ollama_host = cli_ollama_host
         elif env_ollama_host:
             self.config.ollama_host = env_ollama_host
-            
+
         if cli_ollama_models is not None:
             self.config.ollama_semantic_models = cli_ollama_models
         elif env_ollama_semantic_models is not None:
             self.config.ollama_semantic_models = env_ollama_semantic_models
-            
+
         if cli_ollama_consensus is not None:
             self.config.ollama_consensus_threshold = cli_ollama_consensus
         elif env_ollama_consensus_threshold is not None:
             self.config.ollama_consensus_threshold = env_ollama_consensus_threshold
-            
+
         if env_ollama_timeout is not None:
             self.config.ollama_timeout = env_ollama_timeout
         if env_ollama_batch_size is not None:
@@ -375,7 +395,7 @@ class ConfigManager:
             self.config.concepts_file = cli_concepts_file
         elif env_concepts_file:
             self.config.concepts_file = env_concepts_file
-        
+
         if env_concept_validation_enabled is not None:
             self.config.concept_validation_enabled = env_concept_validation_enabled
         if env_concept_validation_batch_size is not None:
@@ -399,18 +419,18 @@ class ConfigManager:
         env_rebuild_db = env_config.get_bool("ABBA_REBUILD_DB")
         env_rebuild_stepbible = env_config.get_bool("ABBA_REBUILD_STEPBIBLE")
         env_rebuild_embeddings = env_config.get_bool("ABBA_REBUILD_EMBEDDINGS")
-        
+
         # CLI takes precedence for rebuild flags
         if cli_config.should_rebuild_db():
             self.config.rebuild_db = True
         elif env_rebuild_db is not None:
             self.config.rebuild_db = env_rebuild_db
-            
+
         if cli_config.should_rebuild_stepbible():
             self.config.rebuild_stepbible = True
         elif env_rebuild_stepbible is not None:
             self.config.rebuild_stepbible = env_rebuild_stepbible
-            
+
         if cli_config.should_rebuild_embeddings():
             self.config.rebuild_embeddings = True
         elif env_rebuild_embeddings is not None:
@@ -420,17 +440,17 @@ class ConfigManager:
         cli_parallel_workers = cli_config.get_parallel_workers()
         env_parallel_workers = env_config.get_int("ABBA_PARALLEL_WORKERS")
         env_connection_pool_size = env_config.get_int("ABBA_CONNECTION_POOL_SIZE")
-        
+
         # CLI takes precedence
         if cli_parallel_workers is not None:
             self.config.parallel_workers = cli_parallel_workers
         elif env_parallel_workers is not None:
             self.config.parallel_workers = env_parallel_workers
-            
+
         # Check if parallel is disabled
         if not cli_config.should_use_parallel():
             self.config.parallel_workers = 1
-            
+
         if env_connection_pool_size is not None:
             self.config.connection_pool_size = env_connection_pool_size
 
@@ -458,6 +478,7 @@ class ConfigManager:
         except IOError as e:
             # Import logger here to avoid circular imports
             from .logging_setup import get_logger
+
             logger = get_logger(__name__)
             logger.warning(f"Could not save config file {config_file}: {e}")
 

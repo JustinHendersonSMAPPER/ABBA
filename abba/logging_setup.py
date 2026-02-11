@@ -1,21 +1,22 @@
 """Centralized logging setup using loguru for ABBA."""
 
 import sys
-from loguru import logger
 from typing import Optional
+
+from loguru import logger
 
 
 def setup_logging(log_level: str = "INFO") -> None:
     """Setup loguru logging with appropriate level and formatting.
-    
+
     Args:
         log_level: The log level (TRACE, DEBUG, INFO, WARNING, ERROR, CRITICAL)
     """
     # Remove default loguru handler
     logger.remove()
-    
+
     effective_level = log_level
-    
+
     # Add custom handler with clean formatting
     logger.add(
         sys.stderr,
@@ -23,29 +24,30 @@ def setup_logging(log_level: str = "INFO") -> None:
         level=effective_level,
         colorize=True,
         backtrace=True,
-        diagnose=True
+        diagnose=True,
     )
-    
+
     # For progress bar compatibility, add a method to write messages that don't interfere
     def tqdm_write(message: str, level: str = "INFO"):
         """Write a log message using tqdm.write() to avoid interfering with progress bars."""
         try:
             from tqdm import tqdm
+
             tqdm.write(f"{level}: {message}")
         except ImportError:
             # Fallback to regular logging if tqdm not available
             getattr(logger, level.lower())(message)
-    
+
     # Add the tqdm_write method to logger
     logger.tqdm_write = tqdm_write
 
 
 def get_logger(name: Optional[str] = None):
     """Get a logger instance.
-    
+
     Args:
         name: Optional name for the logger (defaults to calling module)
-        
+
     Returns:
         Configured loguru logger
     """
@@ -58,10 +60,10 @@ def get_logger(name: Optional[str] = None):
 def configure_standard_logging():
     """Configure standard Python logging to use loguru as backend."""
     import logging
-    
+
     class InterceptHandler(logging.Handler):
         """Intercept standard logging messages and route them to loguru."""
-        
+
         def emit(self, record):
             # Get corresponding Loguru level if it exists
             try:
@@ -79,7 +81,7 @@ def configure_standard_logging():
 
     # Replace all existing loggers with intercept handler
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
-    
+
     # Suppress some noisy third-party loggers
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)

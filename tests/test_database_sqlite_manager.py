@@ -25,13 +25,13 @@ class TestSQLiteManager(unittest.TestCase):
     def test_database_initialization(self):
         """Test database is created and schema is applied."""
         self.assertTrue(self.db_path.exists())
-        
+
         # Check that tables exist
         with self.db_manager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = [row[0] for row in cursor.fetchall()]
-            
+
             expected_tables = ["words", "lexicon", "morphology", "translations", "books", "verses"]
             for table in expected_tables:
                 self.assertIn(table, tables)
@@ -42,17 +42,17 @@ class TestSQLiteManager(unittest.TestCase):
             "id": "ESV",
             "name": "English Standard Version",
             "english_name": "English Standard Version",
-            "language": "en"
+            "language": "en",
         }
-        
+
         self.db_manager.insert_translation(translation_data)
-        
+
         # Verify insertion
         with self.db_manager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM translations WHERE id = ?", ("ESV",))
             result = cursor.fetchone()
-            
+
             self.assertIsNotNone(result)
             self.assertEqual(result["id"], "ESV")
             self.assertEqual(result["name"], "English Standard Version")
@@ -62,22 +62,22 @@ class TestSQLiteManager(unittest.TestCase):
         # First insert a translation
         translation_data = {
             "id": "ESV",
-            "name": "English Standard Version", 
+            "name": "English Standard Version",
             "english_name": "English Standard Version",
-            "language": "en"
+            "language": "en",
         }
         self.db_manager.insert_translation(translation_data)
-        
+
         # Insert a verse
         verse_data = {
             "translation_id": "ESV",
             "book_id": 1,
             "chapter": 1,
             "verse": 1,
-            "text": "In the beginning, God created the heavens and the earth."
+            "text": "In the beginning, God created the heavens and the earth.",
         }
         self.db_manager.insert_verse(verse_data)
-        
+
         # Retrieve verse
         result = self.db_manager.get_verse("ESV", 1, 1, 1)
         self.assertIsNotNone(result)
@@ -95,11 +95,11 @@ class TestSQLiteManager(unittest.TestCase):
             "transliteration": "b'reshit",
             "translation": "beginning",
             "strongs_primary": "H7225",
-            "language": "hebrew"
+            "language": "hebrew",
         }
-        
+
         self.db_manager.insert_word(word_data)
-        
+
         # Verify insertion
         words = self.db_manager.get_words_for_verse("Genesis", 1, 1)
         self.assertEqual(len(words), 1)
@@ -108,13 +108,13 @@ class TestSQLiteManager(unittest.TestCase):
     def test_database_stats(self):
         """Test database statistics."""
         stats = self.db_manager.get_database_stats()
-        
+
         # Should be a dict with counts
         self.assertIsInstance(stats, dict)
         self.assertIn("words", stats)
         self.assertIn("verses", stats)
         self.assertIn("translations", stats)
-        
+
         # All should be 0 initially
         for table in ["words", "verses", "translations"]:
             self.assertEqual(stats[table], 0)

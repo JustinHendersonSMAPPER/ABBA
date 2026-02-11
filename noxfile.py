@@ -2,72 +2,81 @@
 
 import nox
 
-SOURCE_FILES = ("src/", "tests/")
+SOURCE_FILES = ("abba/", "tests/")
 
 REPORTS_DIR = "reports"
-BAGDES_DIR = ".badges"
+BADGES_DIR = ".badges"
 
 
 @nox.session(python=["3.11"])
 def tests(session):
     """Run the test suite."""
     session.install("poetry")
-    session.run("poetry", "install")
-    session.run("poetry", "shell")
-    session.run("coverage", "run", "-m", "pytest", "--junit-xml=reports/junit/junit.xml")
-    session.run("coverage", "combine")
-    session.run("coverage", "report")
-    session.run("coverage", "xml", "-o", f"{REPORTS_DIR}/coverage.xml")
-    session.run("coverage", "html", "-d", f"{REPORTS_DIR}/coverage")
+    session.run("poetry", "install", "--no-interaction")
     session.run(
+        "poetry",
+        "run",
+        "coverage",
+        "run",
+        "-m",
+        "pytest",
+        f"--junit-xml={REPORTS_DIR}/junit/junit.xml",
+    )
+    session.run("poetry", "run", "coverage", "report")
+    session.run("poetry", "run", "coverage", "xml", "-o", f"{REPORTS_DIR}/coverage.xml")
+    session.run("poetry", "run", "coverage", "html", "-d", f"{REPORTS_DIR}/coverage")
+    session.run(
+        "poetry",
+        "run",
         "genbadge",
         "coverage",
         "-i",
         f"{REPORTS_DIR}/coverage.xml",
         "-o",
-        f"{BAGDES_DIR}/coverage-badge.svg",
+        f"{BADGES_DIR}/coverage-badge.svg",
     )
-    session.run("genbadge", "tests", "-o", f"{BAGDES_DIR}/tests-badge.svg")
+    session.run("poetry", "run", "genbadge", "tests", "-o", f"{BADGES_DIR}/tests-badge.svg")
 
 
 @nox.session(python=["3.11"])
 def lint(session):
-    """Lint the codebase."""
+    """Lint the codebase with black, isort, flake8, and pylint."""
     session.install("poetry")
-    session.run("poetry", "install")
-    session.run("poetry", "shell")
-    session.run("pylint", *SOURCE_FILES, "--exit-zero")
-    # session.run("black", "--check", ".")
-    session.run("python", "-c", "import os; os.remove('reports/flake8/flake8stats.txt')")
-    session.run(
-        "flake8",
-        ".",
-        "--color",
-        "never",
-        "--config",
-        ".flake8",
-        "--exit-zero",
-        "--statistics",
-        f"--output-file={REPORTS_DIR}/flake8/flake8stats.txt",
-    )
-    session.run("genbadge", "flake8", "-o", f"{BAGDES_DIR}/flake8-badge.svg")
-    session.run("flynt", *SOURCE_FILES)
-    session.run("isort", *SOURCE_FILES)
+    session.run("poetry", "install", "--no-interaction")
+
+    # Check formatting with black (line length 120)
+    session.run("poetry", "run", "black", "--check", "--line-length", "120", *SOURCE_FILES)
+
+    # Check import sorting with isort (black-compatible profile)
+    session.run("poetry", "run", "isort", "--check-only", "--profile", "black", "--line-length", "120", *SOURCE_FILES)
+
+    # Run flake8 for style enforcement
+    session.run("poetry", "run", "flake8", *SOURCE_FILES, "--config", ".flake8")
+
+    # Run pylint for code analysis
+    session.run("poetry", "run", "pylint", *SOURCE_FILES)
 
 
 @nox.session(python=["3.11"])
 def typing(session):
-    """Run the type checker."""
+    """Run the type checker with mypy."""
     session.install("poetry")
-    session.run("poetry", "install")
-    session.run("poetry", "shell")
-    session.run("mypy", ".")
+    session.run("poetry", "install", "--no-interaction")
+    session.run("poetry", "run", "mypy", *SOURCE_FILES)
 
 
 @nox.session(python=["3.11"])
 def security(session):
-    """Run the security checks."""
+    """Run the security checks with bandit."""
     session.install("poetry")
-    session.run("poetry", "install")
-    session.run("poetry", "shell")
-    session.run("bandit", "--exit-zero", "-c", "bandit.yaml", "-r", *SOURCE_FILES)
+    session.run("poetry", "install", "--no-interaction")
+    session.run("poetry", "run", "bandit", "-c", "bandit.yml", "-r", "abba/")
+
+
+@nox.session(python=["3.11"])
+def format(session):
+    """Auto-format code with black and isort."""
+    session.install("poetry")
+    session.run("poetry", "install", "--no-interaction")
+    session.run("poetry", "run", "black", "--line-length", "120", *SOURCE_FILES)
+    session.run("poetry", "run", "isort", "--profile", "black", "--line-length", "120", *SOURCE_FILES)

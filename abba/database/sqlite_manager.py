@@ -28,11 +28,12 @@ class SQLiteManager:
             logger.info(f"Creating new database at {self.db_path}")
 
         self._execute_schema()
-        
+
         # Run migrations for existing databases
         from .migrations import run_migrations
+
         run_migrations(self.db_path)
-        
+
         logger.info("Database initialized successfully")
 
     def _execute_schema(self) -> None:
@@ -120,11 +121,11 @@ class SQLiteManager:
             cursor.executemany(query, params_list)
             conn.commit()
             return cursor.rowcount
-    
+
     @contextmanager
     def transaction(self):
         """Context manager for explicit transaction control.
-        
+
         Usage:
             with db_manager.transaction():
                 db_manager.insert_translation(...)
@@ -137,11 +138,11 @@ class SQLiteManager:
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("BEGIN TRANSACTION")
-            
+
             # Store the connection for use in nested operations
             self._transaction_conn = conn
             yield self
-            
+
             conn.execute("COMMIT")
         except Exception as e:
             if conn:
@@ -152,10 +153,10 @@ class SQLiteManager:
             self._transaction_conn = None
             if conn:
                 conn.close()
-    
+
     def _get_connection_for_transaction(self):
         """Get the current transaction connection if in a transaction."""
-        return getattr(self, '_transaction_conn', None)
+        return getattr(self, "_transaction_conn", None)
 
     def get_verse(self, translation_id: str, book_id: int, chapter: int, verse: int) -> Optional[sqlite3.Row]:
         """Get a specific verse.
@@ -265,12 +266,10 @@ class SQLiteManager:
         canon = translation_data.get("canon")
         if not canon:
             from ..parallel_import import get_translation_canon
-            canon_enum = get_translation_canon(
-                translation_data["id"], 
-                str(self.db_path.parent / "bible.db")
-            )
+
+            canon_enum = get_translation_canon(translation_data["id"], str(self.db_path.parent / "bible.db"))
             canon = canon_enum.value
-        
+
         query = """
             INSERT OR REPLACE INTO translations (id, name, english_name, language, canon)
             VALUES (?, ?, ?, ?, ?)
@@ -288,7 +287,7 @@ class SQLiteManager:
 
     def update_translation_partial_canon(self, translation_id: str, is_partial: bool, apocrypha_count: int) -> None:
         """Update partial canon information for a translation.
-        
+
         Args:
             translation_id: Translation ID
             is_partial: Whether the canon is partial
