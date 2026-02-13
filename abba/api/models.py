@@ -254,6 +254,94 @@ class TextSearchResult(BaseModel):
     book_name: Optional[str] = None
 
 
+class SemanticSearchResult(BaseModel):
+    """Result from a semantic or hybrid search."""
+
+    book_id: int
+    chapter: int
+    verse: int
+    text: str = ""
+    book_name: str = ""
+    score: float = 0.0
+    match_type: str = ""
+    explanation: str = ""
+    translation_id: str = ""
+
+
+# --- Life Topic Models ---
+
+
+class LifeTopicDetail(BaseModel):
+    """Full life topic with study steps."""
+
+    slug: str
+    name: str
+    category: str
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    concepts: List[Dict[str, Any]] = Field(default_factory=list)
+    study_steps: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class LifeTopicSummary(BaseModel):
+    """Summary of a life topic for listings."""
+
+    slug: str
+    name: str
+    category: str
+    description: Optional[str] = None
+    icon: Optional[str] = None
+
+
+# --- Reading Plan Models ---
+
+
+class ReadingPlanSummary(BaseModel):
+    """Summary of a reading plan."""
+
+    slug: str
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    estimated_days: int = 0
+
+
+class ReadingPlanEntry(BaseModel):
+    """A single day's entry in a reading plan."""
+
+    day_number: int
+    book_id: int
+    start_chapter: int
+    start_verse: int
+    end_chapter: int
+    end_verse: int
+    title: Optional[str] = None
+    reflection_question: Optional[str] = None
+
+
+class ReadingPlanDetail(BaseModel):
+    """Full reading plan with entries."""
+
+    slug: str
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    estimated_days: int = 0
+    entries: List[ReadingPlanEntry] = Field(default_factory=list)
+
+
+# --- Export Models ---
+
+
+class ExportRequest(BaseModel):
+    """Request for exporting study data."""
+
+    format: str = "json"  # "json" or "markdown"
+    include_original_language: bool = True
+    include_cross_references: bool = True
+    include_cultural_context: bool = False
+
+
 # --- API Info Model ---
 
 

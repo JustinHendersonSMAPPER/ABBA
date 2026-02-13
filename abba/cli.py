@@ -156,6 +156,17 @@ Examples:
 
         parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts (assume yes)")
 
+        # Search options
+        parser.add_argument("--max-results", type=int, help="Maximum number of search results (default: 50)")
+
+        parser.add_argument(
+            "--similarity-threshold", type=float, help="Minimum similarity score for semantic search (0.0-1.0)"
+        )
+
+        parser.add_argument(
+            "--exact-only", action="store_true", help="Disable semantic search, use only exact text match"
+        )
+
         # Server options
         parser.add_argument("--serve", action="store_true", help="Start the ABBA API server (uvicorn)")
 
@@ -332,6 +343,24 @@ Examples:
     def should_map_concepts(self) -> bool:
         """Check if should map concepts to verses."""
         return self.args.map_concepts if self.args else False
+
+    def get_max_results(self) -> Optional[int]:
+        """Get max results override from CLI args."""
+        if self.args and hasattr(self.args, "max_results"):
+            result: Optional[int] = self.args.max_results
+            return result
+        return None
+
+    def get_similarity_threshold(self) -> Optional[float]:
+        """Get similarity threshold override from CLI args."""
+        if self.args and hasattr(self.args, "similarity_threshold"):
+            result: Optional[float] = self.args.similarity_threshold
+            return result
+        return None
+
+    def is_exact_only(self) -> bool:
+        """Check if exact-only search mode is requested."""
+        return self.args.exact_only if self.args and hasattr(self.args, "exact_only") else False
 
     def should_serve(self) -> bool:
         """Check if should start the API server."""

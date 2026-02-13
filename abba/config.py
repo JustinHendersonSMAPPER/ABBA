@@ -65,6 +65,9 @@ class ABBAConfig:
     max_results: int = 50
     similarity_threshold: float = 0.7
     enable_query_expansion: bool = True
+    search_cache_size: int = 256
+    exact_only: bool = False
+    search_timeout: int = 10
 
     # Performance settings
     parallel_workers: Optional[int] = None  # None means auto-detect
@@ -404,16 +407,30 @@ class ConfigManager:
             self.config.concept_validation_cache = env_concept_validation_cache
 
         # Search settings
+        cli_max_results = cli_config.get_max_results()
+        cli_similarity_threshold = cli_config.get_similarity_threshold()
         env_max_results = env_config.get_int("ABBA_MAX_RESULTS")
         env_similarity_threshold = env_config.get_float("ABBA_SIMILARITY_THRESHOLD")
         env_enable_query_expansion = env_config.get_bool("ABBA_ENABLE_QUERY_EXPANSION")
+        env_search_cache_size = env_config.get_int("ABBA_SEARCH_CACHE_SIZE")
 
-        if env_max_results is not None:
+        if cli_max_results is not None:
+            self.config.max_results = cli_max_results
+        elif env_max_results is not None:
             self.config.max_results = env_max_results
-        if env_similarity_threshold is not None:
+
+        if cli_similarity_threshold is not None:
+            self.config.similarity_threshold = cli_similarity_threshold
+        elif env_similarity_threshold is not None:
             self.config.similarity_threshold = env_similarity_threshold
+
         if env_enable_query_expansion is not None:
             self.config.enable_query_expansion = env_enable_query_expansion
+        if env_search_cache_size is not None:
+            self.config.search_cache_size = env_search_cache_size
+
+        if cli_config.is_exact_only():
+            self.config.exact_only = True
 
         # Rebuild flags
         env_rebuild_db = env_config.get_bool("ABBA_REBUILD_DB")

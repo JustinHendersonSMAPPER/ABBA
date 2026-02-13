@@ -12,9 +12,19 @@ from .analysis import AnalysisAPI
 from .models import (
     APIInfo,
     BookInfo,
+    CrossRef,
+    CulturalNote,
     DepthLevel,
     LexiconEntry,
+    LifeTopicDetail,
+    LifeTopicSummary,
     MorphologyInfo,
+    PassageInfo,
+    ReadingPlanDetail,
+    ReadingPlanEntry,
+    ReadingPlanSummary,
+    RichnessFlag,
+    SemanticSearchResult,
     StrongsResult,
     TextSearchResult,
     ThemeGroup,
@@ -25,6 +35,7 @@ from .models import (
     WordAnalysis,
     WordDetail,
 )
+from .query_parser import parse_query
 from .search import SearchAPI
 
 router = APIRouter(prefix="/api/v1", tags=["bible"])
@@ -127,11 +138,13 @@ async def get_verse(
 
     if depth in (DepthLevel.STANDARD, DepthLevel.DEEP, DepthLevel.SCHOLARLY):
         response.words = _get_words_for_verse(book_name or str(book_id), chapter, verse)
+        response.richness_flags = _get_richness_flags(book_name or str(book_id), chapter, verse)
 
     if depth in (DepthLevel.DEEP, DepthLevel.SCHOLARLY):
-        # Placeholder for enrichment data — populated once enrichment tables exist
-        response.cultural_context = []
-        response.cross_references = []
+        response.cross_references = _get_cross_refs(book_id, chapter, verse)
+        response.cultural_context = _get_cultural_context(book_id, chapter, verse)
+        response.passage_info = _get_passage_info(book_id, chapter, verse)
+        response.literary_structures = _get_literary_structures(book_id, chapter, verse)
         response.concepts = []
 
     if depth == DepthLevel.SCHOLARLY:
@@ -512,7 +525,321 @@ async def semantic_domain(domain: str) -> List[Dict[str, Any]]:
     return analysis.semantic_domain_analysis(domain)
 
 
+# --- Semantic Search ---
+
+
+@router.get("/search/semantic", response_model=List[SemanticSearchResult])
+async def semantic_search(
+    q: str = Query(..., description="Natural language search query"),
+    translation_id: str = Query("engbsb", description="Translation for text display"),
+    limit: int = Query(20, ge=1, le=100),
+    testament: Optional[str] = Query(None, description="Filter: 'old' or 'new'"),
+    book_id: Optional[int] = Query(None, description="Filter by book ID"),
+) -> List[SemanticSearchResult]:
+    """Search using natural language — combines exact text matching with semantic similarity.
+
+    Supports structured query syntax:
+    - ``love in:john`` — filter by book
+    - ``grace testament:new`` — filter by testament
+    - ``"living water"`` — exact phrase
+    """
+    parsed = parse_query(q)
+    testament_override = testament or parsed.testament_filter
+    book_override = book_id or parsed.book_filter
+    search_text = parsed.text or q
+
+    db = _get_db()
+    results: List[SemanticSearchResult] = []
+
+    # FTS search
+    try:
+        fts_rows = db.search_verses(translation_id, search_text, limit * 2)
+        for rank, row in enumerate(fts_rows):
+            results.append(
+                SemanticSearchResult(
+                    book_id=row["book_id"],
+                    chapter=row["chapter"],
+                    verse=row["verse"],
+                    text=row["text"],
+                    book_name=row["book_name"] if "book_name" in (row.keys() if hasattr(row, "keys") else []) else "",
+                    score=round(1.0 - (rank / max(len(fts_rows), 1)), 3),
+                    match_type="exact",
+                    explanation=f"Text match (rank {rank + 1})",
+                    translation_id=translation_id,
+                )
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Apply filters
+    if testament_override:
+        t = "old" if testament_override in ("old", "ot") else "new"
+        old_books = set(range(1, 40))
+        new_books = set(range(40, 67))
+        allowed = old_books if t == "old" else new_books
+        results = [r for r in results if r.book_id in allowed]
+
+    if book_override:
+        results = [r for r in results if r.book_id == book_override]
+
+    return results[:limit]
+
+
+# --- Life Topics Endpoints ---
+
+
+@router.get("/life-topics", response_model=List[LifeTopicSummary])
+async def list_life_topics() -> List[LifeTopicSummary]:
+    """List all life topics for everyday topical access to Scripture."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT slug, name, category, description, icon FROM life_topics ORDER BY display_order"
+        )
+        return [LifeTopicSummary(slug=r[0], name=r[1], category=r[2], description=r[3], icon=r[4]) for r in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
+@router.get("/life-topics/search", response_model=List[LifeTopicSummary])
+async def search_life_topics(
+    q: str = Query(..., description="Search query for topics"),
+) -> List[LifeTopicSummary]:
+    """Search life topics by name, category, or description."""
+    db = _get_db()
+    try:
+        pattern = f"%{q}%"
+        rows = db.execute_query(
+            "SELECT slug, name, category, description, icon FROM life_topics "
+            "WHERE name LIKE ? OR description LIKE ? OR category LIKE ? "
+            "ORDER BY display_order",
+            (pattern, pattern, pattern),
+        )
+        return [LifeTopicSummary(slug=r[0], name=r[1], category=r[2], description=r[3], icon=r[4]) for r in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
+@router.get("/life-topics/{slug}", response_model=LifeTopicDetail)
+async def get_life_topic(slug: str) -> LifeTopicDetail:
+    """Get a life topic with its study steps and concept links."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT id, slug, name, category, description, icon FROM life_topics WHERE slug = ?",
+            (slug,),
+        )
+    except sqlite3.OperationalError as exc:
+        raise HTTPException(status_code=503, detail="Life topics not available") from exc
+
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"Topic '{slug}' not found")
+
+    row = rows[0]
+    topic_id = row[0]
+
+    concepts: List[Dict[str, Any]] = []
+    try:
+        concept_rows = db.execute_query(
+            "SELECT concept_name, relevance_aspect FROM life_topic_concepts "
+            "WHERE topic_id = ? ORDER BY display_order",
+            (topic_id,),
+        )
+        concepts = [{"concept_name": c[0], "relevance_aspect": c[1]} for c in concept_rows]
+    except sqlite3.OperationalError:
+        pass
+
+    steps: List[Dict[str, Any]] = []
+    try:
+        step_rows = db.execute_query(
+            "SELECT step_order, step_type, verse_reference, insight FROM topic_study_steps "
+            "WHERE topic_id = ? ORDER BY step_order",
+            (topic_id,),
+        )
+        steps = [{"step_order": s[0], "step_type": s[1], "verse_reference": s[2], "insight": s[3]} for s in step_rows]
+    except sqlite3.OperationalError:
+        pass
+
+    return LifeTopicDetail(
+        slug=row[1],
+        name=row[2],
+        category=row[3],
+        description=row[4],
+        icon=row[5],
+        concepts=concepts,
+        study_steps=steps,
+    )
+
+
+# --- Passages / Pericope Endpoints ---
+
+
+@router.get("/passages/{book_id}/{chapter}", response_model=List[PassageInfo])
+async def get_passages(book_id: int, chapter: int) -> List[PassageInfo]:
+    """Get passage/pericope boundaries for a chapter."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT passage_id, title, genre, literary_type, structural_features, "
+            "start_chapter, start_verse, end_chapter, end_verse "
+            "FROM passages "
+            "WHERE book_id = ? AND start_chapter <= ? AND end_chapter >= ? "
+            "ORDER BY display_order",
+            (book_id, chapter, chapter),
+        )
+    except sqlite3.OperationalError:
+        return []
+
+    return [
+        PassageInfo(
+            passage_id=r[0],
+            title=r[1],
+            genre=r[2],
+            literary_type=r[3],
+            structural_features=_parse_json_list(r[4]),
+            start_chapter=r[5],
+            start_verse=r[6],
+            end_chapter=r[7],
+            end_verse=r[8],
+        )
+        for r in rows
+    ]
+
+
+# --- Reading Plan Endpoints ---
+
+
+@router.get("/reading-plans", response_model=List[ReadingPlanSummary])
+async def list_reading_plans() -> List[ReadingPlanSummary]:
+    """List all available reading plans."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT slug, name, description, category, estimated_days FROM reading_plans ORDER BY slug"
+        )
+        return [
+            ReadingPlanSummary(
+                slug=r[0],
+                name=r[1],
+                description=r[2],
+                category=r[3],
+                estimated_days=r[4] or 0,
+            )
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+
+
+@router.get("/reading-plans/{slug}", response_model=ReadingPlanDetail)
+async def get_reading_plan(slug: str) -> ReadingPlanDetail:
+    """Get a reading plan with all daily entries."""
+    db = _get_db()
+    try:
+        plan_rows = db.execute_query(
+            "SELECT slug, name, description, category, estimated_days FROM reading_plans WHERE slug = ?",
+            (slug,),
+        )
+    except sqlite3.OperationalError as exc:
+        raise HTTPException(status_code=503, detail="Reading plans not available") from exc
+
+    if not plan_rows:
+        raise HTTPException(status_code=404, detail=f"Reading plan '{slug}' not found")
+
+    plan = plan_rows[0]
+    entries: List[ReadingPlanEntry] = []
+    try:
+        entry_rows = db.execute_query(
+            "SELECT day_number, book_id, start_chapter, start_verse, "
+            "end_chapter, end_verse, title, reflection_question "
+            "FROM reading_plan_entries WHERE plan_slug = ? ORDER BY day_number",
+            (slug,),
+        )
+        entries = [
+            ReadingPlanEntry(
+                day_number=e[0],
+                book_id=e[1],
+                start_chapter=e[2],
+                start_verse=e[3],
+                end_chapter=e[4],
+                end_verse=e[5],
+                title=e[6],
+                reflection_question=e[7],
+            )
+            for e in entry_rows
+        ]
+    except sqlite3.OperationalError:
+        pass
+
+    return ReadingPlanDetail(
+        slug=plan[0],
+        name=plan[1],
+        description=plan[2],
+        category=plan[3],
+        estimated_days=plan[4] or 0,
+        entries=entries,
+    )
+
+
+# --- Export Endpoint ---
+
+
+@router.get("/export/verse/{translation_id}/{book_id}/{chapter}/{verse}")
+async def export_verse(
+    translation_id: str,
+    book_id: int,
+    chapter: int,
+    verse: int,
+    export_format: str = Query("json", alias="format", description="Export format: json or markdown"),
+) -> Dict[str, Any]:
+    """Export a verse with all available enrichment data."""
+    search = _get_search()
+    result = search.get_verse(translation_id, book_id, chapter, verse)
+    if not result:
+        raise HTTPException(status_code=404, detail="Verse not found")
+
+    book_name = _resolve_book_name(book_id, translation_id)
+    ref = f"{book_name or book_id} {chapter}:{verse}"
+
+    words = _get_words_for_verse(book_name or str(book_id), chapter, verse)
+    xrefs = _get_cross_refs(book_id, chapter, verse)
+
+    data: Dict[str, Any] = {
+        "reference": ref,
+        "text": result.text,
+        "translation_id": translation_id,
+    }
+    if words:
+        data["original_words"] = [w.model_dump() for w in words]
+    if xrefs:
+        data["cross_references"] = [x.model_dump() for x in xrefs]
+    if export_format == "markdown":
+        data["markdown"] = _build_export_markdown(ref, result.text, words, xrefs)
+
+    return data
+
+
 # --- Internal helpers ---
+
+
+def _build_export_markdown(ref: str, text: str, words: List["WordDetail"], xrefs: List["CrossRef"]) -> str:
+    """Build markdown representation of a verse export."""
+    md = f"# {ref}\n\n> {text}\n\n"
+    if words:
+        md += "## Original Language Words\n\n"
+        for w in words:
+            md += f"- **{w.original_text}** ({w.transliteration}) — {w.english_gloss}"
+            if w.strongs_number:
+                md += f" [{w.strongs_number}]"
+            md += "\n"
+    if xrefs:
+        md += "\n## Cross References\n\n"
+        for x in xrefs:
+            md += f"- {x.target_reference} ({x.ref_type})"
+            if x.notes:
+                md += f" — {x.notes}"
+            md += "\n"
+    return md
 
 
 def _resolve_book_name(book_id: int, translation_id: str) -> Optional[str]:
@@ -606,7 +933,250 @@ def _enrich_book_metadata(db: SQLiteManager, book: BookInfo) -> None:
         pass  # Table may not exist yet
 
 
-def _parse_json_list(value: Optional[str]) -> List[str]:
+def _get_richness_flags(book: str, chapter: int, verse: int) -> List[RichnessFlag]:
+    """Get word richness flags for a verse."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT wr.word_num, wr.strongs_number, wr.richness_score, "
+            "wr.untranslatable_nuances, wr.morphology_significance, "
+            "l.original_word, l.gloss, l.definition "
+            "FROM word_richness wr "
+            "LEFT JOIN lexicon l ON wr.strongs_number = l.strongs_number "
+            "WHERE wr.book = ? AND wr.chapter = ? AND wr.verse = ? "
+            "AND wr.richness_score > 0.3 "
+            "ORDER BY wr.richness_score DESC",
+            (book, chapter, verse),
+        )
+        flags = []
+        for r in rows:
+            nuances: List[str] = []
+            if r[3]:
+                try:
+                    nuances = json.loads(r[3])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            flags.append(
+                RichnessFlag(
+                    word_num=r[0],
+                    strongs_number=r[1],
+                    richness_score=r[2],
+                    untranslatable_nuances=nuances,
+                    morphology_significance=r[4],
+                    original_word=r[5],
+                    english_gloss=r[6],
+                    full_definition=r[7],
+                )
+            )
+        return flags
+    except sqlite3.OperationalError:
+        return []
+
+
+def _get_cross_refs(book_id: int, chapter: int, verse: int) -> List[CrossRef]:
+    """Get cross-references for a verse."""
+    db = _get_db()
+    book_names = {
+        1: "Gen",
+        2: "Exo",
+        3: "Lev",
+        4: "Num",
+        5: "Deu",
+        6: "Jos",
+        7: "Jdg",
+        8: "Rut",
+        9: "1Sa",
+        10: "2Sa",
+        11: "1Ki",
+        12: "2Ki",
+        13: "1Ch",
+        14: "2Ch",
+        15: "Ezr",
+        16: "Neh",
+        17: "Est",
+        18: "Job",
+        19: "Psa",
+        20: "Pro",
+        21: "Ecc",
+        22: "Sng",
+        23: "Isa",
+        24: "Jer",
+        25: "Lam",
+        26: "Ezk",
+        27: "Dan",
+        28: "Hos",
+        29: "Jol",
+        30: "Amo",
+        31: "Oba",
+        32: "Jon",
+        33: "Mic",
+        34: "Nam",
+        35: "Hab",
+        36: "Zep",
+        37: "Hag",
+        38: "Zec",
+        39: "Mal",
+        40: "Mat",
+        41: "Mrk",
+        42: "Luk",
+        43: "Jhn",
+        44: "Act",
+        45: "Rom",
+        46: "1Co",
+        47: "2Co",
+        48: "Gal",
+        49: "Eph",
+        50: "Php",
+        51: "Col",
+        52: "1Th",
+        53: "2Th",
+        54: "1Ti",
+        55: "2Ti",
+        56: "Tit",
+        57: "Phm",
+        58: "Heb",
+        59: "Jas",
+        60: "1Pe",
+        61: "2Pe",
+        62: "1Jn",
+        63: "2Jn",
+        64: "3Jn",
+        65: "Jud",
+        66: "Rev",
+    }
+    try:
+        rows = db.execute_query(
+            "SELECT target_book_id, target_chapter, target_verse, ref_type, confidence, notes "
+            "FROM cross_references "
+            "WHERE source_book_id = ? AND source_chapter = ? AND source_verse = ?",
+            (book_id, chapter, verse),
+        )
+        refs = []
+        for r in rows:
+            tgt_name = book_names.get(r[0], str(r[0]))
+            refs.append(
+                CrossRef(
+                    target_reference=f"{tgt_name} {r[1]}:{r[2]}",
+                    ref_type=r[3],
+                    confidence=r[4] or 0.8,
+                    notes=r[5],
+                )
+            )
+        # Also include incoming references
+        rows2 = db.execute_query(
+            "SELECT source_book_id, source_chapter, source_verse, ref_type, confidence, notes "
+            "FROM cross_references "
+            "WHERE target_book_id = ? AND target_chapter = ? AND target_verse = ?",
+            (book_id, chapter, verse),
+        )
+        for r in rows2:
+            src_name = book_names.get(r[0], str(r[0]))
+            refs.append(
+                CrossRef(
+                    target_reference=f"{src_name} {r[1]}:{r[2]}",
+                    ref_type=r[3],
+                    confidence=r[4] or 0.8,
+                    notes=r[5],
+                )
+            )
+        return refs
+    except sqlite3.OperationalError:
+        return []
+
+
+def _get_cultural_context(book_id: int, _chapter: int = 0, _verse: int = 0) -> List[CulturalNote]:
+    """Get cultural context for a verse."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT context_id, context_type, title, summary, detailed_content, "
+            "time_period, geographic_region, confidence "
+            "FROM cultural_context "
+            "WHERE book_id = ? AND start_chapter IS NULL "
+            "ORDER BY display_priority",
+            (book_id,),
+        )
+        return [
+            CulturalNote(
+                context_id=r[0],
+                context_type=r[1],
+                title=r[2],
+                summary=r[3],
+                detailed_content=r[4],
+                time_period=r[5],
+                geographic_region=r[6],
+                confidence=r[7],
+            )
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+
+
+def _get_passage_info(book_id: int, chapter: int, verse: int) -> Optional[PassageInfo]:
+    """Get the innermost passage containing a verse."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT passage_id, title, genre, literary_type, structural_features, "
+            "start_chapter, start_verse, end_chapter, end_verse "
+            "FROM passages "
+            "WHERE book_id = ? "
+            "AND (start_chapter < ? OR (start_chapter = ? AND start_verse <= ?)) "
+            "AND (end_chapter > ? OR (end_chapter = ? AND end_verse >= ?)) "
+            "ORDER BY (end_chapter - start_chapter) ASC, (end_verse - start_verse) ASC "
+            "LIMIT 1",
+            (book_id, chapter, chapter, verse, chapter, chapter, verse),
+        )
+        if rows:
+            r = rows[0]
+            return PassageInfo(
+                passage_id=r[0],
+                title=r[1],
+                genre=r[2],
+                literary_type=r[3],
+                structural_features=_parse_json_list(r[4]),
+                start_chapter=r[5],
+                start_verse=r[6],
+                end_chapter=r[7],
+                end_verse=r[8],
+            )
+    except sqlite3.OperationalError:
+        pass
+    return None
+
+
+def _get_literary_structures(book_id: int, chapter: int, verse: int) -> List[Any]:
+    """Get literary structures containing a verse."""
+    from .models import LiteraryStructure as LS
+
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT structure_type, description, significance, elements "
+            "FROM literary_structures "
+            "WHERE book_id = ? "
+            "AND (start_chapter < ? OR (start_chapter = ? AND start_verse <= ?)) "
+            "AND (end_chapter > ? OR (end_chapter = ? AND end_verse >= ?)) ",
+            (book_id, chapter, chapter, verse, chapter, chapter, verse),
+        )
+        structures: List[LS] = []
+        for r in rows:
+            elements = _parse_json_list(r[3])
+            structures.append(
+                LS(
+                    structure_type=r[0],
+                    description=r[1],
+                    significance=r[2],
+                    elements=elements,
+                )
+            )
+        return structures
+    except sqlite3.OperationalError:
+        return []
+
+
+def _parse_json_list(value: Optional[str]) -> List[Any]:
     """Parse a JSON array string into a list, or return empty list."""
     if not value:
         return []

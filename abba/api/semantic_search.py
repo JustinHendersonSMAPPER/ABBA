@@ -5,6 +5,7 @@ related word discovery, and hybrid (exact + semantic) search.
 """
 
 import logging
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -12,6 +13,44 @@ from ..database import SQLiteManager
 from ..embeddings.chroma_manager import ChromaManager
 
 logger = logging.getLogger(__name__)
+
+
+class LRUCache:
+    """Simple LRU cache for search results."""
+
+    def __init__(self, max_size: int = 256) -> None:
+        self._cache: OrderedDict[str, Any] = OrderedDict()
+        self._max_size = max_size
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, key: str) -> Optional[Any]:
+        """Get a value from cache, moving it to front."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            self.hits += 1
+            return self._cache[key]
+        self.misses += 1
+        return None
+
+    def put(self, key: str, value: Any) -> None:
+        """Store a value, evicting LRU entry if full."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        self._cache[key] = value
+        if len(self._cache) > self._max_size:
+            self._cache.popitem(last=False)
+
+    def clear(self) -> None:
+        """Clear the cache."""
+        self._cache.clear()
+        self.hits = 0
+        self.misses = 0
+
+    @property
+    def size(self) -> int:
+        """Current number of entries."""
+        return len(self._cache)
 
 
 @dataclass
@@ -54,6 +93,7 @@ class HybridSearchResult:
     match_type: str = ""  # "exact", "semantic", "both"
     semantic_similarity: float = 0.0
     exact_rank: int = 0
+    explanation: str = ""
 
 
 class SemanticSearchAPI:
@@ -145,6 +185,7 @@ class SemanticSearchAPI:
         self.db = db_manager
         self.chroma = chroma_manager
         self.models = model_manager
+        self._cache = LRUCache(max_size=256)
 
     # ------------------------------------------------------------------ #
     #  search_similar_verses                                               #
@@ -366,7 +407,7 @@ class SemanticSearchAPI:
                     semantic_similarity=sem.similarity,
                 )
 
-        # --- Score and rank ---
+        # --- Score, rank, and explain ---
         max_fts_rank = len(fts_results) or 1
         for result in combined.values():
             exact_score = (1.0 - (result.exact_rank / max_fts_rank)) if result.exact_rank > 0 else 0.0
@@ -374,10 +415,15 @@ class SemanticSearchAPI:
 
             if result.match_type == "both":
                 result.score = exact_weight * exact_score + semantic_weight * sem_score
+                result.explanation = (
+                    f"Matched both text (rank {result.exact_rank}) " f"and meaning (similarity {sem_score:.0%})"
+                )
             elif result.match_type == "exact":
                 result.score = exact_weight * exact_score
+                result.explanation = f"Text match (rank {result.exact_rank} of {max_fts_rank})"
             else:
                 result.score = semantic_weight * sem_score
+                result.explanation = f"Semantic similarity {sem_score:.0%} to query meaning"
 
         ranked = sorted(combined.values(), key=lambda r: -r.score)
         return ranked[:n_results]
@@ -430,6 +476,10 @@ class SemanticSearchAPI:
         except Exception as e:
             logger.error("Query expansion failed: %s", e)
             return []
+
+    def get_cache_stats(self) -> Dict[str, int]:
+        """Return search cache statistics."""
+        return {"hits": self._cache.hits, "misses": self._cache.misses, "size": self._cache.size}
 
     # ------------------------------------------------------------------ #
     #  Internal helpers                                                    #
