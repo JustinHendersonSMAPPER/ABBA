@@ -11,17 +11,30 @@ from ..database import SQLiteManager
 from .analysis import AnalysisAPI
 from .models import (
     APIInfo,
+    AudioResource,
     BookInfo,
     CollectionCreate,
     CollectionItemAdd,
     CollectionResponse,
+    ConceptDiscoveryResult,
+    ConceptGraph,
+    ConceptProposalCreate,
+    ConceptProposalResponse,
+    ContributionCreate,
+    ContributionResponse,
+    ContributionReviewCreate,
     CrossRef,
     CulturalNote,
     DepthLevel,
+    DiscourseUnit,
     GenreShift,
     LexiconEntry,
     LifeTopicDetail,
     LifeTopicSummary,
+    ManuscriptVariant,
+    MobileSyncRequest,
+    MobileSyncResponse,
+    MobileVerseResponse,
     MorphologyInfo,
     NoteCreate,
     NoteResponse,
@@ -30,11 +43,15 @@ from .models import (
     ReadingPlanEntry,
     ReadingPlanSummary,
     RichnessFlag,
+    SemanticDomain,
+    SemanticDomainMapping,
+    SemanticRelationship,
     SemanticSearchResult,
     ShareCreate,
     ShareResponse,
     SpeakerAttribution,
     StrongsResult,
+    SyntaxNode,
     TextSearchResult,
     ThemeGroup,
     TopicalResult,
@@ -42,8 +59,10 @@ from .models import (
     TranslationComparison,
     VerseContext,
     VerseResponse,
+    VerseSyntaxTree,
     WordAnalysis,
     WordDetail,
+    WordDomainResult,
     WordExplanation,
 )
 from .query_parser import parse_query
@@ -169,6 +188,10 @@ async def get_verse(
         analysis = _get_analysis()
         parallels = analysis.parallel_passage_detection(book_name or str(book_id), chapter, verse)
         response.parallel_passages = parallels
+        response.manuscript_variants = _get_manuscript_variants(book_id, chapter, verse)
+        response.syntax_tree = _get_syntax_tree(book_id, chapter, verse)
+        response.discourse_units = _get_discourse_units(book_id, chapter, verse)
+        response.semantic_domains = _get_semantic_domains_for_verse(book_name or str(book_id), chapter, verse)
 
     return response
 
@@ -1595,3 +1618,912 @@ def _parse_json_list(value: Optional[str]) -> List[Any]:
         return result if isinstance(result, list) else []
     except (json.JSONDecodeError, TypeError):
         return []
+
+
+# --- Phase 9 Helper Functions ---
+
+
+def _get_manuscript_variants(book_id: int, chapter: int, verse: int) -> List[ManuscriptVariant]:
+    """Get manuscript variants for a verse."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT id, variant_type, base_text, variant_text, manuscripts, "
+            "explanation, significance, confidence "
+            "FROM manuscript_variants "
+            "WHERE book_id = ? AND chapter = ? AND verse = ?",
+            (book_id, chapter, verse),
+        )
+        return [
+            ManuscriptVariant(
+                variant_id=r[0],
+                variant_type=r[1],
+                base_text=r[2],
+                variant_text=r[3],
+                manuscripts=r[4],
+                explanation=r[5],
+                significance=r[6] or "minor",
+                confidence=r[7] or 0.8,
+            )
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+
+
+def _get_syntax_tree(book_id: int, chapter: int, verse: int) -> Optional[VerseSyntaxTree]:
+    """Get syntax tree for a verse."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT node_id, node_type, role, parent_id, clause_type, relation, depth, text_content, word_num "
+            "FROM syntax_trees "
+            "WHERE book_id = ? AND chapter = ? AND verse = ? "
+            "ORDER BY depth, id",
+            (book_id, chapter, verse),
+        )
+        if not rows:
+            return None
+
+        nodes_by_id: Dict[str, SyntaxNode] = {}
+        root_nodes: List[SyntaxNode] = []
+
+        for r in rows:
+            node = SyntaxNode(
+                node_id=r[0],
+                node_type=r[1],
+                role=r[2],
+                clause_type=r[4],
+                relation=r[5],
+                depth=r[6] or 0,
+                text_content=r[7],
+                word_num=r[8],
+            )
+            nodes_by_id[r[0]] = node
+            parent_id = r[3]
+            if parent_id and parent_id in nodes_by_id:
+                nodes_by_id[parent_id].children.append(node)
+            else:
+                root_nodes.append(node)
+
+        return VerseSyntaxTree(book_id=book_id, chapter=chapter, verse=verse, root_nodes=root_nodes)
+    except sqlite3.OperationalError:
+        return None
+
+
+def _get_discourse_units(book_id: int, chapter: int, verse: int) -> List[DiscourseUnit]:
+    """Get discourse annotations covering a verse."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT id, discourse_type, function_label, relation_to_context, description, "
+            "prominence, start_chapter, start_verse, end_chapter, end_verse "
+            "FROM discourse_annotations "
+            "WHERE book_id = ? "
+            "AND (start_chapter < ? OR (start_chapter = ? AND start_verse <= ?)) "
+            "AND (end_chapter > ? OR (end_chapter = ? AND end_verse >= ?)) ",
+            (book_id, chapter, chapter, verse, chapter, chapter, verse),
+        )
+        return [
+            DiscourseUnit(
+                discourse_id=r[0],
+                discourse_type=r[1],
+                function_label=r[2],
+                relation_to_context=r[3],
+                description=r[4],
+                prominence=r[5] or 0,
+                start_chapter=r[6],
+                start_verse=r[7],
+                end_chapter=r[8],
+                end_verse=r[9],
+            )
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+
+
+def _get_semantic_domains_for_verse(book: str, chapter: int, verse: int) -> List[SemanticDomainMapping]:
+    """Get semantic domain mappings for words in a verse."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT DISTINCT sdm.strongs_number, sdm.domain_code, sd.domain_name, sdm.confidence "
+            "FROM strongs_domain_mappings sdm "
+            "JOIN semantic_domains sd ON sdm.domain_code = sd.domain_code "
+            "JOIN words w ON w.strongs_primary = sdm.strongs_number "
+            "WHERE w.book = ? AND w.chapter = ? AND w.verse = ?",
+            (book, chapter, verse),
+        )
+        return [
+            SemanticDomainMapping(
+                strongs_number=r[0],
+                domain_code=r[1],
+                domain_name=r[2],
+                confidence=r[3] or 0.9,
+            )
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+
+
+# --- Phase 9A: Semantic Domain Endpoints ---
+
+
+@router.get("/semantic-domains", response_model=List[SemanticDomain], tags=["phase9"])
+async def list_semantic_domains(
+    parent: Optional[str] = Query(None, description="Filter by parent domain code"),
+) -> List[SemanticDomain]:
+    """List Louw-Nida semantic domains."""
+    db = _get_db()
+    try:
+        if parent:
+            rows = db.execute_query(
+                "SELECT domain_code, domain_name, parent_domain, description, level "
+                "FROM semantic_domains WHERE parent_domain = ? ORDER BY domain_code",
+                (parent,),
+            )
+        else:
+            rows = db.execute_query(
+                "SELECT domain_code, domain_name, parent_domain, description, level "
+                "FROM semantic_domains ORDER BY domain_code",
+            )
+        return [
+            SemanticDomain(domain_code=r[0], domain_name=r[1], parent_domain=r[2], description=r[3], level=r[4] or 1)
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+
+
+@router.get("/semantic-domains/{domain_code}/words", response_model=List[WordDomainResult], tags=["phase9"])
+async def get_domain_words(domain_code: str) -> List[WordDomainResult]:
+    """Get all words mapped to a semantic domain."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT sdm.strongs_number, l.original_word, l.gloss, sdm.confidence "
+            "FROM strongs_domain_mappings sdm "
+            "LEFT JOIN lexicon l ON sdm.strongs_number = l.strongs_number "
+            "WHERE sdm.domain_code = ? "
+            "ORDER BY sdm.confidence DESC",
+            (domain_code,),
+        )
+        return [WordDomainResult(strongs_number=r[0], original_word=r[1], gloss=r[2]) for r in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
+@router.get("/words/{strongs_number}/domains", response_model=WordDomainResult, tags=["phase9"])
+async def get_word_domains(strongs_number: str) -> WordDomainResult:
+    """Get semantic domains for a specific word (by Strong's number)."""
+    db = _get_db()
+    lexicon_row = db.get_lexicon_entry(strongs_number)
+    try:
+        rows = db.execute_query(
+            "SELECT sd.domain_code, sd.domain_name, sd.parent_domain, sd.description, sd.level, sdm.confidence "
+            "FROM strongs_domain_mappings sdm "
+            "JOIN semantic_domains sd ON sdm.domain_code = sd.domain_code "
+            "WHERE sdm.strongs_number = ?",
+            (strongs_number,),
+        )
+        domains = [
+            SemanticDomain(domain_code=r[0], domain_name=r[1], parent_domain=r[2], description=r[3], level=r[4] or 1)
+            for r in rows
+        ]
+        # Get related words in same domains
+        related: List[Dict[str, Any]] = []
+        for domain in domains[:3]:
+            rel_rows = db.execute_query(
+                "SELECT sdm.strongs_number, l.original_word, l.gloss "
+                "FROM strongs_domain_mappings sdm "
+                "LEFT JOIN lexicon l ON sdm.strongs_number = l.strongs_number "
+                "WHERE sdm.domain_code = ? AND sdm.strongs_number != ? "
+                "LIMIT 5",
+                (domain.domain_code, strongs_number),
+            )
+            for rr in rel_rows:
+                related.append({"strongs_number": rr[0], "original_word": rr[1], "gloss": rr[2]})
+    except sqlite3.OperationalError:
+        domains = []
+        related = []
+    return WordDomainResult(
+        strongs_number=strongs_number,
+        original_word=lexicon_row["original_word"] if lexicon_row else None,
+        gloss=lexicon_row["gloss"] if lexicon_row else None,
+        domains=domains,
+        related_words=related,
+    )
+
+
+# --- Phase 9A: Concept Discovery Endpoint ---
+
+_SYNONYM_MAP: Dict[str, List[str]] = {
+    "worry": ["anxiety", "fear", "peace"],
+    "anxious": ["anxiety", "fear", "peace"],
+    "angry": ["anger", "wrath", "patience"],
+    "sad": ["grief", "mourning", "comfort"],
+    "money": ["wealth", "generosity", "contentment"],
+    "forgive": ["forgiveness", "mercy", "grace"],
+    "love": ["love", "agape", "compassion"],
+    "death": ["grief", "resurrection", "eternal life"],
+    "sin": ["sin", "repentance", "forgiveness"],
+    "pray": ["prayer", "intercession", "worship"],
+}
+
+
+def _discover_matched_concepts(db: Any, query_lower: str, limit: int) -> List[TopicSummary]:
+    """Search concepts by name/description match."""
+    try:
+        rows = db.execute_query(
+            "SELECT cd.concept_id, cd.name, cd.description, "
+            "COUNT(cvm.verse_id) as verse_count "
+            "FROM concept_definitions cd "
+            "LEFT JOIN concept_verse_mappings cvm ON cd.concept_id = cvm.concept_id "
+            "WHERE LOWER(cd.name) LIKE ? OR LOWER(cd.description) LIKE ? "
+            "GROUP BY cd.concept_id ORDER BY verse_count DESC LIMIT ?",
+            (f"%{query_lower}%", f"%{query_lower}%", limit),
+        )
+        return [TopicSummary(name=r[1] or r[0], description=r[2], verse_count=r[3]) for r in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
+def _discover_matched_topics(db: Any, query_lower: str, limit: int) -> List[LifeTopicSummary]:
+    """Search life topics by name/description match."""
+    try:
+        rows = db.execute_query(
+            "SELECT slug, name, category, description, icon FROM life_topics "
+            "WHERE LOWER(name) LIKE ? OR LOWER(description) LIKE ? LIMIT ?",
+            (f"%{query_lower}%", f"%{query_lower}%", limit),
+        )
+        return [LifeTopicSummary(slug=r[0], name=r[1], category=r[2], description=r[3], icon=r[4]) for r in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
+def _discover_suggestions(db: Any, query_lower: str, query_words: set) -> List[str]:
+    """Generate suggested searches from semantic domains and synonym expansion."""
+    suggestions: List[str] = []
+    try:
+        domain_rows = db.execute_query(
+            "SELECT domain_name FROM semantic_domains WHERE LOWER(domain_name) LIKE ? LIMIT 5",
+            (f"%{query_lower}%",),
+        )
+        for r in domain_rows:
+            suggestions.append(f"words in domain: {r[0]}")
+    except sqlite3.OperationalError:
+        pass
+
+    for word in query_words:
+        if word in _SYNONYM_MAP:
+            for synonym in _SYNONYM_MAP[word]:
+                if synonym not in [s.replace("words in domain: ", "") for s in suggestions]:
+                    suggestions.append(f"topic: {synonym}")
+    return suggestions[:10]
+
+
+@router.get("/discover", response_model=ConceptDiscoveryResult, tags=["phase9"])
+async def discover_concepts(
+    q: str = Query(..., description="Natural language query"),
+    limit: int = Query(10, ge=1, le=50),
+) -> ConceptDiscoveryResult:
+    """Discover biblical concepts from a natural-language query.
+
+    Maps everyday language ('worried about money', 'how to forgive')
+    to biblical concepts and life topics.
+    """
+    db = _get_db()
+    query_lower = q.lower()
+    query_words = set(query_lower.split())
+
+    matched_concepts = _discover_matched_concepts(db, query_lower, limit)
+    matched_topics = _discover_matched_topics(db, query_lower, limit)
+    suggestions = _discover_suggestions(db, query_lower, query_words)
+
+    return ConceptDiscoveryResult(
+        query=q,
+        matched_concepts=matched_concepts[:limit],
+        matched_life_topics=matched_topics[:limit],
+        suggested_searches=suggestions,
+    )
+
+
+# --- Phase 9B: Syntax Tree Endpoints ---
+
+
+@router.get(
+    "/syntax/{book_id}/{chapter}/{verse}",
+    response_model=VerseSyntaxTree,
+    tags=["phase9"],
+)
+async def get_verse_syntax(book_id: int, chapter: int, verse: int) -> VerseSyntaxTree:
+    """Get clause-level syntax tree for a verse (MACULA treebank)."""
+    tree = _get_syntax_tree(book_id, chapter, verse)
+    if not tree:
+        raise HTTPException(status_code=404, detail="Syntax tree not found for this verse")
+    return tree
+
+
+# --- Phase 9B: Discourse Annotation Endpoints ---
+
+
+@router.get(
+    "/discourse/{book_id}/{chapter}/{verse}",
+    response_model=List[DiscourseUnit],
+    tags=["phase9"],
+)
+async def get_verse_discourse(book_id: int, chapter: int, verse: int) -> List[DiscourseUnit]:
+    """Get discourse annotations covering a verse (OpenText.org)."""
+    return _get_discourse_units(book_id, chapter, verse)
+
+
+@router.get(
+    "/discourse/{book_id}",
+    response_model=List[DiscourseUnit],
+    tags=["phase9"],
+)
+async def get_book_discourse(book_id: int) -> List[DiscourseUnit]:
+    """Get all discourse annotations for a book."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT id, discourse_type, function_label, relation_to_context, description, "
+            "prominence, start_chapter, start_verse, end_chapter, end_verse "
+            "FROM discourse_annotations WHERE book_id = ? ORDER BY start_chapter, start_verse",
+            (book_id,),
+        )
+        return [
+            DiscourseUnit(
+                discourse_id=r[0],
+                discourse_type=r[1],
+                function_label=r[2],
+                relation_to_context=r[3],
+                description=r[4],
+                prominence=r[5] or 0,
+                start_chapter=r[6],
+                start_verse=r[7],
+                end_chapter=r[8],
+                end_verse=r[9],
+            )
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+
+
+# --- Phase 9B: Manuscript Variant Endpoints ---
+
+
+@router.get(
+    "/variants/{book_id}/{chapter}/{verse}",
+    response_model=List[ManuscriptVariant],
+    tags=["phase9"],
+)
+async def get_verse_variants(book_id: int, chapter: int, verse: int) -> List[ManuscriptVariant]:
+    """Get manuscript variants for a verse."""
+    return _get_manuscript_variants(book_id, chapter, verse)
+
+
+@router.get(
+    "/variants/significant",
+    response_model=List[ManuscriptVariant],
+    tags=["phase9"],
+)
+async def get_significant_variants(
+    limit: int = Query(50, ge=1, le=200),
+) -> List[ManuscriptVariant]:
+    """Get all significant (major) manuscript variants."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT id, variant_type, base_text, variant_text, manuscripts, "
+            "explanation, significance, confidence "
+            "FROM manuscript_variants WHERE significance = 'major' "
+            "ORDER BY book_id, chapter, verse LIMIT ?",
+            (limit,),
+        )
+        return [
+            ManuscriptVariant(
+                variant_id=r[0],
+                variant_type=r[1],
+                base_text=r[2],
+                variant_text=r[3],
+                manuscripts=r[4],
+                explanation=r[5],
+                significance=r[6] or "major",
+                confidence=r[7] or 0.8,
+            )
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+
+
+# --- Phase 9C: Multi-language Semantic Search Endpoint ---
+
+
+def _multilingual_word_search(db: Any, query_lower: str, limit: int) -> list:
+    """Find matching original-language words/concepts."""
+    try:
+        rows = db.execute_query(
+            "SELECT DISTINCT strongs_primary, book, chapter, verse "
+            "FROM words WHERE LOWER(translation) LIKE ? "
+            "ORDER BY book, chapter, verse LIMIT ?",
+            (f"%{query_lower}%", limit * 3),
+        )
+        return list(rows)
+    except sqlite3.OperationalError:
+        return []
+
+
+def _multilingual_lexicon_fallback(db: Any, query_lower: str, limit: int) -> list:
+    """Fall back to lexicon gloss search when word search yields nothing."""
+    word_rows: list = []
+    try:
+        lex_rows = db.execute_query(
+            "SELECT strongs_number FROM lexicon WHERE LOWER(gloss) LIKE ? OR LOWER(definition) LIKE ? LIMIT 10",
+            (f"%{query_lower}%", f"%{query_lower}%"),
+        )
+        for sn in [str(r[0]) for r in lex_rows][:5]:
+            word_matches = db.execute_query(
+                "SELECT DISTINCT book, chapter, verse FROM words WHERE strongs_primary = ? LIMIT ?",
+                (sn, limit),
+            )
+            word_rows.extend([(sn, r[0], r[1], r[2]) for r in word_matches])
+    except sqlite3.OperationalError:
+        pass
+    return word_rows
+
+
+def _resolve_book_id(db: Any, book_name: str) -> Optional[int]:
+    """Resolve a book name to its book_id."""
+    try:
+        rows = db.execute_query(
+            "SELECT DISTINCT book_id FROM books WHERE name = ? OR common_name = ? LIMIT 1",
+            (book_name, book_name),
+        )
+        return int(rows[0][0]) if rows else None
+    except sqlite3.OperationalError:
+        return None
+
+
+def _fetch_verse_result(
+    db: Any, tid: str, bid: int, ch: int, vs: int, book_name: str, strongs: str
+) -> Optional[SemanticSearchResult]:
+    """Fetch a single verse text and build a search result."""
+    try:
+        rows = db.execute_query(
+            "SELECT text FROM verses WHERE translation_id = ? AND book_id = ? AND chapter = ? AND verse = ?",
+            (tid, bid, ch, vs),
+        )
+        if rows:
+            return SemanticSearchResult(
+                book_id=bid,
+                chapter=ch,
+                verse=vs,
+                text=str(rows[0][0]),
+                book_name=book_name,
+                score=0.8,
+                match_type="multilingual",
+                explanation=f"Matched via original language ({strongs})",
+                translation_id=tid,
+            )
+    except sqlite3.OperationalError:
+        pass
+    return None
+
+
+def _multilingual_resolve_verses(
+    db: Any, word_rows: list, target_list: List[str], limit: int
+) -> List[SemanticSearchResult]:
+    """Resolve word matches to verse texts in requested translations."""
+    results: List[SemanticSearchResult] = []
+    seen: set = set()
+    for row in word_rows:
+        book_name, ch, vs = str(row[1]), int(row[2]), int(row[3])
+        bid = _resolve_book_id(db, book_name)
+        if bid is None:
+            continue
+        for tid in target_list:
+            key = (tid, bid, ch, vs)
+            if key in seen:
+                continue
+            seen.add(key)
+            result = _fetch_verse_result(db, tid, bid, ch, vs, book_name, str(row[0]))
+            if result:
+                results.append(result)
+            if len(results) >= limit:
+                return results
+        if len(results) >= limit:
+            return results
+    return results
+
+
+@router.get("/search/multilingual", response_model=List[SemanticSearchResult], tags=["phase9"])
+async def multilingual_search(
+    q: str = Query(..., description="Search query in any language"),
+    source_lang: str = Query(
+        "en", description="Source language of the query"
+    ),  # noqa: ARG001  # pylint: disable=unused-argument
+    target_translations: Optional[str] = Query(None, description="Comma-separated translation IDs"),
+    limit: int = Query(20, ge=1, le=100),
+) -> List[SemanticSearchResult]:
+    """Search across translations in any language via original-language alignment.
+
+    The query is matched against original Hebrew/Greek concepts, then results
+    are returned from the requested translations regardless of language.
+    """
+    db = _get_db()
+    query_lower = q.lower()
+    word_rows = _multilingual_word_search(db, query_lower, limit)
+    if not word_rows:
+        word_rows = _multilingual_lexicon_fallback(db, query_lower, limit)
+
+    target_list = target_translations.split(",") if target_translations else ["engbsb"]
+    return _multilingual_resolve_verses(db, word_rows, target_list, limit)[:limit]
+
+
+# --- Phase 9C: Community Contribution Endpoints ---
+
+
+@router.post("/community/contributions", response_model=ContributionResponse, tags=["phase9"])
+async def create_contribution(body: ContributionCreate) -> ContributionResponse:
+    """Submit a community contribution for review."""
+    db = _get_db()
+    try:
+        db.execute_update(
+            "INSERT INTO community_contributions (book_id, chapter, verse, contribution_type, title, content) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (body.book_id, body.chapter, body.verse, body.contribution_type, body.title, body.content),
+        )
+        rows = db.execute_query(
+            "SELECT id, book_id, chapter, verse, contribution_type, title, content, "
+            "author_id, status, created_at "
+            "FROM community_contributions ORDER BY id DESC LIMIT 1",
+        )
+        r = rows[0]
+        return ContributionResponse(
+            id=r[0],
+            book_id=r[1],
+            chapter=r[2],
+            verse=r[3],
+            contribution_type=r[4],
+            title=r[5],
+            content=r[6],
+            author_id=r[7] or "anonymous",
+            status=r[8] or "pending",
+            created_at=str(r[9]) if r[9] else None,
+        )
+    except sqlite3.OperationalError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create contribution: {e}") from e
+
+
+@router.get("/community/contributions", response_model=List[ContributionResponse], tags=["phase9"])
+async def list_contributions(
+    status: Optional[str] = Query(None, description="Filter by status"),
+    book_id: Optional[int] = Query(None, description="Filter by book"),
+    limit: int = Query(50, ge=1, le=200),
+) -> List[ContributionResponse]:
+    """List community contributions."""
+    db = _get_db()
+    try:
+        query = (
+            "SELECT id, book_id, chapter, verse, contribution_type, title, content, "
+            "author_id, status, created_at FROM community_contributions WHERE 1=1"
+        )
+        params: List[Any] = []
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        if book_id is not None:
+            query += " AND book_id = ?"
+            params.append(book_id)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        rows = db.execute_query(query, tuple(params))
+        return [
+            ContributionResponse(
+                id=r[0],
+                book_id=r[1],
+                chapter=r[2],
+                verse=r[3],
+                contribution_type=r[4],
+                title=r[5],
+                content=r[6],
+                author_id=r[7] or "anonymous",
+                status=r[8] or "pending",
+                created_at=str(r[9]) if r[9] else None,
+            )
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+
+
+@router.post("/community/contributions/{contribution_id}/review", tags=["phase9"])
+async def review_contribution(contribution_id: int, body: ContributionReviewCreate) -> Dict[str, str]:
+    """Review a community contribution."""
+    db = _get_db()
+    try:
+        db.execute_update(
+            "INSERT INTO contribution_reviews (contribution_id, reviewer_id, decision, review_note) "
+            "VALUES (?, ?, ?, ?)",
+            (contribution_id, "reviewer", body.decision, body.review_note),
+        )
+        new_status = "approved" if body.decision == "approve" else "rejected"
+        if body.decision == "request_changes":
+            new_status = "pending"
+        db.execute_update(
+            "UPDATE community_contributions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_status, contribution_id),
+        )
+        return {"status": "ok", "new_status": new_status}
+    except sqlite3.OperationalError as e:
+        raise HTTPException(status_code=500, detail=f"Review failed: {e}") from e
+
+
+# --- Phase 9C: Concept Proposal Endpoints ---
+
+
+@router.post("/concepts/proposals", response_model=ConceptProposalResponse, tags=["phase9"])
+async def create_concept_proposal(body: ConceptProposalCreate) -> ConceptProposalResponse:
+    """Propose a new concept or edit to an existing one."""
+    db = _get_db()
+    try:
+        db.execute_update(
+            "INSERT INTO concept_proposals "
+            "(concept_name, proposal_type, description, hebrew_terms_json, greek_terms_json, verse_mappings_json) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                body.concept_name,
+                body.proposal_type,
+                body.description,
+                json.dumps(body.hebrew_terms),
+                json.dumps(body.greek_terms),
+                json.dumps(body.verse_mappings),
+            ),
+        )
+        rows = db.execute_query(
+            "SELECT id, concept_name, proposed_by, proposal_type, description, "
+            "hebrew_terms_json, greek_terms_json, verse_mappings_json, status, created_at "
+            "FROM concept_proposals ORDER BY id DESC LIMIT 1",
+        )
+        r = rows[0]
+        return ConceptProposalResponse(
+            id=r[0],
+            concept_name=r[1],
+            proposed_by=r[2] or "anonymous",
+            proposal_type=r[3],
+            description=r[4],
+            hebrew_terms=json.loads(r[5]) if r[5] else [],
+            greek_terms=json.loads(r[6]) if r[6] else [],
+            verse_mappings=json.loads(r[7]) if r[7] else [],
+            status=r[8] or "pending",
+            created_at=str(r[9]) if r[9] else None,
+        )
+    except sqlite3.OperationalError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create proposal: {e}") from e
+
+
+@router.get("/concepts/proposals", response_model=List[ConceptProposalResponse], tags=["phase9"])
+async def list_concept_proposals(
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+) -> List[ConceptProposalResponse]:
+    """List concept proposals."""
+    db = _get_db()
+    try:
+        query = (
+            "SELECT id, concept_name, proposed_by, proposal_type, description, "
+            "hebrew_terms_json, greek_terms_json, verse_mappings_json, status, created_at "
+            "FROM concept_proposals WHERE 1=1"
+        )
+        params: List[Any] = []
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        rows = db.execute_query(query, tuple(params))
+        return [
+            ConceptProposalResponse(
+                id=r[0],
+                concept_name=r[1],
+                proposed_by=r[2] or "anonymous",
+                proposal_type=r[3],
+                description=r[4],
+                hebrew_terms=json.loads(r[5]) if r[5] else [],
+                greek_terms=json.loads(r[6]) if r[6] else [],
+                verse_mappings=json.loads(r[7]) if r[7] else [],
+                status=r[8] or "pending",
+                created_at=str(r[9]) if r[9] else None,
+            )
+            for r in rows
+        ]
+    except sqlite3.OperationalError:
+        return []
+
+
+# --- Phase 9D: Audio Integration Endpoints ---
+
+
+@router.get(
+    "/audio/{book_id}/{chapter}",
+    response_model=AudioResource,
+    tags=["phase9"],
+)
+async def get_audio_resource(
+    book_id: int,
+    chapter: int,
+    translation_id: str = Query("engbsb"),
+) -> AudioResource:
+    """Get audio resource URL for a chapter.
+
+    Returns metadata for audio playback. Actual audio files are served
+    externally; this endpoint provides the URL and timing metadata.
+    """
+    return AudioResource(
+        book_id=book_id,
+        chapter=chapter,
+        verse_start=1,
+        audio_url=f"/audio/{translation_id}/{book_id}/{chapter}.mp3",
+        translation_id=translation_id,
+        narrator="ABBA Default",
+    )
+
+
+# --- Phase 9D: Semantic Relationship Graph Endpoints ---
+
+
+@router.get("/graph/{concept_name}", response_model=ConceptGraph, tags=["phase9"])
+async def get_concept_graph(
+    concept_name: str,
+    depth: int = Query(1, ge=1, le=3, description="How many hops from the center concept"),
+) -> ConceptGraph:
+    """Get a semantic relationship graph for a concept.
+
+    Returns nodes and edges for visualization (e.g., force-directed graph).
+    """
+    db = _get_db()
+    relationships: List[SemanticRelationship] = []
+    visited: set = {concept_name}
+    frontier = [concept_name]
+
+    for _ in range(depth):
+        next_frontier: List[str] = []
+        for concept in frontier:
+            try:
+                rows = db.execute_query(
+                    "SELECT source_concept, target_concept, relationship_type, weight, "
+                    "evidence_count, shared_strongs_json "
+                    "FROM semantic_relationship_graph "
+                    "WHERE source_concept = ? OR target_concept = ?",
+                    (concept, concept),
+                )
+                for r in rows:
+                    shared = []
+                    if r[5]:
+                        try:
+                            shared = json.loads(r[5])
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    relationships.append(
+                        SemanticRelationship(
+                            source_concept=r[0],
+                            target_concept=r[1],
+                            relationship_type=r[2],
+                            weight=r[3] or 1.0,
+                            evidence_count=r[4] or 0,
+                            shared_strongs=shared,
+                        )
+                    )
+                    neighbor = r[1] if r[0] == concept else r[0]
+                    if neighbor not in visited:
+                        visited.add(neighbor)
+                        next_frontier.append(neighbor)
+            except sqlite3.OperationalError:
+                break
+        frontier = next_frontier
+
+    nodes = [{"name": n, "is_center": n == concept_name} for n in visited]
+    return ConceptGraph(
+        center_concept=concept_name,
+        relationships=relationships,
+        nodes=nodes,
+    )
+
+
+# --- Phase 9D: ML Concept Feedback Endpoints ---
+
+
+@router.post("/concepts/{concept_name}/feedback", tags=["phase9"])
+async def submit_concept_feedback(
+    concept_name: str,
+    verse_id: str = Query(..., description="Verse identifier"),
+    feedback_type: str = Query(..., description="relevant, irrelevant, or partial"),
+) -> Dict[str, str]:
+    """Submit feedback on a concept-verse mapping for ML refinement."""
+    db = _get_db()
+    if feedback_type not in ("relevant", "irrelevant", "partial"):
+        raise HTTPException(status_code=400, detail="feedback_type must be relevant, irrelevant, or partial")
+    try:
+        db.execute_update(
+            "INSERT INTO concept_feedback (concept_name, verse_id, feedback_type) VALUES (?, ?, ?)",
+            (concept_name, verse_id, feedback_type),
+        )
+        return {"status": "ok", "message": f"Feedback recorded for {concept_name}"}
+    except sqlite3.OperationalError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to record feedback: {e}") from e
+
+
+@router.get("/concepts/{concept_name}/feedback/summary", tags=["phase9"])
+async def get_concept_feedback_summary(concept_name: str) -> Dict[str, Any]:
+    """Get aggregated feedback for a concept's verse mappings."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT feedback_type, COUNT(*) FROM concept_feedback " "WHERE concept_name = ? GROUP BY feedback_type",
+            (concept_name,),
+        )
+        summary: Dict[str, int] = {}
+        for r in rows:
+            summary[str(r[0])] = int(r[1])
+        return {"concept_name": concept_name, "feedback": summary}
+    except sqlite3.OperationalError:
+        return {"concept_name": concept_name, "feedback": {}}
+
+
+# --- Phase 9D: Mobile Native App Endpoints ---
+
+
+@router.post("/mobile/sync", response_model=MobileSyncResponse, tags=["phase9"])
+async def mobile_sync(body: MobileSyncRequest) -> MobileSyncResponse:
+    """Sync optimized verse data for mobile offline use.
+
+    Returns compact verse objects with optional word data for
+    the requested books.
+    """
+    db = _get_db()
+    import datetime
+
+    sync_ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    verses: List[MobileVerseResponse] = []
+
+    book_ids = body.book_ids if body.book_ids else [1]  # Default to Genesis
+    for bid in book_ids[:5]:  # Limit to 5 books per sync
+        try:
+            rows = db.execute_query(
+                "SELECT b.name, v.chapter, v.verse, v.text "
+                "FROM verses v "
+                "JOIN books b ON v.book_id = b.book_id AND v.translation_id = b.translation_id "
+                "WHERE v.translation_id = 'engbsb' AND v.book_id = ? "
+                "ORDER BY v.chapter, v.verse",
+                (bid,),
+            )
+            for r in rows:
+                mv = MobileVerseResponse(
+                    ref=f"{r[0]} {r[1]}:{r[2]}",
+                    text=str(r[3]),
+                    tid="engbsb",
+                )
+                if body.include_words:
+                    try:
+                        word_rows = db.execute_query(
+                            "SELECT word_num, transliteration, translation, strongs_primary "
+                            "FROM words WHERE book = ? AND chapter = ? AND verse = ? ORDER BY word_num",
+                            (str(r[0]), int(r[1]), int(r[2])),
+                        )
+                        mv.words = [{"n": w[0], "t": w[1], "g": w[2], "s": w[3]} for w in word_rows]
+                    except sqlite3.OperationalError:
+                        pass
+                verses.append(mv)
+        except sqlite3.OperationalError:
+            continue
+
+    return MobileSyncResponse(
+        sync_timestamp=sync_ts,
+        verses=verses,
+        total_verses=len(verses),
+    )

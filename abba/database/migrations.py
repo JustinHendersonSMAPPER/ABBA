@@ -1051,6 +1051,311 @@ def add_user_annotation_tables(db_path: Path) -> bool:
         raise
 
 
+def add_semantic_domain_tables(db_path: Path) -> bool:
+    """Add semantic_domains and strongs_domain_mappings tables for Louw-Nida classification."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='semantic_domains'")
+            if cursor.fetchone()[0] > 0:
+                logger.debug("semantic_domains table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS semantic_domains (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    domain_code TEXT UNIQUE NOT NULL,
+                    domain_name TEXT NOT NULL,
+                    parent_domain TEXT,
+                    description TEXT,
+                    level INTEGER DEFAULT 1
+                )
+            """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS strongs_domain_mappings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    strongs_number TEXT NOT NULL,
+                    domain_code TEXT NOT NULL,
+                    confidence REAL DEFAULT 0.9,
+                    UNIQUE(strongs_number, domain_code),
+                    FOREIGN KEY (domain_code) REFERENCES semantic_domains(domain_code)
+                )
+            """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_domain_strongs ON strongs_domain_mappings(strongs_number)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_domain_code ON strongs_domain_mappings(domain_code)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_domain_parent ON semantic_domains(parent_domain)")
+            conn.commit()
+            logger.info("Added semantic_domains and strongs_domain_mappings tables")
+            return True
+    except Exception as e:
+        logger.error("Failed to add semantic domain tables: %s", e)
+        raise
+
+
+def add_syntax_tree_table(db_path: Path) -> bool:
+    """Add syntax_trees table for MACULA treebank data."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='syntax_trees'")
+            if cursor.fetchone()[0] > 0:
+                logger.debug("syntax_trees table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS syntax_trees (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    node_id TEXT NOT NULL UNIQUE,
+                    book_id INTEGER NOT NULL,
+                    chapter INTEGER NOT NULL,
+                    verse INTEGER NOT NULL,
+                    word_num INTEGER,
+                    node_type TEXT NOT NULL,
+                    role TEXT,
+                    parent_id TEXT,
+                    clause_type TEXT,
+                    relation TEXT,
+                    depth INTEGER DEFAULT 0,
+                    text_content TEXT
+                )
+            """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_syntax_verse ON syntax_trees(book_id, chapter, verse)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_syntax_parent ON syntax_trees(parent_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_syntax_clause ON syntax_trees(clause_type)")
+            conn.commit()
+            logger.info("Added syntax_trees table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add syntax_trees table: %s", e)
+        raise
+
+
+def add_discourse_annotation_table(db_path: Path) -> bool:
+    """Add discourse_annotations table for OpenText.org discourse data."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='discourse_annotations'")
+            if cursor.fetchone()[0] > 0:
+                logger.debug("discourse_annotations table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS discourse_annotations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    book_id INTEGER NOT NULL,
+                    start_chapter INTEGER NOT NULL,
+                    start_verse INTEGER NOT NULL,
+                    end_chapter INTEGER NOT NULL,
+                    end_verse INTEGER NOT NULL,
+                    discourse_type TEXT NOT NULL,
+                    function_label TEXT,
+                    relation_to_context TEXT,
+                    description TEXT,
+                    prominence INTEGER DEFAULT 0
+                )
+            """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_discourse_verse "
+                "ON discourse_annotations(book_id, start_chapter, start_verse)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_discourse_type ON discourse_annotations(discourse_type)")
+            conn.commit()
+            logger.info("Added discourse_annotations table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add discourse_annotations table: %s", e)
+        raise
+
+
+def add_manuscript_variant_table(db_path: Path) -> bool:
+    """Add manuscript_variants table for textual criticism data."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='manuscript_variants'")
+            if cursor.fetchone()[0] > 0:
+                logger.debug("manuscript_variants table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS manuscript_variants (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    book_id INTEGER NOT NULL,
+                    chapter INTEGER NOT NULL,
+                    verse INTEGER NOT NULL,
+                    variant_type TEXT NOT NULL,
+                    base_text TEXT,
+                    variant_text TEXT,
+                    manuscripts TEXT,
+                    explanation TEXT,
+                    significance TEXT CHECK(significance IN ('major', 'minor', 'orthographic'))
+                        DEFAULT 'minor',
+                    confidence REAL DEFAULT 0.8
+                )
+            """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_variants_verse ON manuscript_variants(book_id, chapter, verse)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_variants_type ON manuscript_variants(variant_type)")
+            conn.commit()
+            logger.info("Added manuscript_variants table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add manuscript_variants table: %s", e)
+        raise
+
+
+def add_community_contribution_tables(db_path: Path) -> bool:
+    """Add community_contributions and contribution_reviews tables."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='community_contributions'")
+            if cursor.fetchone()[0] > 0:
+                logger.debug("community_contributions table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS community_contributions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    book_id INTEGER NOT NULL,
+                    chapter INTEGER,
+                    verse INTEGER,
+                    contribution_type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    author_id TEXT DEFAULT 'anonymous',
+                    status TEXT CHECK(status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS contribution_reviews (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    contribution_id INTEGER NOT NULL,
+                    reviewer_id TEXT NOT NULL,
+                    decision TEXT CHECK(decision IN ('approve', 'reject', 'request_changes')) NOT NULL,
+                    review_note TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (contribution_id) REFERENCES community_contributions(id)
+                )
+            """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_contributions_book "
+                "ON community_contributions(book_id, chapter, verse)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_contributions_status ON community_contributions(status)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_reviews_contrib ON contribution_reviews(contribution_id)")
+            conn.commit()
+            logger.info("Added community_contributions and contribution_reviews tables")
+            return True
+    except Exception as e:
+        logger.error("Failed to add community contribution tables: %s", e)
+        raise
+
+
+def add_concept_proposal_table(db_path: Path) -> bool:
+    """Add concept_proposals table for collaborative concept editing."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='concept_proposals'")
+            if cursor.fetchone()[0] > 0:
+                logger.debug("concept_proposals table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS concept_proposals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    concept_name TEXT NOT NULL,
+                    proposed_by TEXT DEFAULT 'anonymous',
+                    proposal_type TEXT CHECK(proposal_type IN ('new', 'edit', 'merge', 'delete')) NOT NULL,
+                    description TEXT NOT NULL,
+                    hebrew_terms_json TEXT,
+                    greek_terms_json TEXT,
+                    verse_mappings_json TEXT,
+                    status TEXT CHECK(status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_proposals_concept ON concept_proposals(concept_name)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_proposals_status ON concept_proposals(status)")
+            conn.commit()
+            logger.info("Added concept_proposals table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add concept_proposals table: %s", e)
+        raise
+
+
+def add_ml_and_graph_tables(db_path: Path) -> bool:
+    """Add concept_feedback and semantic_relationship_graph tables for ML and visualization."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='concept_feedback'")
+            if cursor.fetchone()[0] > 0:
+                logger.debug("concept_feedback table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS concept_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    concept_name TEXT NOT NULL,
+                    verse_id TEXT NOT NULL,
+                    feedback_type TEXT CHECK(feedback_type IN ('relevant', 'irrelevant', 'partial')) NOT NULL,
+                    user_id TEXT DEFAULT 'anonymous',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS semantic_relationship_graph (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_concept TEXT NOT NULL,
+                    target_concept TEXT NOT NULL,
+                    relationship_type TEXT NOT NULL,
+                    weight REAL DEFAULT 1.0,
+                    evidence_count INTEGER DEFAULT 0,
+                    shared_strongs_json TEXT,
+                    UNIQUE(source_concept, target_concept, relationship_type)
+                )
+            """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_feedback_concept ON concept_feedback(concept_name)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_graph_source ON semantic_relationship_graph(source_concept)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_graph_target ON semantic_relationship_graph(target_concept)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_graph_type ON semantic_relationship_graph(relationship_type)"
+            )
+            conn.commit()
+            logger.info("Added concept_feedback and semantic_relationship_graph tables")
+            return True
+    except Exception as e:
+        logger.error("Failed to add ML and graph tables: %s", e)
+        raise
+
+
 _MIGRATIONS = [
     (add_canon_column, "canon column"),
     (add_stepbible_verses_table, "stepbible_verses table"),
@@ -1075,6 +1380,14 @@ _MIGRATIONS = [
     # Phase 7 performance optimization
     (add_verse_annotations_cache_table, "verse_annotations_cache table"),
     (add_range_query_indexes, "range query optimization indexes"),
+    # Phase 9 extended capabilities
+    (add_semantic_domain_tables, "semantic domain tables"),
+    (add_syntax_tree_table, "syntax_trees table"),
+    (add_discourse_annotation_table, "discourse_annotations table"),
+    (add_manuscript_variant_table, "manuscript_variants table"),
+    (add_community_contribution_tables, "community contribution tables"),
+    (add_concept_proposal_table, "concept_proposals table"),
+    (add_ml_and_graph_tables, "ML and graph tables"),
     # Phase 8 user features
     (add_user_annotation_tables, "user annotation tables"),
 ]

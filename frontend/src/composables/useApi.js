@@ -45,7 +45,7 @@ export function useApi() {
 
   function searchText(query, options = {}) {
     const params = new URLSearchParams({ q: query, ...options })
-    return call(() => request(`/search?${params}`))
+    return call(() => request(`/search/text?${params}`))
   }
 
   function getTopics() {
@@ -84,6 +84,98 @@ export function useApi() {
     )
   }
 
+  // --- Phase 9 API methods ---
+
+  function discoverConcepts(query) {
+    return call(() => request(`/discover?q=${encodeURIComponent(query)}`))
+  }
+
+  function getSemanticDomains(parent) {
+    const params = parent ? `?parent=${encodeURIComponent(parent)}` : ''
+    return call(() => request(`/semantic-domains${params}`))
+  }
+
+  function getWordDomains(strongsNumber) {
+    return call(() => request(`/words/${encodeURIComponent(strongsNumber)}/domains`))
+  }
+
+  function getSyntaxTree(bookId, chapter, verse) {
+    return call(() => request(`/syntax/${bookId}/${chapter}/${verse}`))
+  }
+
+  function getDiscourseUnits(bookId, chapter, verse) {
+    return call(() => request(`/discourse/${bookId}/${chapter}/${verse}`))
+  }
+
+  function getBookDiscourse(bookId) {
+    return call(() => request(`/discourse/${bookId}`))
+  }
+
+  function getManuscriptVariants(bookId, chapter, verse) {
+    return call(() => request(`/variants/${bookId}/${chapter}/${verse}`))
+  }
+
+  function getSignificantVariants() {
+    return call(() => request('/variants/significant'))
+  }
+
+  function multilingualSearch(query, sourceLang = 'en', translations = null) {
+    const params = new URLSearchParams({ q: query, source_lang: sourceLang })
+    if (translations) params.set('target_translations', translations)
+    return call(() => request(`/search/multilingual?${params}`))
+  }
+
+  function createContribution(data) {
+    return call(() => request('/community/contributions', {
+      method: 'POST', body: JSON.stringify(data),
+    }))
+  }
+
+  function listContributions(status, bookId) {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (bookId) params.set('book_id', bookId)
+    return call(() => request(`/community/contributions?${params}`))
+  }
+
+  function reviewContribution(contributionId, decision, note) {
+    return call(() => request(`/community/contributions/${contributionId}/review`, {
+      method: 'POST', body: JSON.stringify({ decision, review_note: note }),
+    }))
+  }
+
+  function createConceptProposal(data) {
+    return call(() => request('/concepts/proposals', {
+      method: 'POST', body: JSON.stringify(data),
+    }))
+  }
+
+  function listConceptProposals(status) {
+    const params = status ? `?status=${encodeURIComponent(status)}` : ''
+    return call(() => request(`/concepts/proposals${params}`))
+  }
+
+  function getConceptGraph(conceptName, depth = 1) {
+    return call(() => request(`/graph/${encodeURIComponent(conceptName)}?depth=${depth}`))
+  }
+
+  function submitConceptFeedback(conceptName, verseId, feedbackType) {
+    return call(() => request(
+      `/concepts/${encodeURIComponent(conceptName)}/feedback?verse_id=${encodeURIComponent(verseId)}&feedback_type=${feedbackType}`,
+      { method: 'POST' }
+    ))
+  }
+
+  function getAudioResource(bookId, chapter, translationId = 'engbsb') {
+    return call(() => request(`/audio/${bookId}/${chapter}?translation_id=${translationId}`))
+  }
+
+  function mobileSync(data) {
+    return call(() => request('/mobile/sync', {
+      method: 'POST', body: JSON.stringify(data),
+    }))
+  }
+
   return {
     loading,
     error,
@@ -98,5 +190,24 @@ export function useApi() {
     getWordDetail,
     getCrossReferences,
     getContext,
+    // Phase 9
+    discoverConcepts,
+    getSemanticDomains,
+    getWordDomains,
+    getSyntaxTree,
+    getDiscourseUnits,
+    getBookDiscourse,
+    getManuscriptVariants,
+    getSignificantVariants,
+    multilingualSearch,
+    createContribution,
+    listContributions,
+    reviewContribution,
+    createConceptProposal,
+    listConceptProposals,
+    getConceptGraph,
+    submitConceptFeedback,
+    getAudioResource,
+    mobileSync,
   }
 }

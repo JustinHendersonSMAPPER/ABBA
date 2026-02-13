@@ -8,6 +8,7 @@ const routes = [
   { path: '/topics', component: () => import('./views/LifeTopicNavigator.vue') },
   { path: '/plans', component: () => import('./views/ReadingPlans.vue') },
   { path: '/study/:book/:chapter/:verse?', component: () => import('./views/StudyView.vue') },
+  { path: '/discover', component: () => import('./views/ConceptExplorer.vue') },
 ]
 
 const router = createRouter({

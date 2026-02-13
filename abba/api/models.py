@@ -1,5 +1,7 @@
 """Pydantic response models for the ABBA FastAPI layer."""
 
+from __future__ import annotations
+
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -200,6 +202,10 @@ class VerseResponse(BaseModel):
 
     # Scholarly depth
     parallel_passages: Optional[List[Dict[str, Any]]] = None
+    manuscript_variants: Optional[List[ManuscriptVariant]] = None
+    syntax_tree: Optional[VerseSyntaxTree] = None
+    discourse_units: Optional[List[DiscourseUnit]] = None
+    semantic_domains: Optional[List[SemanticDomainMapping]] = None
 
 
 # --- Translation Comparison Models ---
@@ -439,6 +445,243 @@ class ShareResponse(BaseModel):
     title: str = ""
     content: Dict[str, Any] = Field(default_factory=dict)
     created_at: Optional[str] = None
+
+
+# --- Phase 9: Semantic Domain Models ---
+
+
+class SemanticDomain(BaseModel):
+    """A Louw-Nida semantic domain classification."""
+
+    domain_code: str
+    domain_name: str
+    parent_domain: Optional[str] = None
+    description: Optional[str] = None
+    level: int = 1
+
+
+class SemanticDomainMapping(BaseModel):
+    """Mapping of a Strong's number to a semantic domain."""
+
+    strongs_number: str
+    domain_code: str
+    domain_name: str
+    confidence: float = 0.9
+
+
+class WordDomainResult(BaseModel):
+    """A word with its semantic domain info for word study."""
+
+    strongs_number: str
+    original_word: Optional[str] = None
+    gloss: Optional[str] = None
+    domains: List[SemanticDomain] = Field(default_factory=list)
+    related_words: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+# --- Phase 9: Syntax Tree Models ---
+
+
+class SyntaxNode(BaseModel):
+    """A node in a clause-level syntax tree."""
+
+    node_id: str
+    node_type: str  # sentence, clause, phrase, word
+    role: Optional[str] = None  # subject, predicate, object, modifier
+    clause_type: Optional[str] = None  # main, temporal, relative, causal
+    relation: Optional[str] = None
+    depth: int = 0
+    text_content: Optional[str] = None
+    children: List["SyntaxNode"] = Field(default_factory=list)
+    word_num: Optional[int] = None
+
+
+class VerseSyntaxTree(BaseModel):
+    """Complete syntax tree for a verse."""
+
+    book_id: int
+    chapter: int
+    verse: int
+    root_nodes: List[SyntaxNode] = Field(default_factory=list)
+
+
+# --- Phase 9: Discourse Annotation Models ---
+
+
+class DiscourseUnit(BaseModel):
+    """A discourse annotation from OpenText.org analysis."""
+
+    discourse_id: int
+    discourse_type: str  # narrative, argument, exposition, hymn, dialogue
+    function_label: Optional[str] = None
+    relation_to_context: Optional[str] = None  # continuation, contrast, cause, result
+    description: Optional[str] = None
+    prominence: int = 0
+    start_chapter: int
+    start_verse: int
+    end_chapter: int
+    end_verse: int
+
+
+# --- Phase 9: Manuscript Variant Models ---
+
+
+class ManuscriptVariant(BaseModel):
+    """A textual variant from manuscript tradition."""
+
+    variant_id: int
+    variant_type: str  # addition, omission, substitution, transposition
+    base_text: Optional[str] = None
+    variant_text: Optional[str] = None
+    manuscripts: Optional[str] = None
+    explanation: Optional[str] = None
+    significance: str = "minor"  # major, minor, orthographic
+    confidence: float = 0.8
+
+
+# --- Phase 9: Community Contribution Models ---
+
+
+class ContributionCreate(BaseModel):
+    """Request body for creating a community contribution."""
+
+    book_id: int
+    chapter: Optional[int] = None
+    verse: Optional[int] = None
+    contribution_type: str  # cultural_context, historical_note, translation_note
+    title: str
+    content: str
+
+
+class ContributionResponse(BaseModel):
+    """A community contribution."""
+
+    id: int
+    book_id: int
+    chapter: Optional[int] = None
+    verse: Optional[int] = None
+    contribution_type: str
+    title: str
+    content: str
+    author_id: str = "anonymous"
+    status: str = "pending"
+    created_at: Optional[str] = None
+
+
+class ContributionReviewCreate(BaseModel):
+    """Request body for reviewing a contribution."""
+
+    decision: str  # approve, reject, request_changes
+    review_note: Optional[str] = None
+
+
+# --- Phase 9: Concept Proposal Models ---
+
+
+class ConceptProposalCreate(BaseModel):
+    """Request body for proposing a concept change."""
+
+    concept_name: str
+    proposal_type: str  # new, edit, merge, delete
+    description: str
+    hebrew_terms: List[Dict[str, str]] = Field(default_factory=list)
+    greek_terms: List[Dict[str, str]] = Field(default_factory=list)
+    verse_mappings: List[str] = Field(default_factory=list)
+
+
+class ConceptProposalResponse(BaseModel):
+    """A concept proposal."""
+
+    id: int
+    concept_name: str
+    proposed_by: str = "anonymous"
+    proposal_type: str
+    description: str
+    hebrew_terms: List[Dict[str, str]] = Field(default_factory=list)
+    greek_terms: List[Dict[str, str]] = Field(default_factory=list)
+    verse_mappings: List[str] = Field(default_factory=list)
+    status: str = "pending"
+    created_at: Optional[str] = None
+
+
+# --- Phase 9: Semantic Relationship Graph Models ---
+
+
+class SemanticRelationship(BaseModel):
+    """A relationship between two biblical concepts."""
+
+    source_concept: str
+    target_concept: str
+    relationship_type: str  # synonym, antithetical, causal, enables, contrast
+    weight: float = 1.0
+    evidence_count: int = 0
+    shared_strongs: List[str] = Field(default_factory=list)
+
+
+class ConceptGraph(BaseModel):
+    """A graph of related concepts for visualization."""
+
+    center_concept: str
+    relationships: List[SemanticRelationship] = Field(default_factory=list)
+    nodes: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+# --- Phase 9: Concept Discovery Models ---
+
+
+class ConceptDiscoveryResult(BaseModel):
+    """Result from natural-language concept discovery."""
+
+    query: str
+    matched_concepts: List[TopicSummary] = Field(default_factory=list)
+    matched_life_topics: List[LifeTopicSummary] = Field(default_factory=list)
+    suggested_searches: List[str] = Field(default_factory=list)
+
+
+# --- Phase 9: Audio Integration Models ---
+
+
+class AudioResource(BaseModel):
+    """An audio resource for a passage."""
+
+    book_id: int
+    chapter: int
+    verse_start: int = 1
+    verse_end: Optional[int] = None
+    audio_url: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    narrator: Optional[str] = None
+    translation_id: str = "engbsb"
+
+
+# --- Phase 9: Mobile API Models ---
+
+
+class MobileVerseResponse(BaseModel):
+    """Optimized verse response for mobile clients."""
+
+    ref: str
+    text: str
+    tid: str
+    words: Optional[List[Dict[str, Any]]] = None
+    flags: Optional[List[Dict[str, Any]]] = None
+
+
+class MobileSyncRequest(BaseModel):
+    """Request for syncing offline data."""
+
+    last_sync: Optional[str] = None
+    book_ids: List[int] = Field(default_factory=list)
+    include_words: bool = True
+    include_annotations: bool = False
+
+
+class MobileSyncResponse(BaseModel):
+    """Response with offline-ready data."""
+
+    sync_timestamp: str
+    verses: List[MobileVerseResponse] = Field(default_factory=list)
+    total_verses: int = 0
 
 
 # --- Export Models ---

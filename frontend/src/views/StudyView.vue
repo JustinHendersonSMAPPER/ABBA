@@ -40,6 +40,23 @@
         </div>
       </section>
 
+      <SemanticDomainBadge
+        v-if="verseData.semantic_domains && verseData.semantic_domains.length"
+        :domains="verseData.semantic_domains"
+      />
+
+      <SyntaxTreeView v-if="verseData.syntax_tree" :tree="verseData.syntax_tree" />
+
+      <DiscourseView
+        v-if="verseData.discourse_units && verseData.discourse_units.length"
+        :units="verseData.discourse_units"
+      />
+
+      <ManuscriptVariants
+        v-if="verseData.manuscript_variants && verseData.manuscript_variants.length"
+        :variants="verseData.manuscript_variants"
+      />
+
       <section v-if="contextData" class="study-section">
         <h2 class="section-heading">Context</h2>
         <div v-if="contextData.cultural && contextData.cultural.length">
@@ -83,6 +100,10 @@ import { useApi } from '../composables/useApi.js'
 import TranslationLens from '../components/TranslationLens.vue'
 import WordJourneyCard from '../components/WordJourneyCard.vue'
 import LiteraryModeIndicator from '../components/LiteraryModeIndicator.vue'
+import SyntaxTreeView from '../components/SyntaxTreeView.vue'
+import ManuscriptVariants from '../components/ManuscriptVariants.vue'
+import DiscourseView from '../components/DiscourseView.vue'
+import SemanticDomainBadge from '../components/SemanticDomainBadge.vue'
 
 const props = defineProps({
   depth: { type: String, default: 'basic' },
