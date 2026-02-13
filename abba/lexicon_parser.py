@@ -3,10 +3,14 @@
 Supports:
 - OpenScriptures HebrewStrong.xml (Strong's Hebrew Dictionary, public domain, CC BY 4.0)
 - Abbott-Smith Greek Lexicon TEI XML (public domain, 1922)
+- Brown-Driver-Briggs Hebrew Lexicon XML (public domain 1906, CC BY 4.0 markup)
+- Dodson Greek-English Lexicon CSV (public domain, CC0)
 
-Both sources are free to use without license restrictions.
+All sources are free to use without license restrictions.
 """
 
+import csv
+import io
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -22,10 +26,13 @@ ABBOTT_NS = {"tei": "http://www.crosswire.org/2013/TEIOSIS/namespace"}
 
 # Download URLs for free lexicon sources
 LEXICON_URLS = {
-    "hebrew_strongs.xml": ("https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/HebrewStrong.xml"),
+    "hebrew_strongs.xml": "https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/HebrewStrong.xml",
     "abbott_smith.xml": (
         "https://raw.githubusercontent.com/translatable-exegetical-tools/Abbott-Smith/master/abbott-smith.tei.xml"
     ),
+    "bdb.xml": "https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/BrownDriverBriggs.xml",
+    "lexical_index.xml": "https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/LexicalIndex.xml",
+    "dodson.csv": "https://raw.githubusercontent.com/biblicalhumanities/Dodson-Greek-Lexicon/master/dodson.csv",
 }
 
 
@@ -213,4 +220,233 @@ def parse_abbott_smith_xml(file_path: Path) -> List[Dict[str, Any]]:
             entries.append(entry)
 
     logger.info(f"Parsed {len(entries)} Greek lexicon entries from {file_path.name}")
+    return entries
+
+
+# ── BDB (Brown-Driver-Briggs) Hebrew Lexicon ──────────────────────────
+
+
+def _build_strongs_to_bdb_map(index_path: Path) -> Dict[str, str]:
+    """Build a mapping from Strong's numbers (H-prefixed) to BDB entry IDs.
+
+    Uses LexicalIndex.xml which bridges Strong's numbers to BDB entries.
+
+    Args:
+        index_path: Path to LexicalIndex.xml
+
+    Returns:
+        Dict mapping Strong's number (e.g. "H0006") to BDB entry ID (e.g. "a.ac.aa")
+    """
+    mapping: Dict[str, str] = {}
+
+    try:
+        tree = ET.parse(index_path)
+        root = tree.getroot()
+    except (ET.ParseError, OSError) as e:
+        logger.error(f"Failed to parse LexicalIndex.xml: {e}")
+        return mapping
+
+    for entry_elem in root.findall(".//lex:entry", HEBREW_NS):
+        xref = entry_elem.find("lex:xref", HEBREW_NS)
+        if xref is None:
+            continue
+
+        strong_num = xref.get("strong", "")
+        bdb_id = xref.get("bdb", "")
+
+        if strong_num and bdb_id:
+            # Normalize Strong's number to H-prefixed format with zero-padding
+            h_num = f"H{int(strong_num):04d}" if strong_num.isdigit() else strong_num
+            mapping[h_num] = bdb_id
+
+    logger.info(f"Built Strong's-to-BDB mapping with {len(mapping)} entries")
+    return mapping
+
+
+def _extract_bdb_entry_text(entry_elem: ET.Element) -> Dict[str, str]:
+    """Extract definition components from a BDB entry element.
+
+    Args:
+        entry_elem: XML element for a BDB entry
+
+    Returns:
+        Dict with 'word', 'pos', 'gloss', and 'definition' keys.
+    """
+    # Extract Hebrew word from <w> element
+    w_elem = entry_elem.find("lex:w", HEBREW_NS)
+    word = w_elem.text.strip() if w_elem is not None and w_elem.text else ""
+
+    # Extract part of speech from <pos>
+    pos_elem = entry_elem.find("lex:pos", HEBREW_NS)
+    pos = pos_elem.text.strip() if pos_elem is not None and pos_elem.text else ""
+
+    # Extract primary gloss from first <def>
+    def_elem = entry_elem.find(".//lex:def", HEBREW_NS)
+    gloss = def_elem.text.strip() if def_elem is not None and def_elem.text else ""
+
+    # Build full definition from all senses
+    sense_parts: List[str] = []
+
+    # Add top-level def if present
+    if gloss:
+        sense_parts.append(gloss)
+
+    # Collect numbered senses
+    for sense in entry_elem.findall(".//lex:sense", HEBREW_NS):
+        sense_num = sense.get("n", "")
+        sense_text = _clean_text(_get_element_text(sense))
+        if sense_text:
+            if sense_num:
+                sense_parts.append(f"{sense_num}. {sense_text}")
+            else:
+                sense_parts.append(sense_text)
+
+    definition = "; ".join(sense_parts) if sense_parts else ""
+    if len(definition) > 2000:
+        definition = definition[:2000] + "..."
+
+    return {"word": word, "pos": pos, "gloss": gloss, "definition": definition}
+
+
+def _invert_strongs_mapping(strongs_to_bdb: Dict[str, str]) -> Dict[str, List[str]]:
+    """Invert Strong's-to-BDB mapping to BDB-to-Strong's list."""
+    bdb_to_strongs: Dict[str, List[str]] = {}
+    for h_num, bdb_id in strongs_to_bdb.items():
+        bdb_to_strongs.setdefault(bdb_id, []).append(h_num)
+    return bdb_to_strongs
+
+
+def _index_bdb_entries(root: ET.Element) -> Dict[str, ET.Element]:
+    """Index all BDB XML entries by their ID attribute."""
+    bdb_entries: Dict[str, ET.Element] = {}
+    for entry_elem in root.findall(".//lex:entry", HEBREW_NS):
+        entry_id = entry_elem.get("id", "")
+        if entry_id:
+            bdb_entries[entry_id] = entry_elem
+    return bdb_entries
+
+
+def parse_bdb_xml(bdb_path: Path, index_path: Path) -> List[Dict[str, Any]]:
+    """Parse BDB (Brown-Driver-Briggs) Hebrew Lexicon XML into lexicon definitions.
+
+    Uses LexicalIndex.xml to map BDB entries to Strong's numbers.
+
+    Source: https://github.com/openscriptures/HebrewLexicon
+    License: Public Domain (1906) / CC BY 4.0 (XML markup)
+
+    Args:
+        bdb_path: Path to BrownDriverBriggs.xml
+        index_path: Path to LexicalIndex.xml
+
+    Returns:
+        List of lexicon definition dicts ready for database insertion.
+    """
+    entries: List[Dict[str, Any]] = []
+
+    strongs_to_bdb = _build_strongs_to_bdb_map(index_path)
+    if not strongs_to_bdb:
+        logger.warning("No Strong's-to-BDB mapping found; BDB import will be empty")
+        return entries
+
+    bdb_to_strongs = _invert_strongs_mapping(strongs_to_bdb)
+
+    try:
+        tree = ET.parse(bdb_path)
+        root = tree.getroot()
+    except (ET.ParseError, OSError) as e:
+        logger.error(f"Failed to parse BDB XML: {e}")
+        return entries
+
+    bdb_entries = _index_bdb_entries(root)
+
+    for bdb_id, strongs_list in bdb_to_strongs.items():
+        entry_elem = bdb_entries.get(bdb_id)
+        if entry_elem is None:
+            continue
+
+        extracted = _extract_bdb_entry_text(entry_elem)
+        if not extracted["definition"] and not extracted["gloss"]:
+            continue
+
+        for h_num in strongs_list:
+            entries.append(
+                {
+                    "strongs_number": h_num,
+                    "source_lexicon": "bdb",
+                    "original_word": extracted["word"],
+                    "transliteration": "",
+                    "part_of_speech": extracted["pos"],
+                    "gloss": extracted["gloss"],
+                    "definition": extracted["definition"],
+                    "language": "hebrew",
+                }
+            )
+
+    logger.info(f"Parsed {len(entries)} BDB Hebrew lexicon definitions from {bdb_path.name}")
+    return entries
+
+
+# ── Dodson Greek-English Lexicon ──────────────────────────────────────
+
+
+def parse_dodson_csv(file_path: Path) -> List[Dict[str, Any]]:
+    """Parse Dodson Greek-English Lexicon CSV into lexicon definitions.
+
+    The Dodson lexicon is a public-domain compilation from Abbott-Smith (1922),
+    Berry (1897), Souter (1917), and Strong (1890).
+
+    Source: https://github.com/biblicalhumanities/Dodson-Greek-Lexicon
+    License: Public Domain (CC0)
+
+    Args:
+        file_path: Path to dodson.csv
+
+    Returns:
+        List of lexicon definition dicts ready for database insertion.
+    """
+    entries: List[Dict[str, Any]] = []
+
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except OSError as e:
+        logger.error(f"Failed to read Dodson CSV: {e}")
+        return entries
+
+    reader = csv.reader(io.StringIO(content))
+
+    for row in reader:
+        if len(row) < 4:
+            continue
+
+        # Expected columns: Strong's number, Greek word, transliteration,
+        # brief gloss, full definition (some rows may have fewer/more columns)
+        strongs_raw = row[0].strip()
+        greek_word = row[1].strip() if len(row) > 1 else ""
+        transliteration = row[2].strip() if len(row) > 2 else ""
+        pos = row[3].strip() if len(row) > 3 else ""
+        gloss = row[4].strip() if len(row) > 4 else ""
+        definition = row[5].strip() if len(row) > 5 else ""
+
+        # Only process G-prefixed entries (Greek)
+        if not strongs_raw.startswith("G"):
+            continue
+
+        # Use gloss as definition fallback
+        if not definition and gloss:
+            definition = gloss
+
+        entries.append(
+            {
+                "strongs_number": strongs_raw,
+                "source_lexicon": "dodson",
+                "original_word": greek_word,
+                "transliteration": transliteration,
+                "part_of_speech": pos,
+                "gloss": gloss,
+                "definition": definition,
+                "language": "greek",
+            }
+        )
+
+    logger.info(f"Parsed {len(entries)} Dodson Greek lexicon definitions from {file_path.name}")
     return entries

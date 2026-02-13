@@ -119,6 +119,16 @@ class BibleExtractor:
                 "https://raw.githubusercontent.com/"
                 "translatable-exegetical-tools/Abbott-Smith/master/abbott-smith.tei.xml"
             ),
+            # BDB Hebrew Lexicon: Public Domain (1906) / CC BY 4.0 (markup)
+            "bdb.xml": ("https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/BrownDriverBriggs.xml"),
+            # Lexical Index: bridges Strong's numbers to BDB entry IDs (CC BY 4.0)
+            "lexical_index.xml": (
+                "https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/LexicalIndex.xml"
+            ),
+            # Dodson Greek Lexicon: Public Domain (CC0), compiled from Abbott-Smith, Berry, Souter, Strong
+            "dodson.csv": (
+                "https://raw.githubusercontent.com/biblicalhumanities/Dodson-Greek-Lexicon/master/dodson.csv"
+            ),
             # Morphology code explanations
             "hebrew_morphology.txt": (
                 "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/"
@@ -185,6 +195,20 @@ This folder contains data from multiple open-source projects.
    - Repository: https://github.com/translatable-exegetical-tools/Abbott-Smith
    - License: Public Domain (1922, out of copyright)
    - Source: G. Abbott-Smith, "A Manual Greek Lexicon of the New Testament"
+
+4. Brown-Driver-Briggs Hebrew Lexicon (BDB)
+   - Files: bdb.xml, lexical_index.xml
+   - Repository: https://github.com/openscriptures/HebrewLexicon
+   - License: Public Domain (1906, out of copyright), CC BY 4.0 (XML markup)
+   - Source: F. Brown, S.R. Driver, C.A. Briggs, "A Hebrew and English Lexicon
+     of the Old Testament" (Oxford: Clarendon Press, 1906)
+
+5. Dodson Greek-English Lexicon
+   - File: dodson.csv
+   - Repository: https://github.com/biblicalhumanities/Dodson-Greek-Lexicon
+   - License: Public Domain (CC0)
+   - Source: Jeffrey Dodson, compiled from Abbott-Smith (1922), Berry (1897),
+     Souter (1917), and Strong (1890)
 """
 
         try:
@@ -200,10 +224,18 @@ This folder contains data from multiple open-source projects.
         # We need at least the lexicons and morphology files
         core_files = [
             "hebrew_strongs.xml",
-            "abbott_smith.xml",  # Lexicons
+            "abbott_smith.xml",  # Primary lexicons
             "hebrew_morphology.txt",
             "greek_morphology.txt",  # Morphology
         ]
+        # Supplementary lexicons (enhance definitions but not required)
+        supplementary_files = ["bdb.xml", "lexical_index.xml", "dodson.csv"]
+        supp_count = sum(1 for f in supplementary_files if (self.stepbible_dir / f).exists())
+        if supp_count < len(supplementary_files):
+            logger.warning(
+                f"Some supplementary lexicons missing ({supp_count}/{len(supplementary_files)}). "
+                "BDB/Dodson enrichment may be incomplete."
+            )
         core_success = all((self.stepbible_dir / f).exists() for f in core_files)
 
         # Check if we have at least some text files (ideally all 6)
@@ -261,6 +293,75 @@ This folder contains data from multiple open-source projects.
         except Exception as e:
             logger.error(f"Failed to parse {language} lexicon: {e}")
             return False
+
+    def _import_supplementary_lexicon(
+        self, filename: str, parser_fn, db_manager, tracker=None, parser_args=None
+    ) -> bool:
+        """Import a single supplementary lexicon file.
+
+        Args:
+            filename: Filename to track in import tracker
+            parser_fn: Parser function returning List[Dict]
+            db_manager: SQLiteManager instance
+            tracker: ImportTracker instance (optional)
+            parser_args: Tuple of arguments for parser_fn
+
+        Returns:
+            True if import succeeded
+        """
+        if tracker and tracker.is_stepbible_file_imported("lexicon", filename):
+            logger.debug(f"  Skipping {filename} - already imported")
+            return False
+
+        try:
+            entries = parser_fn(*parser_args) if parser_args else parser_fn()
+            for entry in entries:
+                db_manager.insert_lexicon_definition(entry)
+            logger.info(f"Imported {len(entries)} definitions from {filename}")
+            if tracker:
+                tracker.mark_stepbible_file_imported("lexicon", filename)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to parse {filename}: {e}")
+            return False
+
+    def parse_supplementary_lexicons(self, db_manager, tracker=None) -> bool:
+        """Parse supplementary lexicon sources (BDB, Dodson) into lexicon_definitions.
+
+        These provide additional scholarly definitions keyed to Strong's numbers,
+        stored alongside the primary lexicon entries for multi-source comparison.
+
+        Args:
+            db_manager: SQLiteManager instance
+            tracker: ImportTracker instance for tracking progress (optional)
+
+        Returns:
+            True if at least one supplementary lexicon was imported
+        """
+        from abba.lexicon_parser import parse_bdb_xml, parse_dodson_csv
+
+        any_success = False
+
+        # BDB Hebrew Lexicon (requires both bdb.xml and lexical_index.xml)
+        bdb_path = self.stepbible_dir / "bdb.xml"
+        index_path = self.stepbible_dir / "lexical_index.xml"
+        if bdb_path.exists() and index_path.exists():
+            if self._import_supplementary_lexicon(
+                "bdb.xml", parse_bdb_xml, db_manager, tracker, (bdb_path, index_path)
+            ):
+                any_success = True
+        else:
+            logger.debug("BDB files not available (bdb.xml and/or lexical_index.xml missing)")
+
+        # Dodson Greek Lexicon
+        dodson_path = self.stepbible_dir / "dodson.csv"
+        if dodson_path.exists():
+            if self._import_supplementary_lexicon("dodson.csv", parse_dodson_csv, db_manager, tracker, (dodson_path,)):
+                any_success = True
+        else:
+            logger.debug("Dodson CSV not available")
+
+        return any_success
 
     def parse_stepbible_morphology(self, language: str, db_manager) -> bool:
         """Parse STEPBible morphology files and import into database.
@@ -541,6 +642,12 @@ This folder contains data from multiple open-source projects.
                     cursor.execute("DELETE FROM lexicon")
                     cursor.execute("DELETE FROM morphology")
                     cursor.execute("DELETE FROM stepbible_validation")  # Clear validation history
+                    # Clear supplementary lexicon definitions if table exists
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='lexicon_definitions'"
+                    )
+                    if cursor.fetchone()[0] > 0:
+                        cursor.execute("DELETE FROM lexicon_definitions")
                     conn.commit()
                 logger.info("Cleared existing STEPBible data for re-import")
 
@@ -561,6 +668,8 @@ This folder contains data from multiple open-source projects.
             all_files = [
                 ("lexicon", "tbesh.txt"),
                 ("lexicon", "tbesg.txt"),
+                ("lexicon", "bdb.xml"),
+                ("lexicon", "dodson.csv"),
                 ("morphology", "tehmc.txt"),
                 ("morphology", "tegmc.txt"),
                 ("tahot", "tahot_gen_deu.txt"),
@@ -602,6 +711,9 @@ This folder contains data from multiple open-source projects.
 
             if success and tracker:
                 tracker.mark_stepbible_file_imported(file_type, filename)
+
+        # Parse supplementary lexicons (BDB Hebrew, Dodson Greek)
+        self.parse_supplementary_lexicons(db_manager, tracker)
 
         # Parse morphology
         morph_files = [

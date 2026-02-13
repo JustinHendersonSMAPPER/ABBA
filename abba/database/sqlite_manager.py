@@ -383,6 +383,52 @@ class SQLiteManager:
             ),
         )
 
+    def insert_lexicon_definition(self, definition_data: Dict[str, Any]) -> None:
+        """Insert a supplementary lexicon definition.
+
+        Stores definitions from additional lexicon sources (BDB, Dodson, etc.)
+        enabling multi-source comparison for the same Strong's number.
+
+        Args:
+            definition_data: Definition information with keys:
+                strongs_number, source_lexicon, original_word, transliteration,
+                part_of_speech, gloss, definition, language
+        """
+        query = """
+            INSERT OR REPLACE INTO lexicon_definitions (
+                strongs_number, source_lexicon, original_word, transliteration,
+                part_of_speech, gloss, definition, language
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        self.execute_update(
+            query,
+            (
+                definition_data["strongs_number"],
+                definition_data["source_lexicon"],
+                definition_data.get("original_word"),
+                definition_data.get("transliteration"),
+                definition_data.get("part_of_speech"),
+                definition_data.get("gloss"),
+                definition_data.get("definition"),
+                definition_data["language"],
+            ),
+        )
+
+    def get_lexicon_definitions(self, strongs_number: str) -> List[sqlite3.Row]:
+        """Get all supplementary lexicon definitions for a Strong's number.
+
+        Returns definitions from all available sources (BDB, Dodson, etc.)
+        for the given Strong's number, enabling multi-source comparison.
+
+        Args:
+            strongs_number: Strong's number (e.g., "H0430", "G0026")
+
+        Returns:
+            List of definition rows from all sources
+        """
+        query = "SELECT * FROM lexicon_definitions WHERE strongs_number = ? ORDER BY source_lexicon"
+        return self.execute_query(query, (strongs_number,))
+
     def insert_morphology_entry(self, morphology_data: Dict[str, Any]) -> None:
         """Insert a morphology entry.
 
@@ -410,7 +456,16 @@ class SQLiteManager:
             Dictionary with table row counts
         """
         stats = {}
-        tables = ["words", "lexicon", "morphology", "translations", "books", "verses", "stepbible_verses"]
+        tables = [
+            "words",
+            "lexicon",
+            "lexicon_definitions",
+            "morphology",
+            "translations",
+            "books",
+            "verses",
+            "stepbible_verses",
+        ]
 
         for table in tables:
             query = f"SELECT COUNT(*) as count FROM {table}"

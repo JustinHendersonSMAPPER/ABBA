@@ -797,6 +797,54 @@ def add_concept_quality_tables(db_path: Path) -> bool:
         raise
 
 
+def add_lexicon_definitions_table(db_path: Path) -> bool:
+    """Add lexicon_definitions table for multi-source lexicon data.
+
+    Stores definitions from supplementary lexicons (BDB, Dodson, etc.)
+    keyed to Strong's numbers, enabling multi-source comparison.
+
+    Args:
+        db_path: Path to the database
+
+    Returns:
+        True if migration was needed and succeeded, False if already exists
+    """
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='lexicon_definitions'")
+            if cursor.fetchone()[0] > 0:
+                logger.debug("lexicon_definitions table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS lexicon_definitions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    strongs_number TEXT NOT NULL,
+                    source_lexicon TEXT NOT NULL,
+                    original_word TEXT,
+                    transliteration TEXT,
+                    part_of_speech TEXT,
+                    gloss TEXT,
+                    definition TEXT,
+                    language TEXT CHECK(language IN ('hebrew', 'greek')) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(strongs_number, source_lexicon)
+                )
+            """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_lexdef_strongs ON lexicon_definitions(strongs_number)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_lexdef_source ON lexicon_definitions(source_lexicon)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_lexdef_language ON lexicon_definitions(language)")
+            conn.commit()
+            logger.info("Added lexicon_definitions table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add lexicon_definitions table: %s", e)
+        raise
+
+
 def add_user_annotation_tables(db_path: Path) -> bool:
     """Add tables for user notes, collections, and sharing."""
     try:
@@ -886,6 +934,8 @@ _MIGRATIONS = [
     (add_speaker_attributions_table, "speaker_attributions table"),
     (add_word_explanations_table, "word_explanations table"),
     (add_concept_quality_tables, "concept quality tables"),
+    # Supplementary lexicon support
+    (add_lexicon_definitions_table, "lexicon_definitions table"),
     # Phase 8 user features
     (add_user_annotation_tables, "user annotation tables"),
 ]

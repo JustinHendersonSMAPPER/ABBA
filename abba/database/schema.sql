@@ -45,6 +45,25 @@ CREATE TABLE IF NOT EXISTS lexicon (
 CREATE INDEX IF NOT EXISTS idx_lexicon_language ON lexicon(language);
 CREATE INDEX IF NOT EXISTS idx_lexicon_original_word ON lexicon(original_word);
 
+-- Supplementary lexicon definitions (multiple sources per Strong's number)
+CREATE TABLE IF NOT EXISTS lexicon_definitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    strongs_number TEXT NOT NULL,
+    source_lexicon TEXT NOT NULL,  -- 'bdb', 'dodson', 'thayers', etc.
+    original_word TEXT,
+    transliteration TEXT,
+    part_of_speech TEXT,
+    gloss TEXT,                    -- short meaning
+    definition TEXT,               -- full scholarly definition
+    language TEXT CHECK(language IN ('hebrew', 'greek')) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(strongs_number, source_lexicon)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lexdef_strongs ON lexicon_definitions(strongs_number);
+CREATE INDEX IF NOT EXISTS idx_lexdef_source ON lexicon_definitions(source_lexicon);
+CREATE INDEX IF NOT EXISTS idx_lexdef_language ON lexicon_definitions(language);
+
 -- Morphology codes (from TEHMC/TEGMC)
 CREATE TABLE IF NOT EXISTS morphology (
     code TEXT PRIMARY KEY,

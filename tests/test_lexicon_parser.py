@@ -1,4 +1,7 @@
-"""Tests for the free/open-source lexicon parsers (OpenScriptures Hebrew, Abbott-Smith Greek)."""
+"""Tests for the free/open-source lexicon parsers.
+
+Covers: OpenScriptures Hebrew, Abbott-Smith Greek, BDB Hebrew, Dodson Greek.
+"""
 
 import tempfile
 import unittest
@@ -9,6 +12,8 @@ from abba.lexicon_parser import (
     _clean_text,
     _get_element_text,
     parse_abbott_smith_xml,
+    parse_bdb_xml,
+    parse_dodson_csv,
     parse_hebrew_strongs_xml,
 )
 
@@ -299,6 +304,255 @@ class TestAbbottSmithParser(unittest.TestCase):
         )
         entries = parse_abbott_smith_xml(self.xml_path)
         self.assertEqual(entries[0]["original_word"], "ἀγάπη")
+
+
+class TestBDBParser(unittest.TestCase):
+    """Test Brown-Driver-Briggs Hebrew Lexicon XML parser."""
+
+    NS = "http://openscriptures.github.com/morphhb/namespace"
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.bdb_path = Path(self.temp_dir) / "BrownDriverBriggs.xml"
+        self.index_path = Path(self.temp_dir) / "LexicalIndex.xml"
+
+    def _write_bdb(self, content: str):
+        with open(self.bdb_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    def _write_index(self, content: str):
+        with open(self.index_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    def _make_bdb_xml(self, entries_xml: str) -> str:
+        return f'<?xml version="1.0" encoding="utf-8"?>' f'<lexicon xmlns="{self.NS}">{entries_xml}</lexicon>'
+
+    def _make_index_xml(self, entries_xml: str) -> str:
+        return (
+            f'<?xml version="1.0" encoding="utf-8"?>'
+            f'<index xmlns="{self.NS}"><part xml:lang="heb">{entries_xml}</part></index>'
+        )
+
+    def test_parse_basic_entry(self):
+        self._write_bdb(
+            self._make_bdb_xml(
+                """
+                <part>
+                    <section>
+                        <entry id="a.ac.aa">
+                            <w>אָבַד</w>
+                            <pos>vb</pos>
+                            <def>perish</def>
+                        </entry>
+                    </section>
+                </part>
+                """
+            )
+        )
+        self._write_index(
+            self._make_index_xml(
+                """
+                <entry id="aaf">
+                    <w xlit="abad">אָבַד</w>
+                    <pos>V</pos>
+                    <def>perish</def>
+                    <xref bdb="a.ac.aa" strong="6" twot="2"/>
+                </entry>
+                """
+            )
+        )
+        entries = parse_bdb_xml(self.bdb_path, self.index_path)
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertEqual(entry["strongs_number"], "H0006")
+        self.assertEqual(entry["source_lexicon"], "bdb")
+        self.assertEqual(entry["original_word"], "אָבַד")
+        self.assertEqual(entry["part_of_speech"], "vb")
+        self.assertEqual(entry["gloss"], "perish")
+        self.assertEqual(entry["language"], "hebrew")
+        self.assertIn("perish", entry["definition"])
+
+    def test_parse_multiple_strongs_for_one_bdb(self):
+        """Multiple Strong's numbers can map to the same BDB entry."""
+        self._write_bdb(
+            self._make_bdb_xml(
+                """
+                <part>
+                    <section>
+                        <entry id="a.ae.ab">
+                            <w>אָב</w>
+                            <pos>n.m</pos>
+                            <def>father</def>
+                        </entry>
+                    </section>
+                </part>
+                """
+            )
+        )
+        self._write_index(
+            self._make_index_xml(
+                """
+                <entry id="aac">
+                    <w xlit="ab">אָב</w>
+                    <xref bdb="a.ae.ab" strong="1" twot="4a"/>
+                </entry>
+                <entry id="aad">
+                    <w xlit="ab">אַב</w>
+                    <xref bdb="a.ae.ab" strong="2" twot="4a"/>
+                </entry>
+                """
+            )
+        )
+        entries = parse_bdb_xml(self.bdb_path, self.index_path)
+        self.assertEqual(len(entries), 2)
+        strongs = {e["strongs_number"] for e in entries}
+        self.assertEqual(strongs, {"H0001", "H0002"})
+
+    def test_parse_entry_with_senses(self):
+        self._write_bdb(
+            self._make_bdb_xml(
+                """
+                <part>
+                    <section>
+                        <entry id="a.am.aa">
+                            <w>אֶבֶן</w>
+                            <pos>n.f</pos>
+                            <def>stone</def>
+                            <sense n="1"><def>in natural state</def></sense>
+                            <sense n="2"><def>as material</def></sense>
+                        </entry>
+                    </section>
+                </part>
+                """
+            )
+        )
+        self._write_index(
+            self._make_index_xml(
+                """
+                <entry id="x">
+                    <w xlit="eben">אֶבֶן</w>
+                    <xref bdb="a.am.aa" strong="68" twot="9"/>
+                </entry>
+                """
+            )
+        )
+        entries = parse_bdb_xml(self.bdb_path, self.index_path)
+        self.assertEqual(len(entries), 1)
+        self.assertIn("1.", entries[0]["definition"])
+        self.assertIn("2.", entries[0]["definition"])
+
+    def test_empty_bdb_returns_empty(self):
+        self._write_bdb(self._make_bdb_xml(""))
+        self._write_index(self._make_index_xml('<entry id="x"><w>w</w><xref bdb="missing" strong="1"/></entry>'))
+        entries = parse_bdb_xml(self.bdb_path, self.index_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_empty_index_returns_empty(self):
+        self._write_bdb(
+            self._make_bdb_xml('<part><section><entry id="a.a.a"><w>x</w><def>test</def></entry></section></part>')
+        )
+        self._write_index(self._make_index_xml(""))
+        entries = parse_bdb_xml(self.bdb_path, self.index_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_malformed_bdb_returns_empty(self):
+        with open(self.bdb_path, "w") as f:
+            f.write("not xml")
+        self._write_index(self._make_index_xml(""))
+        entries = parse_bdb_xml(self.bdb_path, self.index_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_malformed_index_returns_empty(self):
+        self._write_bdb(self._make_bdb_xml(""))
+        with open(self.index_path, "w") as f:
+            f.write("not xml")
+        entries = parse_bdb_xml(self.bdb_path, self.index_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_nonexistent_files_return_empty(self):
+        entries = parse_bdb_xml(Path("/nonexistent/bdb.xml"), Path("/nonexistent/index.xml"))
+        self.assertEqual(len(entries), 0)
+
+    def test_long_definition_is_truncated(self):
+        long_text = "x" * 3000
+        self._write_bdb(
+            self._make_bdb_xml(
+                f"""
+                <part><section>
+                    <entry id="a.a.a">
+                        <w>test</w>
+                        <def>{long_text}</def>
+                    </entry>
+                </section></part>
+                """
+            )
+        )
+        self._write_index(self._make_index_xml('<entry id="x"><w>test</w><xref bdb="a.a.a" strong="1"/></entry>'))
+        entries = parse_bdb_xml(self.bdb_path, self.index_path)
+        self.assertEqual(len(entries), 1)
+        self.assertLessEqual(len(entries[0]["definition"]), 2010)
+
+
+class TestDodsonParser(unittest.TestCase):
+    """Test Dodson Greek-English Lexicon CSV parser."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.csv_path = Path(self.temp_dir) / "dodson.csv"
+
+    def _write_csv(self, content: str):
+        with open(self.csv_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    def test_parse_basic_entry(self):
+        self._write_csv('G0026,ἀγάπη,"agape",N:F,love,"love, benevolence, good will"\n')
+        entries = parse_dodson_csv(self.csv_path)
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertEqual(entry["strongs_number"], "G0026")
+        self.assertEqual(entry["source_lexicon"], "dodson")
+        self.assertEqual(entry["original_word"], "ἀγάπη")
+        self.assertEqual(entry["transliteration"], "agape")
+        self.assertEqual(entry["part_of_speech"], "N:F")
+        self.assertEqual(entry["gloss"], "love")
+        self.assertIn("benevolence", entry["definition"])
+        self.assertEqual(entry["language"], "greek")
+
+    def test_parse_multiple_entries(self):
+        self._write_csv(
+            'G0026,ἀγάπη,"agape",N:F,love,"love, benevolence"\n' 'G4102,πίστις,"pistis",N:F,faith,"faith, trust"\n'
+        )
+        entries = parse_dodson_csv(self.csv_path)
+        self.assertEqual(len(entries), 2)
+        self.assertEqual(entries[0]["strongs_number"], "G0026")
+        self.assertEqual(entries[1]["strongs_number"], "G4102")
+
+    def test_skips_non_g_entries(self):
+        self._write_csv("H0001,test,test,N,test,test\n" 'G0026,ἀγάπη,"agape",N:F,love,love\n')
+        entries = parse_dodson_csv(self.csv_path)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["strongs_number"], "G0026")
+
+    def test_skips_short_rows(self):
+        self._write_csv("G0026,ἀγάπη,agape\n")
+        entries = parse_dodson_csv(self.csv_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_definition_falls_back_to_gloss(self):
+        """When no definition column, gloss should be used."""
+        self._write_csv("G0026,ἀγάπη,agape,N:F,love\n")
+        entries = parse_dodson_csv(self.csv_path)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["definition"], "love")
+
+    def test_empty_file_returns_empty(self):
+        self._write_csv("")
+        entries = parse_dodson_csv(self.csv_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_nonexistent_file_returns_empty(self):
+        entries = parse_dodson_csv(Path("/nonexistent/dodson.csv"))
+        self.assertEqual(len(entries), 0)
 
 
 if __name__ == "__main__":
