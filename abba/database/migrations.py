@@ -797,6 +797,142 @@ def add_concept_quality_tables(db_path: Path) -> bool:
         raise
 
 
+def add_verse_annotations_cache_table(db_path: Path) -> bool:
+    """Add verse_annotations_cache table for precomputed annotation data.
+
+    Materializes all STANDARD/DEEP-level annotation queries into a single
+    row per verse, reducing 8-12 queries per deep request to a single lookup.
+
+    Args:
+        db_path: Path to the database
+
+    Returns:
+        True if migration was needed and succeeded, False if already exists
+    """
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='verse_annotations_cache'")
+            if cursor.fetchone()[0] > 0:
+                logger.debug("verse_annotations_cache table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS verse_annotations_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    book_id INTEGER NOT NULL,
+                    chapter INTEGER NOT NULL,
+                    verse INTEGER NOT NULL,
+                    words_json TEXT,
+                    richness_flags_json TEXT,
+                    cross_references_json TEXT,
+                    cultural_context_json TEXT,
+                    passage_info_json TEXT,
+                    literary_structures_json TEXT,
+                    speaker_json TEXT,
+                    active_genre TEXT,
+                    cache_version INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(book_id, chapter, verse)
+                )
+            """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_annotation_cache_verse "
+                "ON verse_annotations_cache(book_id, chapter, verse)"
+            )
+            conn.commit()
+            logger.info("Added verse_annotations_cache table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add verse_annotations_cache table: %s", e)
+        raise
+
+
+def add_range_query_indexes(db_path: Path) -> bool:
+    """Add composite indexes optimizing range-based verse lookups.
+
+    Covers the expensive WHERE (start_chapter < ? OR ...) patterns
+    used by passages, literary_structures, speaker_attributions,
+    and genre_shifts queries.
+
+    Args:
+        db_path: Path to the database
+
+    Returns:
+        True if any indexes were added, False if all exist
+    """
+    indexes = [
+        (
+            "idx_passages_range",
+            "passages",
+            "book_id, start_chapter, start_verse, end_chapter, end_verse",
+        ),
+        (
+            "idx_literary_structures_range",
+            "literary_structures",
+            "book_id, start_chapter, start_verse, end_chapter, end_verse",
+        ),
+        (
+            "idx_speaker_attr_range",
+            "speaker_attributions",
+            "book_id, start_chapter, start_verse, end_chapter, end_verse",
+        ),
+        (
+            "idx_genre_shifts_lookup",
+            "genre_shifts",
+            "book_id, chapter, verse",
+        ),
+        (
+            "idx_cross_refs_source",
+            "cross_references",
+            "source_book_id, source_chapter, source_verse",
+        ),
+        (
+            "idx_cross_refs_target",
+            "cross_references",
+            "target_book_id, target_chapter, target_verse",
+        ),
+        (
+            "idx_word_richness_verse",
+            "word_richness",
+            "book, chapter, verse",
+        ),
+        (
+            "idx_cultural_context_book",
+            "cultural_context",
+            "book_id, start_chapter",
+        ),
+    ]
+    added = False
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            for idx_name, table, columns in indexes:
+                # Check if table exists before adding index
+                cursor.execute(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+                    (table,),
+                )
+                if cursor.fetchone()[0] == 0:
+                    continue
+                cursor.execute(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?",
+                    (idx_name,),
+                )
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table}({columns})")
+                    added = True
+            conn.commit()
+            if added:
+                logger.info("Added range query optimization indexes")
+    except Exception as e:
+        logger.error("Failed to add range query indexes: %s", e)
+        raise
+    return added
+
+
 def add_lexicon_definitions_table(db_path: Path) -> bool:
     """Add lexicon_definitions table for multi-source lexicon data.
 
@@ -936,6 +1072,9 @@ _MIGRATIONS = [
     (add_concept_quality_tables, "concept quality tables"),
     # Supplementary lexicon support
     (add_lexicon_definitions_table, "lexicon_definitions table"),
+    # Phase 7 performance optimization
+    (add_verse_annotations_cache_table, "verse_annotations_cache table"),
+    (add_range_query_indexes, "range query optimization indexes"),
     # Phase 8 user features
     (add_user_annotation_tables, "user annotation tables"),
 ]

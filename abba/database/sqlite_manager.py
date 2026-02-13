@@ -2,11 +2,15 @@
 
 import logging
 import sqlite3
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
+
+# Query profiling threshold (log queries slower than this)
+_SLOW_QUERY_THRESHOLD_MS = 50.0
 
 
 class SQLiteManager:
@@ -80,13 +84,18 @@ class SQLiteManager:
         Returns:
             List of result rows
         """
+        start = time.perf_counter()
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if params:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
-            return cursor.fetchall()  # type: ignore[no-any-return]
+            result = cursor.fetchall()
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        if elapsed_ms > _SLOW_QUERY_THRESHOLD_MS:
+            logger.warning("Slow query (%.1fms): %s", elapsed_ms, query.strip()[:120])
+        return result  # type: ignore[no-any-return]
 
     def execute_update(self, query: str, params: Optional[tuple] = None) -> int:
         """Execute an INSERT, UPDATE, or DELETE query.
@@ -449,6 +458,80 @@ class SQLiteManager:
             ),
         )
 
+    def get_annotation_cache(self, book_id: int, chapter: int, verse: int) -> Optional[sqlite3.Row]:
+        """Get precomputed annotation cache for a verse.
+
+        Args:
+            book_id: Book identifier
+            chapter: Chapter number
+            verse: Verse number
+
+        Returns:
+            Cache row or None if not cached
+        """
+        query = (
+            "SELECT words_json, richness_flags_json, cross_references_json, "
+            "cultural_context_json, passage_info_json, literary_structures_json, "
+            "speaker_json, active_genre "
+            "FROM verse_annotations_cache "
+            "WHERE book_id = ? AND chapter = ? AND verse = ?"
+        )
+        try:
+            results = self.execute_query(query, (book_id, chapter, verse))
+            return results[0] if results else None
+        except sqlite3.OperationalError:
+            return None
+
+    def upsert_annotation_cache(self, book_id: int, chapter: int, verse: int, data: Dict[str, Any]) -> None:
+        """Insert or update precomputed annotation cache for a verse.
+
+        Args:
+            book_id: Book identifier
+            chapter: Chapter number
+            verse: Verse number
+            data: Dict with JSON-serialized annotation fields
+        """
+        query = """
+            INSERT OR REPLACE INTO verse_annotations_cache (
+                book_id, chapter, verse,
+                words_json, richness_flags_json, cross_references_json,
+                cultural_context_json, passage_info_json, literary_structures_json,
+                speaker_json, active_genre
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        self.execute_update(
+            query,
+            (
+                book_id,
+                chapter,
+                verse,
+                data.get("words_json"),
+                data.get("richness_flags_json"),
+                data.get("cross_references_json"),
+                data.get("cultural_context_json"),
+                data.get("passage_info_json"),
+                data.get("literary_structures_json"),
+                data.get("speaker_json"),
+                data.get("active_genre"),
+            ),
+        )
+
+    def invalidate_annotation_cache(self, book_id: Optional[int] = None) -> int:
+        """Invalidate (delete) annotation cache entries.
+
+        Args:
+            book_id: If provided, only invalidate for this book. Otherwise invalidate all.
+
+        Returns:
+            Number of rows deleted
+        """
+        if book_id is not None:
+            return self.execute_update(
+                "DELETE FROM verse_annotations_cache WHERE book_id = ?",
+                (book_id,),
+            )
+        return self.execute_update("DELETE FROM verse_annotations_cache")
+
     def get_database_stats(self) -> Dict[str, int]:
         """Get database statistics.
 
@@ -465,6 +548,7 @@ class SQLiteManager:
             "books",
             "verses",
             "stepbible_verses",
+            "verse_annotations_cache",
         ]
 
         for table in tables:

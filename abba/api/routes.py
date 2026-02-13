@@ -148,21 +148,22 @@ async def get_verse(
     )
 
     if depth in (DepthLevel.STANDARD, DepthLevel.DEEP, DepthLevel.SCHOLARLY):
-        response.words = _get_words_for_verse(book_name or str(book_id), chapter, verse)
-        response.richness_flags = _get_richness_flags(book_name or str(book_id), chapter, verse)
+        cached = _try_annotation_cache(book_id, chapter, verse, depth, response, translation_id, book_name)
+        if not cached:
+            response.words = _get_words_for_verse(book_name or str(book_id), chapter, verse)
+            response.richness_flags = _get_richness_flags(book_name or str(book_id), chapter, verse)
 
-    if depth in (DepthLevel.DEEP, DepthLevel.SCHOLARLY):
-        response.cross_references = _get_cross_refs(book_id, chapter, verse)
-        response.cultural_context = _get_cultural_context(book_id, chapter, verse)
-        response.passage_info = _get_passage_info(book_id, chapter, verse)
-        response.literary_structures = _get_literary_structures(book_id, chapter, verse)
-        response.concepts = []
-        response.surrounding_context = _get_surrounding_context(translation_id, book_id, chapter, verse)
-        response.speaker = _get_speaker(book_id, chapter, verse)
-        response.genre = _get_active_genre(book_id, chapter, verse)
-        # Narrative genre passages are descriptive (what happened), not prescriptive (what to do)
-        if response.genre in ("narrative", "unknown"):
-            response.is_descriptive = True
+            if depth in (DepthLevel.DEEP, DepthLevel.SCHOLARLY):
+                response.cross_references = _get_cross_refs(book_id, chapter, verse)
+                response.cultural_context = _get_cultural_context(book_id, chapter, verse)
+                response.passage_info = _get_passage_info(book_id, chapter, verse)
+                response.literary_structures = _get_literary_structures(book_id, chapter, verse)
+                response.concepts = []
+                response.surrounding_context = _get_surrounding_context(translation_id, book_id, chapter, verse)
+                response.speaker = _get_speaker(book_id, chapter, verse)
+                response.genre = _get_active_genre(book_id, chapter, verse)
+                if response.genre in ("narrative", "unknown"):
+                    response.is_descriptive = True
 
     if depth == DepthLevel.SCHOLARLY:
         analysis = _get_analysis()
@@ -1059,6 +1060,99 @@ def _build_export_markdown(ref: str, text: str, words: List["WordDetail"], xrefs
                 md += f" — {x.notes}"
             md += "\n"
     return md
+
+
+def _deserialize_json_list(json_str: Optional[str], model_cls: type) -> Optional[List[Any]]:
+    """Deserialize a JSON string into a list of Pydantic model instances."""
+    if not json_str:
+        return None
+    try:
+        return [model_cls(**item) for item in json.loads(json_str)]
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _deserialize_json_obj(json_str: Optional[str], model_cls: type) -> Optional[Any]:
+    """Deserialize a JSON string into a single Pydantic model instance."""
+    if not json_str:
+        return None
+    try:
+        return model_cls(**json.loads(json_str))
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _apply_cache_standard(row: sqlite3.Row, response: VerseResponse, book_name: Optional[str], verse: int) -> None:
+    """Apply STANDARD-depth cached fields to response, falling back to live queries."""
+    book_key = book_name or str(response.chapter)
+    chapter = response.chapter
+
+    cached_words = _deserialize_json_list(row["words_json"], WordDetail)
+    response.words = cached_words if cached_words is not None else _get_words_for_verse(book_key, chapter, verse)
+
+    cached_flags = _deserialize_json_list(row["richness_flags_json"], RichnessFlag)
+    if cached_flags is not None:
+        response.richness_flags = cached_flags
+
+
+def _apply_cache_deep(
+    row: sqlite3.Row,
+    response: VerseResponse,
+    book_id: int,
+    chapter: int,
+    verse: int,
+    translation_id: str,
+) -> None:
+    """Apply DEEP-depth cached fields to response, falling back to live queries."""
+    from .models import LiteraryStructure as LS
+
+    response.cross_references = _deserialize_json_list(row["cross_references_json"], CrossRef) or _get_cross_refs(
+        book_id, chapter, verse
+    )
+    response.cultural_context = _deserialize_json_list(
+        row["cultural_context_json"], CulturalNote
+    ) or _get_cultural_context(book_id, chapter, verse)
+    response.passage_info = _deserialize_json_obj(row["passage_info_json"], PassageInfo) or _get_passage_info(
+        book_id, chapter, verse
+    )
+    response.literary_structures = _deserialize_json_list(
+        row["literary_structures_json"], LS
+    ) or _get_literary_structures(book_id, chapter, verse)
+    response.speaker = _deserialize_json_obj(row["speaker_json"], SpeakerAttribution) or _get_speaker(
+        book_id, chapter, verse
+    )
+    response.genre = row["active_genre"]
+    if response.genre in ("narrative", "unknown"):
+        response.is_descriptive = True
+    response.concepts = []
+    response.surrounding_context = _get_surrounding_context(translation_id, book_id, chapter, verse)
+
+
+def _try_annotation_cache(
+    book_id: int,
+    chapter: int,
+    verse: int,
+    depth: DepthLevel,
+    response: VerseResponse,
+    translation_id: str,
+    book_name: Optional[str],
+) -> bool:
+    """Try to populate a VerseResponse from the annotation cache.
+
+    Returns True if the cache was used, False if the caller should fall back
+    to individual queries.
+    """
+    db = _get_db()
+    row = db.get_annotation_cache(book_id, chapter, verse)
+    if row is None:
+        return False
+
+    _apply_cache_standard(row, response, book_name, verse)
+
+    if depth in (DepthLevel.DEEP, DepthLevel.SCHOLARLY):
+        _apply_cache_deep(row, response, book_id, chapter, verse, translation_id)
+
+    return True
 
 
 def _resolve_book_name(book_id: int, translation_id: str) -> Optional[str]:

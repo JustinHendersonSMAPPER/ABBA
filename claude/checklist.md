@@ -423,8 +423,8 @@ ABBA_CONNECTION_POOL_SIZE=10
 
 ### Performance Optimization
 - [x] Connection pooling for FastAPI concurrent requests
-- [ ] Precomputed verse annotation cache (materialized `verse_annotations_cache` table)
-- [ ] Profile and optimize database queries
+- [x] Precomputed verse annotation cache (materialized `verse_annotations_cache` table)
+- [x] Profile and optimize database queries (slow query logging, composite indexes for range queries)
 - [x] Add query result pagination
 - [x] Create performance benchmarks (targets: <5ms basic, <30ms standard, <100ms deep, <200ms scholarly)
 

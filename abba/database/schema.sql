@@ -204,6 +204,27 @@ CREATE TABLE IF NOT EXISTS stepbible_validation (
     details TEXT  -- JSON with detailed results
 );
 
+-- Precomputed verse annotation cache (materializes STANDARD/DEEP queries)
+CREATE TABLE IF NOT EXISTS verse_annotations_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL,
+    chapter INTEGER NOT NULL,
+    verse INTEGER NOT NULL,
+    words_json TEXT,              -- serialized word details
+    richness_flags_json TEXT,     -- serialized richness flags
+    cross_references_json TEXT,   -- serialized cross-references
+    cultural_context_json TEXT,   -- serialized cultural notes
+    passage_info_json TEXT,       -- serialized passage info
+    literary_structures_json TEXT,-- serialized literary structures
+    speaker_json TEXT,            -- serialized speaker attribution
+    active_genre TEXT,            -- active genre at this verse
+    cache_version INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(book_id, chapter, verse)
+);
+
+CREATE INDEX IF NOT EXISTS idx_annotation_cache_verse ON verse_annotations_cache(book_id, chapter, verse);
+
 -- Database metadata
 CREATE TABLE IF NOT EXISTS db_metadata (
     key TEXT PRIMARY KEY,
