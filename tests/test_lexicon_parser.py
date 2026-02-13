@@ -1,6 +1,6 @@
 """Tests for the free/open-source lexicon parsers.
 
-Covers: OpenScriptures Hebrew, Abbott-Smith Greek, BDB Hebrew, Dodson Greek.
+Covers: OpenScriptures Hebrew, Abbott-Smith Greek, BDB Hebrew, Dodson Greek, Strong's Greek.
 """
 
 import tempfile
@@ -15,6 +15,7 @@ from abba.lexicon_parser import (
     parse_bdb_xml,
     parse_dodson_csv,
     parse_hebrew_strongs_xml,
+    parse_strongs_greek_xml,
 )
 
 
@@ -553,6 +554,149 @@ class TestDodsonParser(unittest.TestCase):
     def test_nonexistent_file_returns_empty(self):
         entries = parse_dodson_csv(Path("/nonexistent/dodson.csv"))
         self.assertEqual(len(entries), 0)
+
+
+class TestStrongsGreekParser(unittest.TestCase):
+    """Test Strong's Greek Dictionary XML parser (morphgnt CC0)."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.xml_path = Path(self.temp_dir) / "strongsgreek.xml"
+
+    def _write_xml(self, entries_xml: str):
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(
+                f"<?xml version='1.0' encoding='utf-8'?>"
+                f"<strongsdictionary><prologue>test</prologue>"
+                f"<entries>{entries_xml}</entries></strongsdictionary>"
+            )
+
+    def test_parse_basic_entry(self):
+        self._write_xml(
+            """
+            <entry strongs="00026">
+                <strongs>26</strongs>
+                <greek BETA="A)GA/PH" unicode="ἀγάπη" translit="agápē"/>
+                <pronunciation strongs="ag-ah'-pay"/>
+                <strongs_derivation>from <strongsref language="GREEK" strongs="0025"/>;</strongs_derivation>
+                <strongs_def>love, i.e. affection or benevolence</strongs_def>
+                <kjv_def>--love, charity.</kjv_def>
+            </entry>
+            """
+        )
+        entries = parse_strongs_greek_xml(self.xml_path)
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertEqual(entry["strongs_number"], "G0026")
+        self.assertEqual(entry["source_lexicon"], "strongs_greek")
+        self.assertEqual(entry["original_word"], "ἀγάπη")
+        self.assertEqual(entry["transliteration"], "agápē")
+        self.assertEqual(entry["language"], "greek")
+        self.assertIn("love", entry["gloss"])
+        self.assertIn("love", entry["definition"])
+        self.assertIn("affection", entry["definition"])
+
+    def test_parse_multiple_entries(self):
+        self._write_xml(
+            """
+            <entry strongs="00026">
+                <strongs>26</strongs>
+                <greek BETA="A" unicode="ἀγάπη" translit="agápē"/>
+                <strongs_def>love</strongs_def>
+                <kjv_def>--love.</kjv_def>
+            </entry>
+            <entry strongs="04102">
+                <strongs>4102</strongs>
+                <greek BETA="B" unicode="πίστις" translit="pístis"/>
+                <strongs_def>persuasion, credence, faith</strongs_def>
+                <kjv_def>--faith, belief.</kjv_def>
+            </entry>
+            """
+        )
+        entries = parse_strongs_greek_xml(self.xml_path)
+        self.assertEqual(len(entries), 2)
+        self.assertEqual(entries[0]["strongs_number"], "G0026")
+        self.assertEqual(entries[1]["strongs_number"], "G4102")
+
+    def test_includes_derivation_in_definition(self):
+        self._write_xml(
+            """
+            <entry strongs="00002">
+                <strongs>2</strongs>
+                <greek BETA="A" unicode="Ἀαρών" translit="Aarṓn"/>
+                <strongs_derivation>of Hebrew origin</strongs_derivation>
+                <strongs_def>Aaron, the brother of Moses</strongs_def>
+                <kjv_def>--Aaron.</kjv_def>
+            </entry>
+            """
+        )
+        entries = parse_strongs_greek_xml(self.xml_path)
+        self.assertEqual(len(entries), 1)
+        self.assertIn("Origin: of Hebrew origin", entries[0]["definition"])
+        self.assertIn("Aaron", entries[0]["definition"])
+
+    def test_skips_entry_without_strongs(self):
+        self._write_xml("<entry><strongs>bad</strongs></entry>")
+        entries = parse_strongs_greek_xml(self.xml_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_skips_empty_definition_entries(self):
+        self._write_xml(
+            """
+            <entry strongs="99999">
+                <strongs>99999</strongs>
+                <greek BETA="X" unicode="" translit=""/>
+            </entry>
+            """
+        )
+        entries = parse_strongs_greek_xml(self.xml_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_gloss_strips_dashes_and_takes_first_word(self):
+        self._write_xml(
+            """
+            <entry strongs="00018">
+                <strongs>18</strongs>
+                <greek BETA="A" unicode="ἀγαθός" translit="agathós"/>
+                <strongs_def>a good thing</strongs_def>
+                <kjv_def>--benefit, good(-s, things), well.</kjv_def>
+            </entry>
+            """
+        )
+        entries = parse_strongs_greek_xml(self.xml_path)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["gloss"], "benefit")
+
+    def test_empty_file_returns_empty(self):
+        self._write_xml("")
+        entries = parse_strongs_greek_xml(self.xml_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_malformed_xml_returns_empty(self):
+        with open(self.xml_path, "w") as f:
+            f.write("not xml")
+        entries = parse_strongs_greek_xml(self.xml_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_nonexistent_file_returns_empty(self):
+        entries = parse_strongs_greek_xml(Path("/nonexistent/strongs.xml"))
+        self.assertEqual(len(entries), 0)
+
+    def test_long_definition_is_truncated(self):
+        long_text = "x" * 3000
+        self._write_xml(
+            f"""
+            <entry strongs="00001">
+                <strongs>1</strongs>
+                <greek BETA="A" unicode="Α" translit="A"/>
+                <strongs_def>{long_text}</strongs_def>
+                <kjv_def>--Alpha.</kjv_def>
+            </entry>
+            """
+        )
+        entries = parse_strongs_greek_xml(self.xml_path)
+        self.assertEqual(len(entries), 1)
+        self.assertLessEqual(len(entries[0]["definition"]), 2010)
 
 
 if __name__ == "__main__":

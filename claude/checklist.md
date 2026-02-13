@@ -368,10 +368,11 @@ ABBA_CONNECTION_POOL_SIZE=10
 - [x] **Life topic mappings**: Map 12 everyday topics to existing concepts with curated study steps
 
 ### Lexicon Expansion (scholarly quality improvement)
-- [ ] Integrate Thayer's Greek Lexicon (1889, public domain) — more detail than Abbott-Smith
-- [ ] Integrate full BDB Hebrew Lexicon (1906, public domain) — resolve current abridged version licensing
-- [ ] Consider LEH (Lust-Eynikel-Hauspie) for Septuagint coverage
+- [x] Integrate Strong's Greek Dictionary (CC0, morphgnt) — public domain alternative to Thayer's (no structured Thayer's data exists)
+- [x] Integrate full BDB Hebrew Lexicon (1906, public domain) — OpenScriptures BrownDriverBriggs.xml + LexicalIndex.xml
+- [x] LEH (Lust-Eynikel-Hauspie) — SKIPPED: copyrighted (Deutsche Bibelgesellschaft, 2003), not free to use
 - [x] Add source attribution to all lexicon entries (which lexicon provided each definition)
+- [x] Integrate Dodson Greek-English Lexicon (CC0) — compiled from Abbott-Smith, Berry, Souter, Strong
 
 ### Concept Definition Quality Review
 - [x] Add temporal tags to concept definitions (OT concept / NT concept / post-biblical systematization)

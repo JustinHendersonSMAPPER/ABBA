@@ -5,6 +5,7 @@ Supports:
 - Abbott-Smith Greek Lexicon TEI XML (public domain, 1922)
 - Brown-Driver-Briggs Hebrew Lexicon XML (public domain 1906, CC BY 4.0 markup)
 - Dodson Greek-English Lexicon CSV (public domain, CC0)
+- Strong's Greek Dictionary XML (public domain, CC0)
 
 All sources are free to use without license restrictions.
 """
@@ -33,6 +34,7 @@ LEXICON_URLS = {
     "bdb.xml": "https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/BrownDriverBriggs.xml",
     "lexical_index.xml": "https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/LexicalIndex.xml",
     "dodson.csv": "https://raw.githubusercontent.com/biblicalhumanities/Dodson-Greek-Lexicon/master/dodson.csv",
+    "strongs_greek.xml": "https://raw.githubusercontent.com/morphgnt/strongs-dictionary-xml/master/strongsgreek.xml",
 }
 
 
@@ -449,4 +451,124 @@ def parse_dodson_csv(file_path: Path) -> List[Dict[str, Any]]:
         )
 
     logger.info(f"Parsed {len(entries)} Dodson Greek lexicon definitions from {file_path.name}")
+    return entries
+
+
+# ── Strong's Greek Dictionary (morphgnt XML) ─────────────────────────
+
+
+def _extract_strongs_greek_text(elem: ET.Element) -> str:
+    """Extract text content from a Strong's Greek element, stripping child tags."""
+    parts = []
+    if elem.text:
+        parts.append(elem.text)
+    for child in elem:
+        if child.text:
+            parts.append(child.text)
+        if child.tail:
+            parts.append(child.tail)
+    return _clean_text(" ".join(parts))
+
+
+def _extract_strongs_elem_text(entry_elem: ET.Element, tag: str) -> str:
+    """Extract cleaned text from a named child element of a Strong's entry."""
+    elem = entry_elem.find(tag)
+    return _extract_strongs_greek_text(elem) if elem is not None else ""
+
+
+def _build_strongs_greek_gloss(kjv_text: str) -> str:
+    """Extract first gloss word from KJV definition text (strips leading dashes)."""
+    if not kjv_text:
+        return ""
+    cleaned = kjv_text.lstrip("-").strip()
+    if not cleaned:
+        return ""
+    return cleaned.split(",")[0].strip().rstrip(".")
+
+
+def _build_strongs_greek_definition(derivation: str, definition: str, kjv_text: str) -> str:
+    """Combine derivation, definition, and KJV text into full definition."""
+    parts = []
+    if derivation:
+        parts.append(f"Origin: {derivation}")
+    if definition:
+        parts.append(definition)
+    if kjv_text:
+        parts.append(f"KJV: {kjv_text.lstrip('-').strip()}")
+    full = "; ".join(parts)
+    if len(full) > 2000:
+        full = full[:2000] + "..."
+    return full
+
+
+def _parse_strongs_greek_entry(entry_elem: ET.Element) -> Optional[Dict[str, Any]]:
+    """Parse a single Strong's Greek Dictionary XML entry."""
+    strongs_num = entry_elem.get("strongs", "")
+    if not strongs_num:
+        return None
+
+    try:
+        g_num = f"G{int(strongs_num):04d}"
+    except ValueError:
+        return None
+
+    greek_elem = entry_elem.find("greek")
+    greek_word = greek_elem.get("unicode", "") if greek_elem is not None else ""
+    translit = greek_elem.get("translit", "") if greek_elem is not None else ""
+
+    definition = _extract_strongs_elem_text(entry_elem, "strongs_def")
+    derivation = _extract_strongs_elem_text(entry_elem, "strongs_derivation")
+    kjv_text = _extract_strongs_elem_text(entry_elem, "kjv_def")
+
+    gloss = _build_strongs_greek_gloss(kjv_text)
+    full_definition = _build_strongs_greek_definition(derivation, definition, kjv_text)
+
+    if not full_definition and not gloss:
+        return None
+
+    return {
+        "strongs_number": g_num,
+        "source_lexicon": "strongs_greek",
+        "original_word": greek_word,
+        "transliteration": translit,
+        "part_of_speech": "",
+        "gloss": gloss,
+        "definition": full_definition,
+        "language": "greek",
+    }
+
+
+def parse_strongs_greek_xml(file_path: Path) -> List[Dict[str, Any]]:
+    """Parse Strong's Greek Dictionary XML into lexicon definitions.
+
+    Uses the morphgnt/strongs-dictionary-xml CC0 dataset with real Greek unicode.
+
+    Source: https://github.com/morphgnt/strongs-dictionary-xml
+    License: Public Domain (CC0)
+
+    Args:
+        file_path: Path to strongsgreek.xml
+
+    Returns:
+        List of lexicon definition dicts ready for database insertion.
+    """
+    entries: List[Dict[str, Any]] = []
+
+    try:
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+    except (ET.ParseError, OSError) as e:
+        logger.error(f"Failed to parse Strong's Greek XML: {e}")
+        return entries
+
+    entries_elem = root.find("entries")
+    if entries_elem is None:
+        entries_elem = root
+
+    for entry_elem in entries_elem.findall("entry"):
+        entry = _parse_strongs_greek_entry(entry_elem)
+        if entry is not None:
+            entries.append(entry)
+
+    logger.info(f"Parsed {len(entries)} Strong's Greek lexicon definitions from {file_path.name}")
     return entries

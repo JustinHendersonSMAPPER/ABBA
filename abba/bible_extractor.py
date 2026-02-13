@@ -129,6 +129,10 @@ class BibleExtractor:
             "dodson.csv": (
                 "https://raw.githubusercontent.com/biblicalhumanities/Dodson-Greek-Lexicon/master/dodson.csv"
             ),
+            # Strong's Greek Dictionary: Public Domain (CC0), XML with real Greek unicode
+            "strongs_greek.xml": (
+                "https://raw.githubusercontent.com/morphgnt/strongs-dictionary-xml/master/strongsgreek.xml"
+            ),
             # Morphology code explanations
             "hebrew_morphology.txt": (
                 "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/"
@@ -209,6 +213,13 @@ This folder contains data from multiple open-source projects.
    - License: Public Domain (CC0)
    - Source: Jeffrey Dodson, compiled from Abbott-Smith (1922), Berry (1897),
      Souter (1917), and Strong (1890)
+
+6. Strong's Greek Dictionary
+   - File: strongs_greek.xml
+   - Repository: https://github.com/morphgnt/strongs-dictionary-xml
+   - License: Public Domain (CC0)
+   - Source: James Strong, "Exhaustive Concordance of the Bible" (1890),
+     XML by Ulrik Sandborg-Petersen with real Greek unicode text
 """
 
         try:
@@ -229,7 +240,7 @@ This folder contains data from multiple open-source projects.
             "greek_morphology.txt",  # Morphology
         ]
         # Supplementary lexicons (enhance definitions but not required)
-        supplementary_files = ["bdb.xml", "lexical_index.xml", "dodson.csv"]
+        supplementary_files = ["bdb.xml", "lexical_index.xml", "dodson.csv", "strongs_greek.xml"]
         supp_count = sum(1 for f in supplementary_files if (self.stepbible_dir / f).exists())
         if supp_count < len(supplementary_files):
             logger.warning(
@@ -326,7 +337,7 @@ This folder contains data from multiple open-source projects.
             return False
 
     def parse_supplementary_lexicons(self, db_manager, tracker=None) -> bool:
-        """Parse supplementary lexicon sources (BDB, Dodson) into lexicon_definitions.
+        """Parse supplementary lexicon sources (BDB, Dodson, Strong's Greek) into lexicon_definitions.
 
         These provide additional scholarly definitions keyed to Strong's numbers,
         stored alongside the primary lexicon entries for multi-source comparison.
@@ -338,7 +349,7 @@ This folder contains data from multiple open-source projects.
         Returns:
             True if at least one supplementary lexicon was imported
         """
-        from abba.lexicon_parser import parse_bdb_xml, parse_dodson_csv
+        from abba.lexicon_parser import parse_bdb_xml, parse_dodson_csv, parse_strongs_greek_xml
 
         any_success = False
 
@@ -360,6 +371,16 @@ This folder contains data from multiple open-source projects.
                 any_success = True
         else:
             logger.debug("Dodson CSV not available")
+
+        # Strong's Greek Dictionary (CC0, morphgnt)
+        strongs_greek_path = self.stepbible_dir / "strongs_greek.xml"
+        if strongs_greek_path.exists():
+            if self._import_supplementary_lexicon(
+                "strongs_greek.xml", parse_strongs_greek_xml, db_manager, tracker, (strongs_greek_path,)
+            ):
+                any_success = True
+        else:
+            logger.debug("Strong's Greek XML not available")
 
         return any_success
 
@@ -670,6 +691,7 @@ This folder contains data from multiple open-source projects.
                 ("lexicon", "tbesg.txt"),
                 ("lexicon", "bdb.xml"),
                 ("lexicon", "dodson.csv"),
+                ("lexicon", "strongs_greek.xml"),
                 ("morphology", "tehmc.txt"),
                 ("morphology", "tegmc.txt"),
                 ("tahot", "tahot_gen_deu.txt"),
