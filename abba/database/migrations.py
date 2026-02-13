@@ -658,6 +658,215 @@ def add_life_topics_tables(db_path: Path) -> bool:
         raise
 
 
+def add_genre_shifts_table(db_path: Path) -> bool:
+    """Add genre_shifts table for tracking genre transitions within books."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='genre_shifts'")
+            if cursor.fetchone()[0] > 0:
+                return False
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS genre_shifts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    book_id INTEGER NOT NULL,
+                    chapter INTEGER NOT NULL,
+                    verse INTEGER NOT NULL,
+                    from_genre TEXT NOT NULL,
+                    to_genre TEXT NOT NULL,
+                    description TEXT
+                )
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_genre_shifts_book ON genre_shifts(book_id, chapter, verse)")
+            conn.commit()
+            logger.info("Added genre_shifts table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add genre_shifts table: %s", e)
+        raise
+
+
+def add_speaker_attributions_table(db_path: Path) -> bool:
+    """Add speaker_attributions table for quoted speech."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='speaker_attributions'")
+            if cursor.fetchone()[0] > 0:
+                return False
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS speaker_attributions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    book_id INTEGER NOT NULL,
+                    start_chapter INTEGER NOT NULL,
+                    start_verse INTEGER NOT NULL,
+                    end_chapter INTEGER NOT NULL,
+                    end_verse INTEGER NOT NULL,
+                    speaker TEXT NOT NULL,
+                    context_note TEXT
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_speaker_attr_book "
+                "ON speaker_attributions(book_id, start_chapter, start_verse)"
+            )
+            conn.commit()
+            logger.info("Added speaker_attributions table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add speaker_attributions table: %s", e)
+        raise
+
+
+def add_word_explanations_table(db_path: Path) -> bool:
+    """Add word_explanations table for plain-English word explanations."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='word_explanations'")
+            if cursor.fetchone()[0] > 0:
+                return False
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS word_explanations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    strongs_number TEXT UNIQUE NOT NULL,
+                    language TEXT NOT NULL,
+                    explanation TEXT NOT NULL
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_word_explanations_strongs ON word_explanations(strongs_number)"
+            )
+            conn.commit()
+            logger.info("Added word_explanations table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add word_explanations table: %s", e)
+        raise
+
+
+def add_concept_quality_tables(db_path: Path) -> bool:
+    """Add tables for concept quality review metadata."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='semantic_range_warnings'")
+            if cursor.fetchone()[0] > 0:
+                return False
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS semantic_range_warnings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    strongs_number TEXT UNIQUE NOT NULL,
+                    warning_text TEXT NOT NULL,
+                    frequency_note TEXT
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS concept_review_flags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    concept_name TEXT UNIQUE NOT NULL,
+                    flag_type TEXT NOT NULL,
+                    review_note TEXT NOT NULL
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS concept_temporal_tags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    concept_name TEXT UNIQUE NOT NULL,
+                    temporal_period TEXT NOT NULL,
+                    period_note TEXT
+                )
+                """
+            )
+            conn.commit()
+            logger.info("Added concept quality tables")
+            return True
+    except Exception as e:
+        logger.error("Failed to add concept quality tables: %s", e)
+        raise
+
+
+def add_user_annotation_tables(db_path: Path) -> bool:
+    """Add tables for user notes, collections, and sharing."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='verse_notes'")
+            if cursor.fetchone()[0] > 0:
+                return False
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS verse_notes (
+                    note_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    book_id INTEGER NOT NULL,
+                    chapter INTEGER NOT NULL,
+                    verse INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    note_type TEXT DEFAULT 'personal',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_notes_verse ON verse_notes(book_id, chapter, verse)")
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_collections (
+                    collection_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS collection_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    collection_id INTEGER NOT NULL,
+                    book_id INTEGER NOT NULL,
+                    chapter INTEGER NOT NULL,
+                    verse INTEGER NOT NULL,
+                    note TEXT DEFAULT '',
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (collection_id) REFERENCES user_collections(collection_id),
+                    UNIQUE(collection_id, book_id, chapter, verse)
+                )
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_collection_items ON collection_items(collection_id)")
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS shared_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    share_token TEXT UNIQUE NOT NULL,
+                    share_type TEXT NOT NULL,
+                    title TEXT DEFAULT '',
+                    content_json TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_shared_token ON shared_items(share_token)")
+            conn.commit()
+            logger.info("Added user annotation tables")
+            return True
+    except Exception as e:
+        logger.error("Failed to add user annotation tables: %s", e)
+        raise
+
+
 _MIGRATIONS = [
     (add_canon_column, "canon column"),
     (add_stepbible_verses_table, "stepbible_verses table"),
@@ -672,6 +881,13 @@ _MIGRATIONS = [
     (add_cross_references_table, "cross_references table"),
     (add_word_richness_table, "word_richness table"),
     (add_life_topics_tables, "life_topics tables"),
+    # Phase 5-6 quality + contextual intelligence
+    (add_genre_shifts_table, "genre_shifts table"),
+    (add_speaker_attributions_table, "speaker_attributions table"),
+    (add_word_explanations_table, "word_explanations table"),
+    (add_concept_quality_tables, "concept quality tables"),
+    # Phase 8 user features
+    (add_user_annotation_tables, "user annotation tables"),
 ]
 
 

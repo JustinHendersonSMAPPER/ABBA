@@ -42,6 +42,7 @@ class LexiconEntry(BaseModel):
     gloss: Optional[str] = None
     definition: Optional[str] = None
     language: Optional[str] = None
+    source: Optional[str] = None
 
 
 class MorphologyInfo(BaseModel):
@@ -74,6 +75,14 @@ class RichnessFlag(BaseModel):
     untranslatable_nuances: List[str] = Field(default_factory=list)
     full_definition: Optional[str] = None
     morphology_significance: Optional[str] = None
+
+
+class WordExplanation(BaseModel):
+    """Plain-English explanation of what the original adds beyond translation."""
+
+    strongs_number: str
+    language: str
+    explanation: str
 
 
 # --- Cultural Context Models ---
@@ -130,7 +139,37 @@ class PassageInfo(BaseModel):
     end_verse: int
 
 
+# --- Speaker Attribution Models ---
+
+
+class SpeakerAttribution(BaseModel):
+    """Who is speaking in a quoted passage."""
+
+    speaker: str
+    context_note: Optional[str] = None
+
+
+# --- Genre Shift Models ---
+
+
+class GenreShift(BaseModel):
+    """A genre transition within a book."""
+
+    chapter: int
+    verse: int
+    from_genre: str
+    to_genre: str
+    description: Optional[str] = None
+
+
 # --- Verse Response Models ---
+
+
+class VerseContext(BaseModel):
+    """Surrounding verses for anti-proof-texting context."""
+
+    previous_verse: Optional[str] = None
+    next_verse: Optional[str] = None
 
 
 class VerseResponse(BaseModel):
@@ -154,6 +193,10 @@ class VerseResponse(BaseModel):
     passage_info: Optional[PassageInfo] = None
     literary_structures: Optional[List[LiteraryStructure]] = None
     concepts: Optional[List[Dict[str, Any]]] = None
+    surrounding_context: Optional[VerseContext] = None
+    speaker: Optional[SpeakerAttribution] = None
+    genre: Optional[str] = None
+    is_descriptive: Optional[bool] = None
 
     # Scholarly depth
     parallel_passages: Optional[List[Dict[str, Any]]] = None
@@ -168,6 +211,7 @@ class TranslationComparison(BaseModel):
     reference: str
     translations: Dict[str, str]
     original_words: List[WordDetail] = Field(default_factory=list)
+    divergences: Optional[List[Dict[str, Any]]] = None
 
 
 # --- Topical Study Models ---
@@ -330,6 +374,73 @@ class ReadingPlanDetail(BaseModel):
     entries: List[ReadingPlanEntry] = Field(default_factory=list)
 
 
+# --- User Annotation Models ---
+
+
+class NoteCreate(BaseModel):
+    """Request body for creating a note."""
+
+    content: str
+    note_type: str = "personal"
+
+
+class NoteResponse(BaseModel):
+    """A verse note."""
+
+    note_id: int
+    book_id: int
+    chapter: int
+    verse: int
+    content: str
+    note_type: str = "personal"
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class CollectionCreate(BaseModel):
+    """Request body for creating a collection."""
+
+    name: str
+    description: str = ""
+
+
+class CollectionResponse(BaseModel):
+    """A user collection."""
+
+    collection_id: int
+    name: str
+    description: str = ""
+    created_at: Optional[str] = None
+    verse_count: int = 0
+
+
+class CollectionItemAdd(BaseModel):
+    """Request body for adding a verse to a collection."""
+
+    book_id: int
+    chapter: int
+    verse: int
+    note: str = ""
+
+
+class ShareCreate(BaseModel):
+    """Request body for creating a shared item."""
+
+    share_type: str
+    title: str = ""
+    content: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ShareResponse(BaseModel):
+    """A shared item."""
+
+    share_token: str
+    share_type: str
+    title: str = ""
+    content: Dict[str, Any] = Field(default_factory=dict)
+    created_at: Optional[str] = None
+
+
 # --- Export Models ---
 
 
@@ -340,6 +451,20 @@ class ExportRequest(BaseModel):
     include_original_language: bool = True
     include_cross_references: bool = True
     include_cultural_context: bool = False
+
+
+# --- Pagination Models ---
+
+
+class PaginatedResponse(BaseModel):
+    """Wrapper for paginated results."""
+
+    items: List[Any] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 50
+    has_next: bool = False
+    has_previous: bool = False
 
 
 # --- API Info Model ---

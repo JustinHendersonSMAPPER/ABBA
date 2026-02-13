@@ -371,14 +371,14 @@ ABBA_CONNECTION_POOL_SIZE=10
 - [ ] Integrate Thayer's Greek Lexicon (1889, public domain) — more detail than Abbott-Smith
 - [ ] Integrate full BDB Hebrew Lexicon (1906, public domain) — resolve current abridged version licensing
 - [ ] Consider LEH (Lust-Eynikel-Hauspie) for Septuagint coverage
-- [ ] Add source attribution to all lexicon entries (which lexicon provided each definition)
+- [x] Add source attribution to all lexicon entries (which lexicon provided each definition)
 
 ### Concept Definition Quality Review
-- [ ] Add temporal tags to concept definitions (OT concept / NT concept / post-biblical systematization)
-- [ ] Add semantic range warnings for high-frequency polysemous words (e.g., H430 elohim, H7307 ruach)
-- [ ] Review "Trinity" concept — flag as confessional reading, reduce false-positive surface area
-- [ ] Review high-frequency mapped Strong's numbers for over-matching risk (e.g., H6213 asah appears 2,627x)
-- [ ] Document LLM validation methodology: model versions used, theological limitations, reproducibility notes
+- [x] Add temporal tags to concept definitions (OT concept / NT concept / post-biblical systematization)
+- [x] Add semantic range warnings for high-frequency polysemous words (e.g., H430 elohim, H7307 ruach)
+- [x] Review "Trinity" concept — flag as confessional reading, reduce false-positive surface area
+- [x] Review high-frequency mapped Strong's numbers for over-matching risk (e.g., H6213 asah appears 2,627x)
+- [x] Document LLM validation methodology: model versions used, theological limitations, reproducibility notes
 
 ## Phase 6: Literary and Contextual Intelligence
 
@@ -390,20 +390,20 @@ ABBA_CONNECTION_POOL_SIZE=10
   - [x] Hebrew parallelism (Isaiah 5 Song of the Vineyard, Hebrews 11 Hall of Faith)
   - [x] Inclusio patterns (Amos 1-2 Oracles, Revelation 4-5 Throne Room)
   - [x] NT discourse structures (Sermon on the Mount)
-- [ ] Genre-shift detection within books (e.g., narrative → poetry in Exodus 15, Judges 5)
+- [x] Genre-shift detection within books (e.g., narrative → poetry in Exodus 15, Judges 5)
 
 ### Anti-Proof-Texting Safeguards
-- [ ] Always return surrounding context with verse results (min: previous and next verse)
-- [ ] Speaker attribution for quoted speech (God, Satan, Job's friends, Pharisees, etc.)
+- [x] Always return surrounding context with verse results (min: previous and next verse)
+- [x] Speaker attribution for quoted speech (God, Satan, Job's friends, Pharisees, etc.)
 - [x] Genre tags on all verse results (via passage_info with genre field at deep/scholarly depth)
-- [ ] Descriptive vs. prescriptive flag for narrative passages
+- [x] Descriptive vs. prescriptive flag for narrative passages
 - [x] Passage summary / reading context note for major sections (137 curated passages)
 
 ### Translation Insight Features
 - [x] Meaning-richness indicator computation using word_richness table (richness flags at standard+ depth)
-- [ ] Translation divergence detection for compare endpoint
-- [ ] Plain-English explanations for top 500 Hebrew + top 500 Greek words where meaning is lost
-- [ ] Frame all indicators as "the original adds richness" — never "your Bible is wrong"
+- [x] Translation divergence detection for compare endpoint
+- [x] Plain-English explanations for top 500 Hebrew + top 500 Greek words where meaning is lost
+- [x] Frame all indicators as "the original adds richness" — never "your Bible is wrong"
 
 ## Phase 7: Performance + Testing
 
@@ -412,42 +412,42 @@ ABBA_CONNECTION_POOL_SIZE=10
   - [x] `search_cache_size` - Search result LRU cache
   - [x] `search_timeout` - Maximum search execution time
   - [x] `parallel_workers` - Number of parallel processors
-  - [ ] `connection_pool_size` - Database connection pool
-  - [ ] `memory_limit` - Maximum memory usage
-  - [ ] `enable_profiling` - Performance profiling toggle
-- [ ] Add performance CLI arguments:
-  - [ ] `--workers` - Set parallel worker count
-  - [ ] `--profile` - Enable performance profiling
-  - [ ] `--benchmark` - Run performance tests
+  - [x] `connection_pool_size` - Database connection pool
+  - [x] `memory_limit` - Maximum memory usage
+  - [x] `enable_profiling` - Performance profiling toggle
+- [x] Add performance CLI arguments:
+  - [x] `--workers` - Set parallel worker count
+  - [x] `--profile` - Enable performance profiling
+  - [x] `--benchmark` - Run performance tests
 
 ### Performance Optimization
-- [ ] Connection pooling for FastAPI concurrent requests
+- [x] Connection pooling for FastAPI concurrent requests
 - [ ] Precomputed verse annotation cache (materialized `verse_annotations_cache` table)
 - [ ] Profile and optimize database queries
-- [ ] Add query result pagination
-- [ ] Create performance benchmarks (targets: <5ms basic, <30ms standard, <100ms deep, <200ms scholarly)
+- [x] Add query result pagination
+- [x] Create performance benchmarks (targets: <5ms basic, <30ms standard, <100ms deep, <200ms scholarly)
 
 ### Testing
 - [x] Create unit tests for database operations (80% min, goal 95%)
 - [x] Add integration tests for all FastAPI endpoints (39 tests across 8 user flow classes)
-- [ ] Test embedding generation accuracy
-- [ ] Validate concept mappings against known scholarly references
-- [ ] Performance testing for large queries
+- [x] Test embedding generation accuracy
+- [x] Validate concept mappings against known scholarly references
+- [x] Performance testing for large queries
 - [x] Test progressive depth responses at all four levels
 
 ### Documentation
-- [ ] Update API documentation (OpenAPI/Swagger auto-generated from FastAPI)
-- [ ] Create user guide for semantic search
-- [ ] Document concept taxonomy and life topic mappings
-- [ ] Add code examples for common API use cases
-- [ ] Create troubleshooting guide
+- [x] Update API documentation (OpenAPI/Swagger auto-generated from FastAPI)
+- [x] Create user guide for semantic search
+- [x] Document concept taxonomy and life topic mappings
+- [x] Add code examples for common API use cases
+- [x] Create troubleshooting guide
 
 ### Deployment Preparation
-- [ ] Create installation scripts
-- [ ] Add database migration support
-- [ ] Create backup/restore functionality
-- [ ] Add configuration validation
-- [ ] Prepare distribution package
+- [x] Create installation scripts
+- [x] Add database migration support
+- [x] Create backup/restore functionality
+- [x] Add configuration validation
+- [x] Prepare distribution package
 
 ## Phase 8: User Experience Layer
 
@@ -458,20 +458,20 @@ ABBA_CONNECTION_POOL_SIZE=10
 - [x] Beginner onboarding flow with "Start Here" guidance
 
 ### Interactive Features
-- [ ] Note-taking and verse saving/collections
-- [ ] Sharing functionality (passages, study notes, topic collections)
-- [ ] Interactive mode for exploration via CLI
+- [x] Note-taking and verse saving/collections
+- [x] Sharing functionality (passages, study notes, topic collections)
+- [x] Interactive mode for exploration via CLI
 - [x] Export functionality for study results (JSON, Markdown)
 
 ### Frontend Foundation
-- [ ] Vue.js project setup with mobile-responsive design
-- [ ] Clean reading pane (Level 1: just text, no clutter)
-- [ ] Translation Lens component (subtle richness indicators with progressive disclosure)
-- [ ] Context Sidebar component (collapsible, scope-aware cultural notes)
-- [ ] Depth Dial control (Read → Understand → Study → Analyze)
-- [ ] Life Topic Navigator (problem-first search entry point)
-- [ ] Literary Mode Indicator (ambient visual genre shifts)
-- [ ] Word Journey cards (expandable word study with tabs: meaning, occurrences, word family, this verse)
+- [x] Vue.js project setup with mobile-responsive design
+- [x] Clean reading pane (Level 1: just text, no clutter)
+- [x] Translation Lens component (subtle richness indicators with progressive disclosure)
+- [x] Context Sidebar component (collapsible, scope-aware cultural notes)
+- [x] Depth Dial control (Read → Understand → Study → Analyze)
+- [x] Life Topic Navigator (problem-first search entry point)
+- [x] Literary Mode Indicator (ambient visual genre shifts)
+- [x] Word Journey cards (expandable word study with tabs: meaning, occurrences, word family, this verse)
 
 ## Phase 9: Future Enhancements (Post-MVP)
 

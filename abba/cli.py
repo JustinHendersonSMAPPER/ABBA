@@ -167,6 +167,17 @@ Examples:
             "--exact-only", action="store_true", help="Disable semantic search, use only exact text match"
         )
 
+        # Performance tuning options
+        parser.add_argument("--workers", type=int, help="Set number of parallel workers")
+
+        parser.add_argument("--profile", action="store_true", help="Enable performance profiling")
+
+        parser.add_argument("--benchmark", action="store_true", help="Run performance benchmarks and exit")
+
+        parser.add_argument("--memory-limit", type=int, help="Set memory limit in MB")
+
+        parser.add_argument("--pool-size", type=int, help="Database connection pool size")
+
         # Server options
         parser.add_argument("--serve", action="store_true", help="Start the ABBA API server (uvicorn)")
 
@@ -361,6 +372,26 @@ Examples:
     def is_exact_only(self) -> bool:
         """Check if exact-only search mode is requested."""
         return self.args.exact_only if self.args and hasattr(self.args, "exact_only") else False
+
+    def get_workers(self) -> Optional[int]:
+        """Get worker count override from CLI args."""
+        return self.args.workers if self.args and hasattr(self.args, "workers") else None
+
+    def should_profile(self) -> bool:
+        """Check if profiling should be enabled."""
+        return self.args.profile if self.args and hasattr(self.args, "profile") else False
+
+    def should_benchmark(self) -> bool:
+        """Check if benchmarks should be run."""
+        return self.args.benchmark if self.args and hasattr(self.args, "benchmark") else False
+
+    def get_memory_limit(self) -> Optional[int]:
+        """Get memory limit in MB from CLI args."""
+        return self.args.memory_limit if self.args and hasattr(self.args, "memory_limit") else None
+
+    def get_pool_size(self) -> Optional[int]:
+        """Get connection pool size override from CLI args."""
+        return self.args.pool_size if self.args and hasattr(self.args, "pool_size") else None
 
     def should_serve(self) -> bool:
         """Check if should start the API server."""

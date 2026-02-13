@@ -74,6 +74,8 @@ class ABBAConfig:
     connection_pool_size: int = 10
     use_processes_for_cpu_bound: bool = True  # Use processes for CPU-bound tasks
     use_threads_for_io_bound: bool = True  # Use threads for I/O-bound tasks
+    memory_limit: Optional[int] = None  # Memory limit in MB; None means no limit
+    enable_profiling: bool = False  # Enable performance profiling
 
     # Rebuild flags
     rebuild_db: bool = False

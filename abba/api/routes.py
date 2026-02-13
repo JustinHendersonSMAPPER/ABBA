@@ -12,28 +12,39 @@ from .analysis import AnalysisAPI
 from .models import (
     APIInfo,
     BookInfo,
+    CollectionCreate,
+    CollectionItemAdd,
+    CollectionResponse,
     CrossRef,
     CulturalNote,
     DepthLevel,
+    GenreShift,
     LexiconEntry,
     LifeTopicDetail,
     LifeTopicSummary,
     MorphologyInfo,
+    NoteCreate,
+    NoteResponse,
     PassageInfo,
     ReadingPlanDetail,
     ReadingPlanEntry,
     ReadingPlanSummary,
     RichnessFlag,
     SemanticSearchResult,
+    ShareCreate,
+    ShareResponse,
+    SpeakerAttribution,
     StrongsResult,
     TextSearchResult,
     ThemeGroup,
     TopicalResult,
     TopicSummary,
     TranslationComparison,
+    VerseContext,
     VerseResponse,
     WordAnalysis,
     WordDetail,
+    WordExplanation,
 )
 from .query_parser import parse_query
 from .search import SearchAPI
@@ -146,6 +157,12 @@ async def get_verse(
         response.passage_info = _get_passage_info(book_id, chapter, verse)
         response.literary_structures = _get_literary_structures(book_id, chapter, verse)
         response.concepts = []
+        response.surrounding_context = _get_surrounding_context(translation_id, book_id, chapter, verse)
+        response.speaker = _get_speaker(book_id, chapter, verse)
+        response.genre = _get_active_genre(book_id, chapter, verse)
+        # Narrative genre passages are descriptive (what happened), not prescriptive (what to do)
+        if response.genre in ("narrative", "unknown"):
+            response.is_descriptive = True
 
     if depth == DepthLevel.SCHOLARLY:
         analysis = _get_analysis()
@@ -212,10 +229,12 @@ async def compare_translations(
         )
         for w in result.get("original_words", [])
     ]
+    divergences = _detect_translation_divergences(result.get("translations", {}))
     return TranslationComparison(
         reference=result["reference"],
         translations=result.get("translations", {}),
         original_words=words,
+        divergences=divergences,
     )
 
 
@@ -227,10 +246,13 @@ async def text_search(
     q: str = Query(..., description="Text search query"),
     translation_id: str = Query("engbsb", description="Translation ID"),
     limit: int = Query(50, ge=1, le=200),
+    page: int = Query(1, ge=1, description="Page number for pagination"),
 ) -> List[TextSearchResult]:
-    """Full-text search within a specific translation."""
+    """Full-text search within a specific translation. Supports pagination."""
     search = _get_search()
-    results = search.search_verses(translation_id, q, limit)
+    offset = (page - 1) * limit
+    results = search.search_verses(translation_id, q, limit + offset)
+    paginated = results[offset : offset + limit]
     return [
         TextSearchResult(
             translation_id=r.translation_id,
@@ -240,7 +262,7 @@ async def text_search(
             text=r.text,
             book_name=r.book_name,
         )
-        for r in results
+        for r in paginated
     ]
 
 
@@ -781,6 +803,203 @@ async def get_reading_plan(slug: str) -> ReadingPlanDetail:
     )
 
 
+# --- Word Explanations Endpoint ---
+
+
+@router.get("/word-explanations/{strongs_number}", response_model=WordExplanation)
+async def get_word_explanation(strongs_number: str) -> WordExplanation:
+    """Get a plain-English explanation of what the original word adds beyond translation."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT strongs_number, language, explanation FROM word_explanations WHERE strongs_number = ?",
+            (strongs_number,),
+        )
+        if not rows:
+            raise HTTPException(status_code=404, detail=f"No explanation for {strongs_number}")
+        r = rows[0]
+        return WordExplanation(strongs_number=r[0], language=r[1], explanation=r[2])
+    except sqlite3.OperationalError as exc:
+        raise HTTPException(status_code=503, detail="Word explanations not available") from exc
+
+
+# --- Genre Shifts Endpoint ---
+
+
+@router.get("/genre-shifts/{book_id}", response_model=List[GenreShift])
+async def get_genre_shifts(book_id: int) -> List[GenreShift]:
+    """Get all genre transitions within a book."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT chapter, verse, from_genre, to_genre, description "
+            "FROM genre_shifts WHERE book_id = ? ORDER BY chapter, verse",
+            (book_id,),
+        )
+        return [GenreShift(chapter=r[0], verse=r[1], from_genre=r[2], to_genre=r[3], description=r[4]) for r in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
+# --- Notes Endpoints ---
+
+
+@router.post("/notes/{book_id}/{chapter}/{verse}", response_model=NoteResponse)
+async def create_note(book_id: int, chapter: int, verse: int, body: NoteCreate) -> NoteResponse:
+    """Create a note on a verse."""
+    from ..enrichment.user_annotations import UserAnnotationManager
+
+    db = _get_db()
+    mgr = UserAnnotationManager(db.db_path)
+    note_id = mgr.create_note(book_id, chapter, verse, body.content, body.note_type)
+    return NoteResponse(
+        note_id=note_id,
+        book_id=book_id,
+        chapter=chapter,
+        verse=verse,
+        content=body.content,
+        note_type=body.note_type,
+    )
+
+
+@router.get("/notes/{book_id}/{chapter}/{verse}", response_model=List[NoteResponse])
+async def get_notes(book_id: int, chapter: int, verse: int) -> List[NoteResponse]:
+    """Get all notes for a verse."""
+    from ..enrichment.user_annotations import UserAnnotationManager
+
+    db = _get_db()
+    mgr = UserAnnotationManager(db.db_path)
+    notes = mgr.get_notes_for_verse(book_id, chapter, verse)
+    return [
+        NoteResponse(
+            note_id=n["note_id"],
+            book_id=book_id,
+            chapter=chapter,
+            verse=verse,
+            content=n["content"],
+            note_type=n["note_type"],
+            created_at=n.get("created_at"),
+            updated_at=n.get("updated_at"),
+        )
+        for n in notes
+    ]
+
+
+@router.delete("/notes/{note_id}")
+async def delete_note(note_id: int) -> Dict[str, Any]:
+    """Delete a note."""
+    from ..enrichment.user_annotations import UserAnnotationManager
+
+    db = _get_db()
+    mgr = UserAnnotationManager(db.db_path)
+    deleted = mgr.delete_note(note_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return {"deleted": True}
+
+
+# --- Collections Endpoints ---
+
+
+@router.post("/collections", response_model=CollectionResponse)
+async def create_collection(body: CollectionCreate) -> CollectionResponse:
+    """Create a new verse collection."""
+    from ..enrichment.user_annotations import UserAnnotationManager
+
+    db = _get_db()
+    mgr = UserAnnotationManager(db.db_path)
+    cid = mgr.create_collection(body.name, body.description)
+    return CollectionResponse(collection_id=cid, name=body.name, description=body.description)
+
+
+@router.get("/collections", response_model=List[CollectionResponse])
+async def list_collections() -> List[CollectionResponse]:
+    """List all user collections."""
+    from ..enrichment.user_annotations import UserAnnotationManager
+
+    db = _get_db()
+    mgr = UserAnnotationManager(db.db_path)
+    return [
+        CollectionResponse(
+            collection_id=c["collection_id"],
+            name=c["name"],
+            description=c["description"],
+            created_at=c.get("created_at"),
+            verse_count=c["verse_count"],
+        )
+        for c in mgr.list_collections()
+    ]
+
+
+@router.post("/collections/{collection_id}/items")
+async def add_to_collection(collection_id: int, body: CollectionItemAdd) -> Dict[str, Any]:
+    """Add a verse to a collection."""
+    from ..enrichment.user_annotations import UserAnnotationManager
+
+    db = _get_db()
+    mgr = UserAnnotationManager(db.db_path)
+    added = mgr.add_to_collection(collection_id, body.book_id, body.chapter, body.verse, body.note)
+    if not added:
+        raise HTTPException(status_code=409, detail="Verse already in collection")
+    return {"added": True}
+
+
+@router.get("/collections/{collection_id}/items", response_model=List[Dict[str, Any]])
+async def get_collection_items(collection_id: int) -> List[Dict[str, Any]]:
+    """Get all items in a collection."""
+    from ..enrichment.user_annotations import UserAnnotationManager
+
+    db = _get_db()
+    mgr = UserAnnotationManager(db.db_path)
+    return mgr.get_collection_items(collection_id)
+
+
+@router.delete("/collections/{collection_id}")
+async def delete_collection(collection_id: int) -> Dict[str, Any]:
+    """Delete a collection."""
+    from ..enrichment.user_annotations import UserAnnotationManager
+
+    db = _get_db()
+    mgr = UserAnnotationManager(db.db_path)
+    deleted = mgr.delete_collection(collection_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return {"deleted": True}
+
+
+# --- Sharing Endpoints ---
+
+
+@router.post("/share", response_model=ShareResponse)
+async def create_share(body: ShareCreate) -> ShareResponse:
+    """Create a shareable link for content."""
+    from ..enrichment.user_annotations import UserAnnotationManager
+
+    db = _get_db()
+    mgr = UserAnnotationManager(db.db_path)
+    token = mgr.create_share(body.share_type, body.content, body.title)
+    return ShareResponse(share_token=token, share_type=body.share_type, title=body.title, content=body.content)
+
+
+@router.get("/share/{token}", response_model=ShareResponse)
+async def get_shared_item(token: str) -> ShareResponse:
+    """Retrieve a shared item."""
+    from ..enrichment.user_annotations import UserAnnotationManager
+
+    db = _get_db()
+    mgr = UserAnnotationManager(db.db_path)
+    item = mgr.get_shared_item(token)
+    if not item:
+        raise HTTPException(status_code=404, detail="Shared item not found")
+    return ShareResponse(
+        share_token=token,
+        share_type=item["share_type"],
+        title=item["title"],
+        content=item["content"],
+        created_at=item.get("created_at"),
+    )
+
+
 # --- Export Endpoint ---
 
 
@@ -1174,6 +1393,103 @@ def _get_literary_structures(book_id: int, chapter: int, verse: int) -> List[Any
         return structures
     except sqlite3.OperationalError:
         return []
+
+
+def _get_surrounding_context(translation_id: str, book_id: int, chapter: int, verse: int) -> VerseContext:
+    """Get previous and next verse text for anti-proof-texting context."""
+    db = _get_db()
+    prev_text = None
+    next_text = None
+    try:
+        if verse > 1:
+            prev_rows = db.execute_query(
+                "SELECT text FROM verses WHERE translation_id = ? AND book_id = ? AND chapter = ? AND verse = ?",
+                (translation_id, book_id, chapter, verse - 1),
+            )
+            if prev_rows:
+                prev_text = str(prev_rows[0][0])
+        next_rows = db.execute_query(
+            "SELECT text FROM verses WHERE translation_id = ? AND book_id = ? AND chapter = ? AND verse = ?",
+            (translation_id, book_id, chapter, verse + 1),
+        )
+        if next_rows:
+            next_text = str(next_rows[0][0])
+    except sqlite3.OperationalError:
+        pass
+    return VerseContext(previous_verse=prev_text, next_verse=next_text)
+
+
+def _get_speaker(book_id: int, chapter: int, verse: int) -> Optional[SpeakerAttribution]:
+    """Get speaker attribution for a verse."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT speaker, context_note FROM speaker_attributions "
+            "WHERE book_id = ? "
+            "AND (start_chapter < ? OR (start_chapter = ? AND start_verse <= ?)) "
+            "AND (end_chapter > ? OR (end_chapter = ? AND end_verse >= ?)) "
+            "LIMIT 1",
+            (book_id, chapter, chapter, verse, chapter, chapter, verse),
+        )
+        if rows:
+            return SpeakerAttribution(speaker=rows[0][0], context_note=rows[0][1])
+    except sqlite3.OperationalError:
+        pass
+    return None
+
+
+def _get_active_genre(book_id: int, chapter: int, verse: int) -> Optional[str]:
+    """Determine the active literary genre at a verse based on genre shifts."""
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT to_genre FROM genre_shifts "
+            "WHERE book_id = ? AND (chapter < ? OR (chapter = ? AND verse <= ?)) "
+            "ORDER BY chapter DESC, verse DESC LIMIT 1",
+            (book_id, chapter, chapter, verse),
+        )
+        if rows:
+            return str(rows[0][0])
+    except sqlite3.OperationalError:
+        pass
+    # Fall back to book's primary genre from book_metadata
+    try:
+        rows = db.execute_query(
+            "SELECT primary_genre FROM book_metadata WHERE book_id = ?",
+            (book_id,),
+        )
+        if rows:
+            return str(rows[0][0])
+    except sqlite3.OperationalError:
+        pass
+    return None
+
+
+def _detect_translation_divergences(translations: Dict[str, str]) -> List[Dict[str, Any]]:
+    """Detect significant differences between translations."""
+    if len(translations) < 2:
+        return []
+    divergences: List[Dict[str, Any]] = []
+    items = list(translations.items())
+    for i, (tid1, text1) in enumerate(items):
+        for tid2, text2 in items[i + 1 :]:
+            words1 = set(text1.lower().split())
+            words2 = set(text2.lower().split())
+            unique_to_1 = words1 - words2
+            unique_to_2 = words2 - words1
+            overlap = words1 & words2
+            total_unique = len(words1 | words2)
+            similarity = len(overlap) / max(total_unique, 1)
+            if similarity < 0.85:
+                divergences.append(
+                    {
+                        "translations": [tid1, tid2],
+                        "similarity": round(similarity, 3),
+                        "unique_to_first": sorted(unique_to_1)[:5],
+                        "unique_to_second": sorted(unique_to_2)[:5],
+                    }
+                )
+    return divergences
 
 
 def _parse_json_list(value: Optional[str]) -> List[Any]:
