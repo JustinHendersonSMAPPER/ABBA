@@ -11,11 +11,13 @@ from pathlib import Path
 from abba.lexicon_parser import (
     _clean_text,
     _get_element_text,
+    _parse_tflsj_line,
     parse_abbott_smith_xml,
     parse_bdb_xml,
     parse_dodson_csv,
     parse_hebrew_strongs_xml,
     parse_strongs_greek_xml,
+    parse_tflsj_txt,
 )
 
 
@@ -697,6 +699,94 @@ class TestStrongsGreekParser(unittest.TestCase):
         entries = parse_strongs_greek_xml(self.xml_path)
         self.assertEqual(len(entries), 1)
         self.assertLessEqual(len(entries[0]["definition"]), 2010)
+
+
+class TestTFLSJParser(unittest.TestCase):
+    """Test STEPBible TFLSJ (Tyndale Full LSJ Gloss) parser."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.txt_path = Path(self.temp_dir) / "tflsj.txt"
+
+    def _write_txt(self, content: str):
+        with open(self.txt_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    def test_parse_basic_entry(self):
+        self._write_txt("G0026\tἀγάπη\tagape\tlove\tLove, goodwill, benevolence\n")
+        entries = parse_tflsj_txt(self.txt_path)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["strongs_number"], "G0026")
+        self.assertEqual(entries[0]["original_word"], "ἀγάπη")
+        self.assertEqual(entries[0]["transliteration"], "agape")
+        self.assertEqual(entries[0]["gloss"], "love")
+        self.assertEqual(entries[0]["definition"], "Love, goodwill, benevolence")
+        self.assertEqual(entries[0]["source_lexicon"], "tflsj")
+        self.assertEqual(entries[0]["language"], "greek")
+
+    def test_skip_comment_lines(self):
+        self._write_txt("# This is a comment\n$ Header line\nG0026\tἀγάπη\tagape\tlove\tDefinition\n")
+        entries = parse_tflsj_txt(self.txt_path)
+        self.assertEqual(len(entries), 1)
+
+    def test_skip_hebrew_entries(self):
+        self._write_txt("H0001\tאָב\tab\tfather\tFather definition\n")
+        entries = parse_tflsj_txt(self.txt_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_skip_empty_lines(self):
+        self._write_txt("\n\n\nG0026\tἀγάπη\tagape\tlove\tDefinition\n\n")
+        entries = parse_tflsj_txt(self.txt_path)
+        self.assertEqual(len(entries), 1)
+
+    def test_multiple_entries(self):
+        self._write_txt(
+            "G0026\tἀγάπη\tagape\tlove\tLove definition\n"
+            "G0032\tἄγγελος\tangelos\tmessenger\tMessenger definition\n"
+            "G0040\tἅγιος\thagios\tholy\tSacred, holy\n"
+        )
+        entries = parse_tflsj_txt(self.txt_path)
+        self.assertEqual(len(entries), 3)
+
+    def test_numeric_only_strongs(self):
+        self._write_txt("26\tἀγάπη\tagape\tlove\tDefinition\n")
+        entries = parse_tflsj_txt(self.txt_path)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["strongs_number"], "G0026")
+
+    def test_entry_with_no_definition(self):
+        self._write_txt("G0026\tἀγάπη\n")
+        entries = parse_tflsj_txt(self.txt_path)
+        self.assertEqual(len(entries), 0)
+
+    def test_gloss_used_as_definition_fallback(self):
+        self._write_txt("G0026\tἀγάπη\tagape\tlove\n")
+        entries = parse_tflsj_txt(self.txt_path)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["definition"], "love")
+
+    def test_long_definition_truncation(self):
+        long_def = "a" * 4000
+        self._write_txt(f"G0026\tἀγάπη\tagape\tlove\t{long_def}\n")
+        entries = parse_tflsj_txt(self.txt_path)
+        self.assertEqual(len(entries), 1)
+        self.assertTrue(entries[0]["definition"].endswith("..."))
+        self.assertLessEqual(len(entries[0]["definition"]), 3004)
+
+    def test_missing_file(self):
+        entries = parse_tflsj_txt(Path("/nonexistent/file.txt"))
+        self.assertEqual(len(entries), 0)
+
+    def test_parse_tflsj_line_none_for_empty(self):
+        self.assertIsNone(_parse_tflsj_line(""))
+        self.assertIsNone(_parse_tflsj_line("   "))
+        self.assertIsNone(_parse_tflsj_line("# comment"))
+        self.assertIsNone(_parse_tflsj_line("$ header"))
+
+    def test_parse_tflsj_line_valid(self):
+        entry = _parse_tflsj_line("G0026\tἀγάπη\tagape\tlove\tFull definition")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry["strongs_number"], "G0026")
 
 
 if __name__ == "__main__":

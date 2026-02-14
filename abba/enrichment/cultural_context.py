@@ -218,6 +218,605 @@ BOOK_INTRODUCTIONS: List[Tuple[int, str, str, str, str, str, str, str]] = [
         "Patmos (written to seven churches in Asia Minor)",
         "high",
     ),
+    # --- Remaining OT Books ---
+    (
+        4,
+        "historical_background",
+        "Numbers: Wilderness Wanderings",
+        "Numbers records Israel's forty-year journey from Sinai to the edge of the Promised Land.",
+        "Two censuses bookend the narrative — the first generation that refused to enter Canaan and the "
+        "second that would inherit it. The book illustrates the consequences of unbelief (chs. 13-14). "
+        "Balaam's oracles (chs. 22-24) come from a pagan prophet compelled by God to bless Israel.",
+        "1446-1406 BCE",
+        "Sinai Wilderness, Transjordan",
+        "high",
+    ),
+    (
+        6,
+        "historical_background",
+        "Joshua: Conquest and Settlement",
+        "Joshua narrates Israel's entry into and settlement of the Promised Land under Joshua's leadership.",
+        "Set in the Late Bronze Age during a period of political instability in Canaan. "
+        "The conquest narrative demonstrates God's faithfulness to the Abrahamic land promise. "
+        "The covenant renewal at Shechem (ch. 24) mirrors ancient treaty ceremonies.",
+        "1406-1375 BCE",
+        "Canaan",
+        "high",
+    ),
+    (
+        7,
+        "historical_background",
+        "Judges: Cycles of Apostasy",
+        "Judges describes a dark period of repeated apostasy, oppression, and deliverance.",
+        "The recurring cycle — sin, servitude, supplication, salvation — reveals Israel's unfaithfulness. "
+        "The refrain 'everyone did what was right in his own eyes' captures the era's moral chaos. "
+        "Judge figures were military deliverers, not courtroom officials.",
+        "1375-1050 BCE",
+        "Canaan tribal territories",
+        "high",
+    ),
+    (
+        8,
+        "historical_background",
+        "Ruth: Loyalty and Redemption",
+        "Ruth tells of a Moabite woman's devoted loyalty, set during the period of the Judges.",
+        "The kinsman-redeemer (goel) institution is central — the nearest relative could buy back "
+        "family property and marry a widow to preserve the family line. Ruth's inclusion in the "
+        "Davidic lineage (and thus Jesus') underscores God's universal purposes.",
+        "1100 BCE (setting)",
+        "Moab and Bethlehem",
+        "high",
+    ),
+    (
+        9,
+        "historical_background",
+        "1 Samuel: Monarchy's Beginning",
+        "1 Samuel covers the transition from judges to monarchy — Samuel, Saul, and David's rise.",
+        "Israel's demand for a king 'like the nations' marks a theological watershed. "
+        "Samuel serves as the last judge and first kingmaker. "
+        "Saul's reign demonstrates the danger of human kingship apart from divine obedience.",
+        "1050-1010 BCE",
+        "Israel, primarily Benjamin and Judah",
+        "high",
+    ),
+    (
+        10,
+        "historical_background",
+        "2 Samuel: David's Reign",
+        "2 Samuel recounts David's reign — his triumphs, failures, and lasting covenant promise.",
+        "The Davidic Covenant (ch. 7) promises an eternal dynasty, foundational to messianic expectation. "
+        "David's sin with Bathsheba (chs. 11-12) triggers family dysfunction that shapes the rest of the book. "
+        "David is portrayed honestly as both heroic and deeply flawed.",
+        "1010-970 BCE",
+        "Israel, Jerusalem",
+        "high",
+    ),
+    (
+        11,
+        "historical_background",
+        "1 Kings: Kingdom United and Divided",
+        "1 Kings covers Solomon's glorious reign and the kingdom's tragic division.",
+        "Solomon's temple represents the apex of Israelite worship. "
+        "The kingdom splits under Rehoboam due to heavy taxation and forced labour. "
+        "Elijah's contest on Mount Carmel (ch. 18) confronts Baal worship head-on.",
+        "970-850 BCE",
+        "Israel and Judah",
+        "high",
+    ),
+    (
+        12,
+        "historical_background",
+        "2 Kings: Exile Approaches",
+        "2 Kings traces both kingdoms' decline to exile — Israel (722 BCE) and Judah (586 BCE).",
+        "Elisha continues Elijah's prophetic ministry with signs and wonders. "
+        "Kings are evaluated by faithfulness to Yahweh and the Deuteronomic covenant. "
+        "Josiah's reform (chs. 22-23) provides a brief revival before Babylon's conquest.",
+        "850-586 BCE",
+        "Israel, Judah, Assyria, Babylon",
+        "high",
+    ),
+    (
+        13,
+        "historical_background",
+        "1 Chronicles: David and Temple Worship",
+        "1 Chronicles retells Israel's history emphasizing David's role in establishing temple worship.",
+        "Written for the post-exilic community to reconnect with their heritage. "
+        "Genealogies (chs. 1-9) establish continuity. David's preparations for the temple "
+        "and Levitical worship occupy the bulk of the narrative.",
+        "Post-exilic (450-400 BCE composition)",
+        "Israel, Jerusalem",
+        "medium",
+    ),
+    (
+        14,
+        "historical_background",
+        "2 Chronicles: Temple and Reform",
+        "2 Chronicles focuses on Judah's kings, the temple, and periods of spiritual reform.",
+        "Ignores the northern kingdom almost entirely, focusing on the Davidic line. "
+        "Highlights reformer-kings: Asa, Jehoshaphat, Hezekiah, Josiah. "
+        "Ends with Cyrus's decree to rebuild the temple — hope beyond exile.",
+        "Post-exilic (450-400 BCE composition)",
+        "Judah, Jerusalem",
+        "medium",
+    ),
+    (
+        15,
+        "historical_background",
+        "Ezra: Return and Restoration",
+        "Ezra records the Jewish return from Babylonian exile and rebuilding of the temple.",
+        "Cyrus's edict (538 BCE) fulfils Jeremiah's prophecy. The rebuilt temple was modest "
+        "compared to Solomon's, yet represented God's continued presence. "
+        "Ezra's reform addressed intermarriage with surrounding peoples.",
+        "538-458 BCE",
+        "Babylon and Jerusalem",
+        "high",
+    ),
+    (
+        16,
+        "historical_background",
+        "Nehemiah: Rebuilding the Walls",
+        "Nehemiah leads the rebuilding of Jerusalem's walls and covenant renewal.",
+        "Nehemiah served as cupbearer to Persian King Artaxerxes before requesting "
+        "permission to rebuild. The wall was completed in 52 days despite opposition. "
+        "The covenant renewal ceremony (chs. 8-10) centered on public Torah reading.",
+        "445-430 BCE",
+        "Jerusalem, under Persian rule",
+        "high",
+    ),
+    (
+        17,
+        "historical_background",
+        "Esther: Providence in Exile",
+        "Esther reveals God's hidden providence protecting Jews in the Persian Empire.",
+        "Set in the Persian court at Susa. God is never mentioned by name, yet divine "
+        "providence pervades the narrative. The Festival of Purim celebrates this deliverance. "
+        "Reversal is a key literary motif — intended victims become victors.",
+        "486-465 BCE",
+        "Susa, Persian Empire",
+        "high",
+    ),
+    (
+        21,
+        "historical_background",
+        "Ecclesiastes: Life Under the Sun",
+        "Ecclesiastes wrestles honestly with life's apparent meaninglessness apart from God.",
+        "The Teacher (Qoheleth) systematically examines work, pleasure, wisdom, and wealth, "
+        "finding all 'hebel' (vapour/fleeting). Not nihilism but honest realism. "
+        "The conclusion (12:13-14) anchors meaning in fearing God and keeping his commands.",
+        "950 BCE (Solomonic tradition)",
+        "Jerusalem",
+        "medium",
+    ),
+    (
+        22,
+        "historical_background",
+        "Song of Solomon: Love Poetry",
+        "The Song celebrates romantic love between a man and woman in vivid poetic imagery.",
+        "Ancient Near Eastern love poetry tradition. Metaphors drawn from nature, agriculture, "
+        "and spices. Read literally as celebrating marital love, allegorically as God-Israel or "
+        "Christ-Church relationship. The repeated refrain 'do not arouse love until it so desires' "
+        "structures the poem.",
+        "950 BCE (tradition)",
+        "Israel, Lebanon",
+        "medium",
+    ),
+    (
+        24,
+        "historical_background",
+        "Jeremiah: Prophet of Judgment and Hope",
+        "Jeremiah prophesied during Judah's final decades, warning of Babylon's coming destruction.",
+        "Called as a young man (627 BCE), Jeremiah preached for 40 years through national catastrophe. "
+        "The 'weeping prophet' suffered rejection, imprisonment, and exile. "
+        "The New Covenant prophecy (31:31-34) is foundational for Christian theology.",
+        "627-586 BCE",
+        "Jerusalem, Egypt",
+        "high",
+    ),
+    (
+        25,
+        "historical_background",
+        "Lamentations: Grief over Jerusalem",
+        "Lamentations is a collection of funeral poems mourning Jerusalem's destruction in 586 BCE.",
+        "Five acrostic poems following the Hebrew alphabet — structured grief. "
+        "Raw, honest anguish over destruction coexists with affirmations of God's faithfulness (3:22-23). "
+        "Used liturgically on the ninth of Av to commemorate the temple's destruction.",
+        "586-580 BCE",
+        "Jerusalem (destroyed)",
+        "high",
+    ),
+    (
+        26,
+        "historical_background",
+        "Ezekiel: Visions of Exile and Restoration",
+        "Ezekiel prophesied among the Babylonian exiles, combining bizarre visions with pastoral care.",
+        "Ezekiel was a priest called to prophesy in exile. His sign-acts dramatised judgment. "
+        "The departure of God's glory from the temple (chs. 8-11) and its return (ch. 43) "
+        "frame the book. The valley of dry bones (ch. 37) promises national restoration.",
+        "593-571 BCE",
+        "Babylon (Tel-Abib by the Chebar canal)",
+        "high",
+    ),
+    (
+        27,
+        "historical_background",
+        "Daniel: Faithfulness in Exile",
+        "Daniel combines court narratives of faithfulness with apocalyptic visions of God's kingdom.",
+        "Set in the Babylonian and Persian courts. The fiery furnace and lions' den demonstrate "
+        "that God protects the faithful even in hostile empires. "
+        "Apocalyptic visions (chs. 7-12) use symbolic beasts to represent successive empires.",
+        "605-535 BCE",
+        "Babylon, Persia",
+        "high",
+    ),
+    (
+        28,
+        "historical_background",
+        "Hosea: Unfaithful Love",
+        "Hosea's marriage to an unfaithful wife embodies God's persistent love for unfaithful Israel.",
+        "Hosea prophesied to the northern kingdom during its final, prosperous-but-corrupt decades. "
+        "Religious syncretism — mixing Yahweh worship with Baal fertility religion — was the core problem. "
+        "Despite devastating judgment, restoration is promised (ch. 14).",
+        "750-715 BCE",
+        "Northern Israel",
+        "high",
+    ),
+    (
+        29,
+        "historical_background",
+        "Joel: The Day of the Lord",
+        "Joel uses a devastating locust plague as a lens for understanding the coming Day of the Lord.",
+        "The locust plague served as both historical calamity and prophetic metaphor. "
+        "The call to national repentance (2:12-13) emphasises internal transformation. "
+        "The promise of the Spirit's outpouring (2:28-32) is quoted at Pentecost (Acts 2).",
+        "835-400 BCE (debated)",
+        "Judah, Jerusalem",
+        "medium",
+    ),
+    (
+        30,
+        "historical_background",
+        "Amos: Social Justice",
+        "Amos is a shepherd from Judah sent to confront the northern kingdom's social injustice.",
+        "Preached during a time of prosperity under Jeroboam II — but prosperity masked oppression. "
+        "The rich exploited the poor through rigged scales and corrupt courts. "
+        "God's demand: 'Let justice roll on like a river' (5:24).",
+        "760-750 BCE",
+        "Northern Israel (Bethel)",
+        "high",
+    ),
+    (
+        31,
+        "historical_background",
+        "Obadiah: Edom's Judgment",
+        "Obadiah, the shortest OT book, pronounces judgment on Edom for betraying Judah.",
+        "Edomites (descendants of Esau) gloated over Jerusalem's fall and helped plunder it. "
+        "The ancient sibling rivalry (Jacob/Esau) finds its prophetic resolution.",
+        "586-550 BCE",
+        "Edom (southeast of the Dead Sea)",
+        "medium",
+    ),
+    (
+        32,
+        "historical_background",
+        "Jonah: Reluctant Prophet",
+        "Jonah is a satirical narrative about a prophet who runs from God's compassion for enemies.",
+        "Nineveh was the capital of Assyria — Israel's brutal oppressor. "
+        "Jonah's reluctance exposes nationalistic theology that limits God's mercy. "
+        "The book challenges readers to embrace God's compassion for all peoples.",
+        "8th century BCE (setting)",
+        "Israel, Mediterranean Sea, Nineveh (Assyria)",
+        "high",
+    ),
+    (
+        33,
+        "historical_background",
+        "Micah: Justice, Mercy, and Humility",
+        "Micah addresses social injustice in Judah and envisions a future ruler from Bethlehem.",
+        "A contemporary of Isaiah, Micah prophesied during the Assyrian crisis. "
+        "Micah 6:8 summarises prophetic ethics: act justly, love mercy, walk humbly with God. "
+        "The Bethlehem prophecy (5:2) is quoted in Matthew's birth narrative.",
+        "735-700 BCE",
+        "Judah (Moresheth)",
+        "high",
+    ),
+    (
+        34,
+        "historical_background",
+        "Nahum: Nineveh's Fall",
+        "Nahum celebrates the imminent fall of Nineveh, the brutal Assyrian capital.",
+        "Where Jonah proclaimed mercy to Nineveh, Nahum announces judgment on its unchanged brutality. "
+        "Nineveh fell in 612 BCE to a Babylonian-Median coalition. "
+        "The book affirms God's justice against oppressive empires.",
+        "663-612 BCE",
+        "Judah (regarding Nineveh)",
+        "medium",
+    ),
+    (
+        35,
+        "historical_background",
+        "Habakkuk: Questioning God",
+        "Habakkuk dares to question God about injustice and receives a challenging answer.",
+        "A dialogue between prophet and God. Why does God tolerate Judah's wickedness? "
+        "God's answer — Babylon will punish Judah — raises a harder question: "
+        "how can God use someone even more wicked? The answer: 'the righteous shall live by faith' (2:4).",
+        "610-600 BCE",
+        "Judah",
+        "high",
+    ),
+    (
+        36,
+        "historical_background",
+        "Zephaniah: Day of Judgment and Renewal",
+        "Zephaniah warns of universal judgment while promising a humble, purified remnant.",
+        "Prophesied during Josiah's reign, before his reform took effect. "
+        "The Day of the Lord is described in cosmic terms — silence before God (1:7). "
+        "The remnant promises (3:12-13) envision a meek and humble people trusting in the Lord.",
+        "640-625 BCE",
+        "Judah, Jerusalem",
+        "medium",
+    ),
+    (
+        37,
+        "historical_background",
+        "Haggai: Rebuild the Temple",
+        "Haggai urges the returned exiles to stop neglecting the temple and rebuild it.",
+        "After returning from exile, the people rebuilt their own houses while the temple lay in ruins. "
+        "Haggai links their economic struggles to misplaced priorities. "
+        "His four messages in 520 BCE spurred completion of the Second Temple.",
+        "520 BCE",
+        "Jerusalem (post-exilic)",
+        "high",
+    ),
+    (
+        38,
+        "historical_background",
+        "Zechariah: Visions of Restoration",
+        "Zechariah combines apocalyptic visions with messianic prophecy pointing to God's future king.",
+        "A contemporary of Haggai, encouraging temple rebuilding. "
+        "Eight night visions (chs. 1-6) assure God's commitment to Jerusalem. "
+        "Messianic prophecies include the humble king on a donkey (9:9) "
+        "and the pierced one mourned by all (12:10).",
+        "520-480 BCE",
+        "Jerusalem (post-exilic)",
+        "high",
+    ),
+    (
+        39,
+        "historical_background",
+        "Malachi: Final OT Prophet",
+        "Malachi confronts a spiritually apathetic post-exilic community through dialogue format.",
+        "The temple was rebuilt but worship had become perfunctory — blemished offerings, "
+        "unfaithful priests, and withheld tithes. God says 'I have loved you' (1:2) but the "
+        "people ask 'How?' The book ends looking forward to Elijah's return before the Day of the Lord.",
+        "460-430 BCE",
+        "Jerusalem (post-exilic)",
+        "high",
+    ),
+    # --- Remaining NT Epistles ---
+    (
+        46,
+        "historical_background",
+        "1 Corinthians: Church Problems",
+        "Paul addresses divisions, immorality, and theological confusion in the Corinthian church.",
+        "Corinth was a wealthy, cosmopolitan Roman city known for moral laxity. "
+        "The church reflected its culture: factions, lawsuits, sexual immorality, and confusion "
+        "about spiritual gifts. Chapter 13 (love) and chapter 15 (resurrection) are theological peaks.",
+        "55 CE",
+        "Ephesus (written to Corinth)",
+        "high",
+    ),
+    (
+        47,
+        "historical_background",
+        "2 Corinthians: Apostolic Defence",
+        "Paul defends his ministry and reveals strength through weakness.",
+        "The most personal of Paul's letters. Rival teachers questioned his authority. "
+        "Paul's 'thorn in the flesh' (12:7-10) demonstrates God's power in human weakness. "
+        "Contains the most extended NT teaching on generous giving (chs. 8-9).",
+        "55-56 CE",
+        "Macedonia (written to Corinth)",
+        "high",
+    ),
+    (
+        48,
+        "historical_background",
+        "Galatians: Freedom in Christ",
+        "Paul passionately argues that Gentile believers need not follow Jewish law for salvation.",
+        "Written to churches in central or southern Asia Minor. Rival teachers insisted on circumcision. "
+        "Paul's argument: justification by faith alone, not law-keeping. "
+        "The fruit of the Spirit (5:22-23) describes the character of Spirit-led life.",
+        "48-55 CE (debated)",
+        "Galatia (Asia Minor)",
+        "high",
+    ),
+    (
+        49,
+        "historical_background",
+        "Ephesians: The Church Universal",
+        "Ephesians presents a cosmic vision of the church as Christ's body, uniting Jew and Gentile.",
+        "Likely a circular letter to multiple churches. The first half is doctrinal (identity in Christ); "
+        "the second half is practical (how to live it out). The armour of God passage (6:10-20) "
+        "describes spiritual warfare. Emphasises grace, unity, and the mystery of the gospel.",
+        "60-62 CE",
+        "Rome (written to Ephesus and region)",
+        "high",
+    ),
+    (
+        50,
+        "historical_background",
+        "Philippians: Joy in All Circumstances",
+        "Paul writes joyfully from prison, encouraging the Philippian church to rejoice always.",
+        "Philippi was a Roman colony; the church was Paul's first in Europe (Acts 16). "
+        "The Christ Hymn (2:5-11) is a key Christological text: incarnation, humiliation, exaltation. "
+        "Paul models contentment in every circumstance (4:11-13).",
+        "60-62 CE",
+        "Rome (written to Philippi)",
+        "high",
+    ),
+    (
+        51,
+        "historical_background",
+        "Colossians: Christ Supreme",
+        "Paul counters false teaching by exalting Christ's supremacy over all creation and powers.",
+        "The Colossian heresy combined Jewish legalism, proto-gnostic philosophy, and angel worship. "
+        "The Christ Hymn (1:15-20) affirms Christ as creator, sustainer, and reconciler of all things. "
+        "In Christ 'all the fullness of the deity dwells in bodily form' (2:9).",
+        "60-62 CE",
+        "Rome (written to Colossae)",
+        "high",
+    ),
+    (
+        52,
+        "historical_background",
+        "1 Thessalonians: Christ's Return",
+        "Paul's earliest letter encourages a young church enduring persecution and awaiting Christ's return.",
+        "Written within months of leaving Thessalonica. Addresses concern about believers who had died "
+        "before Christ's return. Paul assures them: the dead in Christ will rise first (4:13-18). "
+        "The letter models pastoral encouragement.",
+        "50-51 CE",
+        "Corinth (written to Thessalonica)",
+        "high",
+    ),
+    (
+        53,
+        "historical_background",
+        "2 Thessalonians: Steadfastness",
+        "Paul corrects misunderstandings about Christ's return and urges continued faithfulness.",
+        "Some Thessalonians had stopped working, believing Christ's return was imminent. "
+        "Paul describes events that must precede the Day of the Lord (2:1-12). "
+        "The practical exhortation: 'if anyone will not work, neither shall he eat' (3:10).",
+        "51 CE",
+        "Corinth (written to Thessalonica)",
+        "high",
+    ),
+    (
+        54,
+        "historical_background",
+        "1 Timothy: Church Leadership",
+        "Paul instructs his young delegate Timothy on church order and sound doctrine in Ephesus.",
+        "A Pastoral Epistle addressing qualifications for overseers and deacons, "
+        "combating false teaching, and caring for widows. Timothy was Paul's trusted representative "
+        "in a complex, multi-ethnic urban church.",
+        "62-65 CE",
+        "Macedonia (written to Ephesus)",
+        "medium",
+    ),
+    (
+        55,
+        "historical_background",
+        "2 Timothy: Final Words",
+        "Paul's final letter — a deeply personal charge to Timothy as Paul faces execution.",
+        "Written from a Roman prison, likely during Nero's persecution. "
+        "Paul reflects on his life: 'I have fought the good fight' (4:7). "
+        "Urges Timothy to guard the gospel, endure hardship, and preach the Word.",
+        "66-67 CE",
+        "Rome",
+        "high",
+    ),
+    (
+        56,
+        "historical_background",
+        "Titus: Church Order in Crete",
+        "Paul instructs Titus on organizing churches in Crete — a culture with a rough reputation.",
+        "Cretans were stereotyped as liars and gluttons (1:12, quoting a Cretan poet). "
+        "The letter emphasises 'good works' as the visible fruit of grace (2:11-14; 3:4-8). "
+        "Practical church governance with attention to cultural context.",
+        "62-65 CE",
+        "Unknown (written to Crete)",
+        "medium",
+    ),
+    (
+        57,
+        "historical_background",
+        "Philemon: Slavery and Brotherhood",
+        "Paul appeals to Philemon to receive back his runaway slave Onesimus as a brother in Christ.",
+        "The shortest of Paul's letters and the most personal. Does not demand abolition but plants "
+        "seeds that would ultimately undermine slavery: if Onesimus is 'no longer a slave but a beloved "
+        "brother' (v. 16), the institution's foundations crack.",
+        "60-62 CE",
+        "Rome (written to Colossae)",
+        "high",
+    ),
+    (
+        59,
+        "historical_background",
+        "James: Faith in Action",
+        "James provides practical wisdom for living out faith through actions, not mere words.",
+        "Written by Jesus' brother to Jewish Christians scattered abroad. "
+        "Strongly influenced by Jewish wisdom tradition and Jesus' Sermon on the Mount. "
+        "'Faith without works is dead' (2:26) complements, not contradicts, Paul's justification teaching.",
+        "45-49 CE (possibly earliest NT writing)",
+        "Jerusalem (written to the diaspora)",
+        "high",
+    ),
+    (
+        60,
+        "historical_background",
+        "1 Peter: Suffering with Hope",
+        "Peter encourages persecuted Christians in Asia Minor to stand firm, rooted in resurrection hope.",
+        "Addresses 'elect exiles' — a blend of Jewish and Gentile believers facing social marginalisation. "
+        "Suffering is framed as participation in Christ's sufferings. "
+        "The 'living hope' of resurrection sustains believers through trials (1:3-9).",
+        "62-64 CE",
+        "Rome (written to Asia Minor)",
+        "high",
+    ),
+    (
+        61,
+        "historical_background",
+        "2 Peter: Guarding Truth",
+        "2 Peter warns against false teachers and reaffirms the certainty of Christ's return.",
+        "Addresses scoffers who mock the delay of Christ's coming: 'a day is like a thousand years' (3:8). "
+        "Urges growth in knowledge and godliness as safeguards against deception.",
+        "65-68 CE",
+        "Unknown",
+        "medium",
+    ),
+    (
+        62,
+        "historical_background",
+        "1 John: Fellowship and Assurance",
+        "1 John combats early proto-gnostic teaching while assuring genuine believers of their salvation.",
+        "False teachers denied that Jesus came in physical flesh. "
+        "John's tests of authentic faith: believing the incarnation, obeying God's commands, and loving others. "
+        "'God is light' (1:5) and 'God is love' (4:8) are central theological affirmations.",
+        "85-95 CE",
+        "Ephesus (likely)",
+        "high",
+    ),
+    (
+        63,
+        "historical_background",
+        "2 John: Truth and Love",
+        "A brief letter warning a church ('chosen lady') against hospitality to false teachers.",
+        "Balances love and doctrinal fidelity. Welcoming false teachers who deny Christ's incarnation "
+        "would make the host complicit in their error.",
+        "85-95 CE",
+        "Ephesus (likely)",
+        "medium",
+    ),
+    (
+        64,
+        "historical_background",
+        "3 John: Hospitality and Leadership",
+        "3 John commends Gaius for hospitality and condemns Diotrephes for authoritarian control.",
+        "A window into early church dynamics: itinerant teachers depended on local hospitality, "
+        "and local leaders could either enable or block the gospel's spread.",
+        "85-95 CE",
+        "Ephesus (likely)",
+        "medium",
+    ),
+    (
+        65,
+        "historical_background",
+        "Jude: Contend for the Faith",
+        "Jude urgently warns against false teachers who have infiltrated the church.",
+        "Uses vivid OT examples (Sodom, Balaam, Korah) and draws on Jewish apocalyptic traditions "
+        "(1 Enoch, Assumption of Moses). The doxology (vv. 24-25) is one of the most beloved in Scripture.",
+        "65-80 CE",
+        "Unknown",
+        "medium",
+    ),
 ]
 
 

@@ -1,0 +1,42 @@
+services:
+  api:
+    build:
+      context: .
+      target: base
+    ports:
+      - "8000:8000"
+    volumes:
+      - bible-data:/app/bible_data
+    environment:
+      - ABBA_DATABASE_PATH=/app/bible_data/abba.db
+      - ABBA_DATA_DIR=/app/bible_data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+  # Full stack (API + built frontend in one container)
+  full:
+    build:
+      context: .
+      target: full
+    ports:
+      - "8000:8000"
+    volumes:
+      - bible-data:/app/bible_data
+    environment:
+      - ABBA_DATABASE_PATH=/app/bible_data/abba.db
+      - ABBA_DATA_DIR=/app/bible_data
+      - ABBA_STATIC_DIR=/app/static
+    restart: unless-stopped
+    profiles:
+      - full
+
+volumes:
+  bible-data:

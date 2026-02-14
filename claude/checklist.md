@@ -481,7 +481,7 @@ ABBA_CONNECTION_POOL_SIZE=10
 - [x] MACULA treebank integration for clause-level syntax (discourse analysis)
 - [x] OpenText.org discourse annotation integration
 - [x] Louw-Nida semantic domain classification system
-- [ ] STEPBible TFLSJ full LSJ Greek lexicon integration (CC BY 4.0, Tyndale House)
+- [x] STEPBible TFLSJ full LSJ Greek lexicon integration (CC BY 4.0, Tyndale House)
 - [x] Manuscript variant surfacing with explanations
 - [x] Community contribution system for cultural context
 - [x] Concept discovery from natural-language user queries

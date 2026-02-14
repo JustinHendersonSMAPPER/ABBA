@@ -35,6 +35,10 @@ LEXICON_URLS = {
     "lexical_index.xml": "https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/LexicalIndex.xml",
     "dodson.csv": "https://raw.githubusercontent.com/biblicalhumanities/Dodson-Greek-Lexicon/master/dodson.csv",
     "strongs_greek.xml": "https://raw.githubusercontent.com/morphgnt/strongs-dictionary-xml/master/strongsgreek.xml",
+    "tflsj.txt": (
+        "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/TFLSJ%20-%20Tyndale%20Full%20LSJ%20Gloss"
+        "%20-%20GT.txt"
+    ),
 }
 
 
@@ -571,4 +575,94 @@ def parse_strongs_greek_xml(file_path: Path) -> List[Dict[str, Any]]:
             entries.append(entry)
 
     logger.info(f"Parsed {len(entries)} Strong's Greek lexicon definitions from {file_path.name}")
+    return entries
+
+
+# ── TFLSJ (Tyndale Full LSJ Gloss) Greek Lexicon ─────────────────────
+
+
+def _parse_tflsj_line(line: str) -> Optional[Dict[str, Any]]:
+    """Parse a single TFLSJ tab-separated data line.
+
+    Expected columns: Strong's, Greek word, transliteration, short gloss,
+    extended definition.  Blank or comment lines return None.
+    """
+    line = line.strip()
+    if not line or line.startswith("#") or line.startswith("$"):
+        return None
+
+    parts = line.split("\t")
+    if len(parts) < 2:
+        return None
+
+    strongs_raw = parts[0].strip()
+    if not strongs_raw:
+        return None
+
+    # Normalise Strong's number to G-prefixed zero-padded form
+    # Accept "G1234", "1234", or already-prefixed values.
+    digits = re.sub(r"[^0-9]", "", strongs_raw)
+    if not digits:
+        return None
+
+    # Determine language prefix; TFLSJ is Greek-only
+    if strongs_raw.startswith("H"):
+        return None  # skip any stray Hebrew entries
+    g_num = f"G{int(digits):04d}"
+
+    greek_word = parts[1].strip() if len(parts) > 1 else ""
+    transliteration = parts[2].strip() if len(parts) > 2 else ""
+    gloss = parts[3].strip() if len(parts) > 3 else ""
+    definition = parts[4].strip() if len(parts) > 4 else ""
+
+    if not gloss and not definition:
+        return None
+
+    if not definition and gloss:
+        definition = gloss
+
+    if len(definition) > 3000:
+        definition = definition[:3000] + "..."
+
+    return {
+        "strongs_number": g_num,
+        "source_lexicon": "tflsj",
+        "original_word": greek_word,
+        "transliteration": transliteration,
+        "part_of_speech": "",
+        "gloss": gloss,
+        "definition": definition,
+        "language": "greek",
+    }
+
+
+def parse_tflsj_txt(file_path: Path) -> List[Dict[str, Any]]:
+    """Parse STEPBible TFLSJ (Tyndale Full LSJ Gloss) tab-separated file.
+
+    The TFLSJ dataset provides full LSJ (Liddell-Scott-Jones) glosses
+    for every Greek word referenced by a Strong's number.
+
+    Source: https://github.com/STEPBible/STEPBible-Data
+    License: CC BY 4.0 (Tyndale House, Cambridge)
+
+    Args:
+        file_path: Path to the TFLSJ .txt file.
+
+    Returns:
+        List of lexicon definition dicts ready for database insertion.
+    """
+    entries: List[Dict[str, Any]] = []
+
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except OSError as e:
+        logger.error(f"Failed to read TFLSJ file: {e}")
+        return entries
+
+    for line in content.splitlines():
+        entry = _parse_tflsj_line(line)
+        if entry is not None:
+            entries.append(entry)
+
+    logger.info(f"Parsed {len(entries)} TFLSJ Greek lexicon definitions from {file_path.name}")
     return entries
