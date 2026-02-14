@@ -474,19 +474,19 @@ ABBA_CONNECTION_POOL_SIZE=10
 - [x] Literary Mode Indicator (ambient visual genre shifts)
 - [x] Word Journey cards (expandable word study with tabs: meaning, occurrences, word family, this verse)
 
-## Phase 9: Future Enhancements (Post-MVP)
+## Phase 9: Extended Capabilities
 
 ### Extended Capabilities
-- [ ] Multi-language semantic search
-- [ ] MACULA treebank integration for clause-level syntax (discourse analysis)
-- [ ] OpenText.org discourse annotation integration
-- [ ] Louw-Nida semantic domain classification system
+- [x] Multi-language semantic search
+- [x] MACULA treebank integration for clause-level syntax (discourse analysis)
+- [x] OpenText.org discourse annotation integration
+- [x] Louw-Nida semantic domain classification system
 - [ ] STEPBible TFLSJ full LSJ Greek lexicon integration (CC BY 4.0, Tyndale House)
-- [ ] Manuscript variant surfacing with explanations
-- [ ] Community contribution system for cultural context
-- [ ] Concept discovery from natural-language user queries
-- [ ] Audio integration for listening
-- [ ] Collaborative concept editing
-- [ ] Machine learning for concept refinement
-- [ ] Visualization tools for semantic relationships
-- [ ] Mobile native app API endpoints
+- [x] Manuscript variant surfacing with explanations
+- [x] Community contribution system for cultural context
+- [x] Concept discovery from natural-language user queries
+- [x] Audio integration for listening
+- [x] Collaborative concept editing
+- [x] Machine learning for concept refinement
+- [x] Visualization tools for semantic relationships
+- [x] Mobile native app API endpoints
