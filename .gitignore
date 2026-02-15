@@ -197,5 +197,8 @@ pyrightconfig.json
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/.tmp/
+frontend/.browser-data/
+frontend/test-results/
 
 # End of https://www.toptal.com/developers/gitignore/api/python
