@@ -15,6 +15,21 @@
         />
       </header>
 
+      <div class="study-actions">
+        <button class="action-btn" @click="addToCollection" title="Save to collection">Bookmark</button>
+        <button class="action-btn" @click="doExport('markdown')" title="Export as markdown">Export</button>
+        <button class="action-btn" @click="doShare" title="Create shareable link">Share</button>
+        <router-link
+          v-if="verse"
+          :to="{ name: 'compare', query: { book: book, chapter: chapter, verse: verse } }"
+          class="action-btn action-link"
+        >Compare</router-link>
+      </div>
+
+      <div v-if="shareUrl" class="share-banner">
+        Shareable link: <a :href="shareUrl" target="_blank">{{ shareUrl }}</a>
+      </div>
+
       <section class="study-text">
         <TranslationLens
           v-if="depth !== 'basic' && verseData.words"
@@ -87,9 +102,32 @@
           </li>
         </ul>
       </section>
+
+      <NotesPanel
+        v-if="verse"
+        :bookId="book"
+        :chapter="chapter"
+        :verse="verse"
+      />
     </template>
 
     <p v-else class="empty-state">No verse selected.</p>
+
+    <div v-if="showCollectionPicker" class="modal-overlay" @click.self="showCollectionPicker = false">
+      <div class="modal-box">
+        <h3 class="modal-title">Save to Collection</h3>
+        <div v-if="collections.length" class="collection-options">
+          <button
+            v-for="col in collections"
+            :key="col.id"
+            class="collection-option"
+            @click="saveToCollection(col.id)"
+          >{{ col.name }}</button>
+        </div>
+        <p v-else class="status-msg">No collections yet. Create one from the Collections page.</p>
+        <button class="modal-close" @click="showCollectionPicker = false">Cancel</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -97,6 +135,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
+import { useContextStore } from '../stores/context.js'
 import TranslationLens from '../components/TranslationLens.vue'
 import WordJourneyCard from '../components/WordJourneyCard.vue'
 import LiteraryModeIndicator from '../components/LiteraryModeIndicator.vue'
@@ -104,6 +143,7 @@ import SyntaxTreeView from '../components/SyntaxTreeView.vue'
 import ManuscriptVariants from '../components/ManuscriptVariants.vue'
 import DiscourseView from '../components/DiscourseView.vue'
 import SemanticDomainBadge from '../components/SemanticDomainBadge.vue'
+import NotesPanel from '../components/NotesPanel.vue'
 
 const props = defineProps({
   depth: { type: String, default: 'basic' },
@@ -111,11 +151,15 @@ const props = defineProps({
 
 const route = useRoute()
 const api = useApi()
+const contextStore = useContextStore()
 
 const verseData = ref(null)
 const contextData = ref(null)
 const crossRefs = ref([])
 const selectedWord = ref(null)
+const shareUrl = ref(null)
+const showCollectionPicker = ref(false)
+const collections = ref([])
 
 const book = computed(() => route.params.book || '')
 const chapter = computed(() => route.params.chapter || '')
@@ -128,6 +172,8 @@ async function loadVerse() {
   contextData.value = null
   crossRefs.value = []
   selectedWord.value = null
+  shareUrl.value = null
+  contextStore.clear()
 
   if (verse.value) {
     const result = await api.getVerse(book.value, chapter.value, verse.value, props.depth)
@@ -144,6 +190,14 @@ async function loadVerse() {
     ])
     if (ctx) contextData.value = ctx
     if (refs) crossRefs.value = refs.references || refs || []
+
+    // Push context data to the shared store for the sidebar
+    contextStore.setContext({
+      cultural: contextData.value?.cultural || [],
+      crossRefs: crossRefs.value,
+      literary: verseData.value?.literary_structures || [],
+      reference: `${book.value} ${chapter.value}:${verse.value}`,
+    })
   }
 }
 
@@ -161,6 +215,41 @@ function onWordClick(word, flags) {
   }
 }
 
+async function doExport(format) {
+  if (!verse.value) return
+  const data = await api.exportVerse('engbsb', book.value, chapter.value, verse.value, format)
+  if (data) {
+    const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+    const blob = new Blob([text], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${book.value}_${chapter.value}_${verse.value}.${format === 'markdown' ? 'md' : 'json'}`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+}
+
+async function doShare() {
+  if (!verse.value) return
+  const ref = `${book.value} ${chapter.value}:${verse.value}`
+  const data = await api.createShare('verse', ref, { book: book.value, chapter: chapter.value, verse: verse.value })
+  if (data && data.token) {
+    shareUrl.value = `${window.location.origin}/share/${data.token}`
+  }
+}
+
+async function addToCollection() {
+  const data = await api.getCollections()
+  collections.value = data?.collections || data || []
+  showCollectionPicker.value = true
+}
+
+async function saveToCollection(collectionId) {
+  await api.addToCollection(collectionId, book.value, chapter.value, verse.value)
+  showCollectionPicker.value = false
+}
+
 onMounted(loadVerse)
 
 watch(
@@ -174,13 +263,55 @@ watch(
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.5rem;
   flex-wrap: wrap;
 }
 
 .study-ref {
   font-family: var(--font-ui);
   font-size: 1.5rem;
+}
+
+.study-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.action-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.action-link {
+  display: inline-flex;
+  align-items: center;
+}
+
+.share-banner {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  background: rgba(74, 111, 165, 0.08);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.share-banner a {
+  color: var(--color-accent);
 }
 
 .study-text {
@@ -275,5 +406,73 @@ watch(
 .error {
   color: #c0392b;
   opacity: 1;
+}
+
+/* Collection picker modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-box {
+  background: var(--color-surface);
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 360px;
+  width: 90%;
+}
+
+.modal-title {
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.collection-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.collection-option {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: none;
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.collection-option:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.modal-close {
+  display: block;
+  margin-top: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.status-msg {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  opacity: 0.5;
+  font-style: italic;
 }
 </style>

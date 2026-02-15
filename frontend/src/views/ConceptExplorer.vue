@@ -23,13 +23,15 @@
       <section v-if="result.matched_concepts && result.matched_concepts.length" class="result-section">
         <h2 class="section-heading">Biblical Concepts</h2>
         <div v-for="concept in result.matched_concepts" :key="concept.name" class="concept-card">
-          <router-link :to="`/topics/${encodeURIComponent(concept.name)}`" class="concept-link">
+          <div class="concept-link" @click="selectConcept(concept.name)">
             <span class="concept-name">{{ concept.name }}</span>
             <span v-if="concept.verse_count" class="verse-badge">{{ concept.verse_count }} verses</span>
-          </router-link>
+          </div>
           <p v-if="concept.description" class="concept-desc">{{ concept.description }}</p>
         </div>
       </section>
+
+      <ConceptGraphView v-if="graphData" :graph="graphData" />
 
       <section v-if="result.matched_life_topics && result.matched_life_topics.length" class="result-section">
         <h2 class="section-heading">Life Topics</h2>
@@ -67,14 +69,25 @@
 <script setup>
 import { ref } from 'vue'
 import { useApi } from '../composables/useApi.js'
+import ConceptGraphView from '../components/ConceptGraphView.vue'
 
 const api = useApi()
 const query = ref('')
 const result = ref(null)
+const graphData = ref(null)
 
 async function search() {
   if (!query.value.trim()) return
+  graphData.value = null
   result.value = await api.discoverConcepts(query.value)
+  if (result.value?.matched_concepts?.length) {
+    selectConcept(result.value.matched_concepts[0].name)
+  }
+}
+
+async function selectConcept(name) {
+  const graph = await api.getConceptGraph(name, 1)
+  if (graph) graphData.value = graph
 }
 </script>
 
@@ -127,7 +140,15 @@ async function search() {
   border-radius: 6px;
   background: rgba(0,0,0,0.02);
 }
-.concept-link, .topic-link {
+.concept-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: inherit;
+}
+.concept-link:hover .concept-name { color: var(--color-accent); }
+.topic-link {
   display: flex;
   align-items: center;
   gap: 0.5rem;

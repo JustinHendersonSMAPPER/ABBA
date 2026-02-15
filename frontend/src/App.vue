@@ -4,31 +4,57 @@
       <router-link to="/" class="nav-brand">ABBA</router-link>
       <div class="nav-links">
         <router-link to="/">Read</router-link>
+        <router-link to="/search">Search</router-link>
         <router-link to="/topics">Topics</router-link>
         <router-link to="/plans">Plans</router-link>
+        <router-link to="/compare">Compare</router-link>
+        <router-link to="/lexicon">Words</router-link>
+        <router-link to="/collections">Collections</router-link>
         <router-link to="/discover">Discover</router-link>
       </div>
       <div class="nav-actions">
+        <form class="nav-search" @submit.prevent="goSearch">
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search the Bible..."
+            class="nav-search-input"
+          />
+          <button type="submit" class="nav-search-btn" :disabled="!searchQuery.trim()">Go</button>
+        </form>
         <DepthDial v-model="depthLevel" />
         <button class="dark-toggle" :aria-label="isDark ? 'Light mode' : 'Dark mode'" @click="isDark = !isDark">
           {{ isDark ? 'Light' : 'Dark' }}
         </button>
       </div>
     </nav>
-    <main class="app-main">
-      <router-view :depth="depthLevel" />
-    </main>
-    <ContextSidebar v-if="depthLevel !== 'basic'" />
+    <div class="app-layout">
+      <main class="app-main" :class="{ 'has-sidebar': depthLevel !== 'basic' }">
+        <router-view :depth="depthLevel" />
+      </main>
+      <ContextSidebar
+        v-if="depthLevel !== 'basic'"
+        :culturalContext="contextStore.culturalContext"
+        :crossReferences="contextStore.crossReferences"
+        :literaryStructures="contextStore.literaryStructures"
+      />
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import DepthDial from './components/DepthDial.vue'
 import ContextSidebar from './components/ContextSidebar.vue'
+import { useContextStore } from './stores/context.js'
+
+const router = useRouter()
+const contextStore = useContextStore()
 
 const depthLevel = ref('basic')
 const isDark = ref(false)
+const searchQuery = ref('')
 
 // Persist dark mode preference
 const saved = typeof localStorage !== 'undefined' && localStorage.getItem('abba-dark')
@@ -37,6 +63,12 @@ if (saved === 'true') isDark.value = true
 watch(isDark, (v) => {
   if (typeof localStorage !== 'undefined') localStorage.setItem('abba-dark', String(v))
 })
+
+function goSearch() {
+  if (!searchQuery.value.trim()) return
+  router.push({ name: 'search', query: { q: searchQuery.value.trim() } })
+  searchQuery.value = ''
+}
 </script>
 
 <style>
@@ -72,7 +104,7 @@ body {
   align-items: center;
   padding: 0.75rem 1.5rem;
   border-bottom: 1px solid var(--color-border);
-  gap: 1.5rem;
+  gap: 1rem;
   flex-wrap: wrap;
 }
 
@@ -85,7 +117,7 @@ body {
 
 .nav-links {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
@@ -93,7 +125,7 @@ body {
   text-decoration: none;
   color: var(--color-text);
   opacity: 0.7;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .nav-links a.router-link-active {
@@ -104,8 +136,46 @@ body {
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   margin-left: auto;
+}
+
+.nav-search {
+  display: flex;
+  gap: 0;
+}
+
+.nav-search-input {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+  font-size: 0.8rem;
+  font-family: var(--font-ui);
+  width: 160px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.nav-search-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.nav-search-btn {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0 4px 4px 0;
+  background: var(--color-accent);
+  color: white;
+  font-size: 0.8rem;
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+.nav-search-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .dark-toggle {
@@ -123,7 +193,12 @@ body {
   border-color: var(--color-accent);
 }
 
+.app-layout {
+  display: flex;
+}
+
 .app-main {
+  flex: 1;
   max-width: 720px;
   margin: 2rem auto;
   padding: 0 1rem;
@@ -131,19 +206,33 @@ body {
   line-height: 1.8;
 }
 
+.app-main.has-sidebar {
+  margin-right: 340px;
+}
+
 /* Responsive adjustments */
+@media (max-width: 900px) {
+  .app-main.has-sidebar {
+    margin-right: 0;
+  }
+}
+
 @media (max-width: 600px) {
   .app-nav {
     padding: 0.5rem 0.75rem;
-    gap: 0.75rem;
-  }
-
-  .nav-links {
     gap: 0.5rem;
   }
 
+  .nav-links {
+    gap: 0.4rem;
+  }
+
   .nav-links a {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+  }
+
+  .nav-search-input {
+    width: 100px;
   }
 
   .app-main {

@@ -32,7 +32,7 @@
 
     <router-link
       v-if="detail.strongs"
-      :to="`/study/lexicon/${detail.strongs}`"
+      :to="{ name: 'lexicon', params: { strongs: detail.strongs } }"
       class="learn-more"
     >
       Learn more &rarr;

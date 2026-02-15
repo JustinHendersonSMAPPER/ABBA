@@ -11,8 +11,13 @@ test.describe('Navigation', () => {
     await page.goto('/')
     const nav = page.locator('.nav-links')
     await expect(nav.getByText('Read')).toBeVisible()
+    await expect(nav.getByText('Search')).toBeVisible()
     await expect(nav.getByText('Topics')).toBeVisible()
     await expect(nav.getByText('Plans')).toBeVisible()
+    await expect(nav.getByText('Compare')).toBeVisible()
+    await expect(nav.getByText('Words')).toBeVisible()
+    await expect(nav.getByText('Collections')).toBeVisible()
+    await expect(nav.getByText('Discover')).toBeVisible()
   })
 
   test('should navigate to Topics page', async ({ page }) => {

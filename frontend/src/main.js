@@ -11,6 +11,12 @@ const routes = [
     meta: { title: 'Read' },
   },
   {
+    path: '/search',
+    name: 'search',
+    component: () => import('./views/SearchResults.vue'),
+    meta: { title: 'Search' },
+  },
+  {
     path: '/topics',
     name: 'topics',
     component: () => import('./views/LifeTopicNavigator.vue'),
@@ -27,6 +33,24 @@ const routes = [
     name: 'study',
     component: () => import('./views/StudyView.vue'),
     meta: { title: 'Study' },
+  },
+  {
+    path: '/compare',
+    name: 'compare',
+    component: () => import('./views/TranslationCompare.vue'),
+    meta: { title: 'Compare Translations' },
+  },
+  {
+    path: '/lexicon/:strongs?',
+    name: 'lexicon',
+    component: () => import('./views/LexiconView.vue'),
+    meta: { title: 'Word Study' },
+  },
+  {
+    path: '/collections',
+    name: 'collections',
+    component: () => import('./views/CollectionsView.vue'),
+    meta: { title: 'My Collections' },
   },
   {
     path: '/discover',

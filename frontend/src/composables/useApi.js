@@ -176,6 +176,104 @@ export function useApi() {
     }))
   }
 
+  // --- Search ---
+
+  function searchStrongs(strongsNumber, limit = 50) {
+    const params = new URLSearchParams({ limit: String(limit) })
+    return call(() => request(`/search/strongs/${encodeURIComponent(strongsNumber)}?${params}`))
+  }
+
+  function semanticSearch(query, options = {}) {
+    const params = new URLSearchParams({ q: query, ...options })
+    return call(() => request(`/search/semantic?${params}`))
+  }
+
+  // --- Translation Comparison ---
+
+  function compareTranslations(book, chapter, verse, translations) {
+    const params = new URLSearchParams()
+    translations.forEach(t => params.append('translations', t))
+    return call(() => request(`/compare/${book}/${chapter}/${verse}?${params}`))
+  }
+
+  // --- Notes ---
+
+  function createNote(bookId, chapter, verse, content, noteType = 'personal') {
+    return call(() => request(`/notes/${bookId}/${chapter}/${verse}`, {
+      method: 'POST', body: JSON.stringify({ content, note_type: noteType }),
+    }))
+  }
+
+  function getNotes(bookId, chapter, verse) {
+    return call(() => request(`/notes/${bookId}/${chapter}/${verse}`))
+  }
+
+  function deleteNote(noteId) {
+    return call(() => request(`/notes/${noteId}`, { method: 'DELETE' }))
+  }
+
+  // --- Collections ---
+
+  function createCollection(name, description = '') {
+    return call(() => request('/collections', {
+      method: 'POST', body: JSON.stringify({ name, description }),
+    }))
+  }
+
+  function getCollections() {
+    return call(() => request('/collections'))
+  }
+
+  function addToCollection(collectionId, bookId, chapter, verse, note = '') {
+    return call(() => request(`/collections/${collectionId}/items`, {
+      method: 'POST', body: JSON.stringify({ book_id: bookId, chapter, verse, note }),
+    }))
+  }
+
+  function getCollectionItems(collectionId) {
+    return call(() => request(`/collections/${collectionId}/items`))
+  }
+
+  function deleteCollection(collectionId) {
+    return call(() => request(`/collections/${collectionId}`, { method: 'DELETE' }))
+  }
+
+  // --- Sharing & Export ---
+
+  function createShare(shareType, title, content) {
+    return call(() => request('/share', {
+      method: 'POST', body: JSON.stringify({ share_type: shareType, title, content }),
+    }))
+  }
+
+  function getShare(token) {
+    return call(() => request(`/share/${encodeURIComponent(token)}`))
+  }
+
+  function exportVerse(translationId, bookId, chapter, verse, format = 'markdown') {
+    return call(() => request(
+      `/export/verse/${encodeURIComponent(translationId)}/${bookId}/${chapter}/${verse}?format=${format}`
+    ))
+  }
+
+  // --- Word Explanations ---
+
+  function getWordExplanation(strongsNumber) {
+    return call(() => request(`/word-explanations/${encodeURIComponent(strongsNumber)}`))
+  }
+
+  // --- Genre Shifts ---
+
+  function getGenreShifts(bookId) {
+    return call(() => request(`/genre-shifts/${bookId}`))
+  }
+
+  // --- Passages ---
+
+  function getPassages(bookId, chapter) {
+    return call(() => request(`/passages/${bookId}/${chapter}`))
+  }
+
   return {
     loading,
     error,
@@ -209,5 +307,22 @@ export function useApi() {
     submitConceptFeedback,
     getAudioResource,
     mobileSync,
+    searchStrongs,
+    semanticSearch,
+    compareTranslations,
+    createNote,
+    getNotes,
+    deleteNote,
+    createCollection,
+    getCollections,
+    addToCollection,
+    getCollectionItems,
+    deleteCollection,
+    createShare,
+    getShare,
+    exportVerse,
+    getWordExplanation,
+    getGenreShifts,
+    getPassages,
   }
 }
