@@ -36,7 +36,7 @@ def main():  # noqa: C901
 
         logger = get_logger(__name__)
 
-        # Handle --serve: start the API server
+        # Handle --serve: start API server only (skip pipeline)
         if cli_config.should_serve():
             import uvicorn
 
@@ -348,11 +348,30 @@ def main():  # noqa: C901
                 logger.error("Failed to download bible.db")
                 sys.exit(1)
 
-        # Download STEPBible data if needed (always download on first run or --download)
-        stepbible_attribution = config.data_dir / "stepbible" / "ATTRIBUTION.txt"
-        if config.should_download() or not stepbible_attribution.exists():
+        # Download STEPBible data if needed (always download on first run, --download, or missing files)
+        stepbible_dir = config.data_dir / "stepbible"
+        stepbible_expected_files = [
+            "tahot_gen_deu.txt", "tahot_jos_est.txt", "tahot_job_sng.txt", "tahot_isa_mal.txt",
+            "tagnt_mat_jhn.txt", "tagnt_act_rev.txt",
+            "hebrew_lexicon.txt", "greek_lexicon.txt",
+            "hebrew_morphology.txt", "greek_morphology.txt",
+        ]
+        force_download_stepbible = getattr(cli_config.args, 'force_download_stepbible', False) if cli_config.args else False
+        if force_download_stepbible:
+            # Delete existing files so download_stepbible_data() re-downloads them
+            for f in stepbible_expected_files:
+                fpath = stepbible_dir / f
+                if fpath.exists():
+                    fpath.unlink()
+            stepbible_missing = stepbible_expected_files
+        else:
+            stepbible_missing = [f for f in stepbible_expected_files if not (stepbible_dir / f).exists()]
+        if config.should_download() or stepbible_missing:
             if config.should_show_output():
-                logger.info("Downloading STEPBible lexicon and morphology data...")
+                if stepbible_missing:
+                    logger.info(f"Downloading {len(stepbible_missing)} missing STEPBible file(s): {', '.join(stepbible_missing)}")
+                else:
+                    logger.info("Downloading STEPBible lexicon and morphology data...")
 
             if not extractor.download_stepbible_data():
                 logger.warning("Failed to download STEPBible data (continuing without it)")
@@ -759,6 +778,22 @@ def main():  # noqa: C901
         # Close ChromaDB connection properly
         if "chroma_manager" in locals() and chroma_manager:
             chroma_manager.close()
+
+        # Auto-start FastAPI server after pipeline completes (unless --no-serve)
+        if not cli_config.should_skip_serve():
+            import uvicorn
+
+            from abba.api.app import create_app
+
+            host = cli_config.get_host()
+            port = cli_config.get_port()
+            logger.info(f"\nStarting ABBA API server at http://{host}:{port}")
+            logger.info(f"Using database: {config.abba_db_path}")
+            logger.info("API docs available at /docs")
+            logger.info("Press Ctrl+C to stop the server")
+
+            app = create_app(db_path=config.abba_db_path)
+            uvicorn.run(app, host=host, port=port)
 
         return None
 

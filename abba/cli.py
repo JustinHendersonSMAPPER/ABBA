@@ -62,6 +62,12 @@ Examples:
         )
 
         parser.add_argument(
+            "--force-download-stepbible",
+            action="store_true",
+            help="Force re-download all STEPBible files even if they exist",
+        )
+
+        parser.add_argument(
             "--rebuild-embeddings",
             action="store_true",
             help="Rebuild embeddings - remove and regenerate all embeddings",
@@ -179,7 +185,13 @@ Examples:
         parser.add_argument("--pool-size", type=int, help="Database connection pool size")
 
         # Server options
-        parser.add_argument("--serve", action="store_true", help="Start the ABBA API server (uvicorn)")
+        parser.add_argument("--serve", action="store_true", help="Start the ABBA API server only (skip pipeline)")
+
+        parser.add_argument(
+            "--no-serve",
+            action="store_true",
+            help="Run pipeline only, do not start the API server afterwards",
+        )
 
         parser.add_argument("--host", default="127.0.0.1", help="API server bind address (default: 127.0.0.1)")
 
@@ -394,8 +406,12 @@ Examples:
         return self.args.pool_size if self.args and hasattr(self.args, "pool_size") else None
 
     def should_serve(self) -> bool:
-        """Check if should start the API server."""
+        """Check if should start the API server (--serve skips pipeline)."""
         return self.args.serve if self.args else False
+
+    def should_skip_serve(self) -> bool:
+        """Check if the API server should NOT start after the pipeline."""
+        return self.args.no_serve if self.args else False
 
     def get_host(self) -> str:
         """Get the API server host."""

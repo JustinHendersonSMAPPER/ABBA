@@ -57,7 +57,7 @@ class BibleExtractor:
         logger.info(f"Downloading {db_name} from {url}...")
 
         try:
-            response = requests.get(url, stream=True, timeout=30)
+            response = requests.get(url, stream=True, timeout=(30, 120))
             response.raise_for_status()
 
             total_size = int(response.headers.get("content-length", 0))
@@ -156,7 +156,7 @@ class BibleExtractor:
 
             try:
                 logger.debug(f"Downloading {filename}...")
-                response = requests.get(url, stream=True, timeout=30)
+                response = requests.get(url, stream=True, timeout=(30, 120))
                 response.raise_for_status()
 
                 total_size = int(response.headers.get("content-length", 0))
