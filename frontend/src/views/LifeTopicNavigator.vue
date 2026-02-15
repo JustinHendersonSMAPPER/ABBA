@@ -62,26 +62,45 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useApi } from '../composables/useApi.js'
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue'
+import { useApi } from '../composables/useApi'
+import type { TopicSummary, TopicDetail } from '../types/api'
 
 const api = useApi()
 
-const topics = ref([])
-const searchQuery = ref('')
-const selectedTopic = ref(null)
-const topicDetail = ref(null)
+const topics = ref<TopicSummary[]>([])
+const searchQuery = ref<string>('')
+const selectedTopic = ref<TopicSummary | null>(null)
+const topicDetail = ref<TopicDetail | null>(null)
+const searchTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
+const apiSearchResults = ref<TopicSummary[] | null>(null)
 
 onMounted(async () => {
   const result = await api.getTopics()
   if (result) {
-    topics.value = result.topics || result
+    if (Array.isArray(result)) {
+      topics.value = result as TopicSummary[]
+    } else {
+      topics.value = (result as Record<string, unknown>).topics as TopicSummary[] || []
+    }
+  }
+})
+
+watch(() => searchQuery.value, (q) => {
+  if (searchTimeout.value) clearTimeout(searchTimeout.value)
+  apiSearchResults.value = null
+  if (q.trim().length >= 2) {
+    searchTimeout.value = setTimeout(async () => {
+      const results = await api.searchTopics(q)
+      if (results) apiSearchResults.value = results as TopicSummary[]
+    }, 300)
   }
 })
 
 const filteredTopics = computed(() => {
   if (selectedTopic.value) return []
+  if (apiSearchResults.value) return apiSearchResults.value
   if (!searchQuery.value) return topics.value
   const q = searchQuery.value.toLowerCase()
   return topics.value.filter(
@@ -91,7 +110,7 @@ const filteredTopics = computed(() => {
   )
 })
 
-async function selectTopic(topic) {
+async function selectTopic(topic: TopicSummary) {
   selectedTopic.value = topic
   const result = await api.getTopic(topic.id)
   if (result) {

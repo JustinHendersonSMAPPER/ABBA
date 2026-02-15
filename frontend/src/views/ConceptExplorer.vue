@@ -28,18 +28,22 @@
             <span v-if="concept.verse_count" class="verse-badge">{{ concept.verse_count }} verses</span>
           </div>
           <p v-if="concept.description" class="concept-desc">{{ concept.description }}</p>
+          <div class="concept-feedback">
+            <button class="fb-btn" @click="giveFeedback(concept.name, 'relevant')">Relevant</button>
+            <button class="fb-btn" @click="giveFeedback(concept.name, 'irrelevant')">Not relevant</button>
+          </div>
         </div>
       </section>
 
-      <ConceptGraphView v-if="graphData" :graph="graphData" />
+      <ConceptGraphView v-if="graphData && graphData.nodes" :graph="graphData" />
 
       <section v-if="result.matched_life_topics && result.matched_life_topics.length" class="result-section">
         <h2 class="section-heading">Life Topics</h2>
-        <div v-for="topic in result.matched_life_topics" :key="topic.slug" class="topic-card">
-          <router-link :to="`/topics/${encodeURIComponent(topic.slug)}`" class="topic-link">
+        <div v-for="topic in result.matched_life_topics" :key="topic.slug || topic.id" class="topic-card">
+          <router-link :to="`/topics/${encodeURIComponent(topic.slug || topic.id)}`" class="topic-link">
             <span v-if="topic.icon" class="topic-icon">{{ topic.icon }}</span>
             <span class="topic-name">{{ topic.name }}</span>
-            <span class="topic-category">{{ topic.category }}</span>
+            <span v-if="topic.category" class="topic-category">{{ topic.category }}</span>
           </router-link>
           <p v-if="topic.description" class="topic-desc">{{ topic.description }}</p>
         </div>
@@ -66,28 +70,40 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
-import { useApi } from '../composables/useApi.js'
+import { useApi } from '../composables/useApi'
+import type { ConceptDiscoveryResult, ConceptGraph } from '../types/api'
 import ConceptGraphView from '../components/ConceptGraphView.vue'
 
 const api = useApi()
-const query = ref('')
-const result = ref(null)
-const graphData = ref(null)
+const query = ref<string>('')
+const result = ref<ConceptDiscoveryResult | null>(null)
+const graphData = ref<ConceptGraph | null>(null)
 
 async function search() {
   if (!query.value.trim()) return
   graphData.value = null
   result.value = await api.discoverConcepts(query.value)
-  if (result.value?.matched_concepts?.length) {
+  if (result.value?.matched_concepts?.length && result.value.matched_concepts[0]?.name) {
     selectConcept(result.value.matched_concepts[0].name)
   }
 }
 
-async function selectConcept(name) {
+async function selectConcept(name: string | undefined) {
+  if (!name) return
   const graph = await api.getConceptGraph(name, 1)
-  if (graph) graphData.value = graph
+  if (graph) {
+    graphData.value = {
+      ...graph,
+      relationships: (graph as unknown as Record<string, unknown>).relationships as Array<{source_concept: string; target_concept: string; relationship_type: string; weight?: number}> || []
+    }
+  }
+}
+
+async function giveFeedback(conceptName: string | undefined, feedbackType: string): Promise<void> {
+  if (!conceptName) return
+  await api.submitConceptFeedback(conceptName, 'discovery', feedbackType)
 }
 </script>
 
@@ -180,4 +196,7 @@ async function selectConcept(name) {
 
 .no-results, .loading, .error { font-family: var(--font-ui); font-size: 0.9rem; opacity: 0.6; padding: 1rem 0; }
 .error { color: #c0392b; opacity: 1; }
+.concept-feedback { display: flex; gap: 0.3rem; margin-top: 0.35rem; }
+.fb-btn { padding: 0.15rem 0.5rem; border: 1px solid var(--color-border); border-radius: 12px; background: none; font-family: var(--font-ui); font-size: 0.7rem; cursor: pointer; color: var(--color-text); opacity: 0.6; }
+.fb-btn:hover { opacity: 1; border-color: var(--color-accent); }
 </style>

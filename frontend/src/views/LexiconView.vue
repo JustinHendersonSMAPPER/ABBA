@@ -51,9 +51,9 @@
       <section class="entry-section" v-if="domains && domains.length">
         <h2 class="section-label">Semantic Domains</h2>
         <div class="domain-list">
-          <span v-for="d in domains" :key="d.domain_code" class="domain-badge">
+          <router-link v-for="d in domains" :key="d.domain_code" :to="`/domains`" class="domain-badge domain-link">
             {{ d.domain_name }}
-          </span>
+          </router-link>
         </div>
       </section>
 
@@ -78,32 +78,33 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { useApi } from '../composables/useApi.js'
+import { useApi } from '../composables/useApi'
+import type { LexiconEntry, WordExplanation, SemanticDomain } from '../types/api'
 
 const route = useRoute()
 const api = useApi()
 
 const strongsInput = ref('')
 const strongsNumber = ref('')
-const entry = ref(null)
-const explanation = ref(null)
-const domains = ref([])
+const entry = ref<LexiconEntry | null>(null)
+const explanation = ref<WordExplanation | null>(null)
+const domains = ref<SemanticDomain[]>([])
 
 onMounted(() => {
   if (route.params.strongs) {
-    strongsInput.value = route.params.strongs
-    strongsNumber.value = route.params.strongs
+    strongsInput.value = route.params.strongs as string
+    strongsNumber.value = route.params.strongs as string
     loadWord()
   }
 })
 
 watch(() => route.params.strongs, (val) => {
   if (val && val !== strongsNumber.value) {
-    strongsInput.value = val
-    strongsNumber.value = val
+    strongsInput.value = val as string
+    strongsNumber.value = val as string
     loadWord()
   }
 })
@@ -123,7 +124,10 @@ async function loadWord() {
 
   if (lexData) entry.value = lexData
   if (explainData) explanation.value = explainData
-  if (domainData) domains.value = domainData.domains || domainData || []
+  if (domainData) {
+    const domainResult = domainData as unknown as Record<string, unknown>
+    domains.value = (domainResult.domains as SemanticDomain[]) || []
+  }
 }
 </script>
 
@@ -187,4 +191,6 @@ async function loadWord() {
 
 .status-msg { font-family: var(--font-ui); font-size: 0.9rem; opacity: 0.6; padding: 1rem 0; }
 .error { color: #c0392b; opacity: 1; }
+.domain-link { text-decoration: none; color: inherit; }
+.domain-link:hover { background: rgba(74, 111, 165, 0.2); }
 </style>

@@ -48,13 +48,36 @@
   </aside>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 
-const props = defineProps({
-  culturalContext: { type: Array, default: () => [] },
-  crossReferences: { type: Array, default: () => [] },
-  literaryStructures: { type: Array, default: () => [] },
+interface CulturalItem {
+  title?: string
+  text?: string
+}
+
+interface CrossRef {
+  book?: string
+  chapter?: string | number
+  verse?: string | number
+  label?: string
+  note?: string
+}
+
+interface LiteraryStructure {
+  type: string
+  description?: string
+  elements?: string[]
+}
+
+const props = withDefaults(defineProps<{
+  culturalContext: CulturalItem[]
+  crossReferences: CrossRef[]
+  literaryStructures: LiteraryStructure[]
+}>(), {
+  culturalContext: () => [],
+  crossReferences: () => [],
+  literaryStructures: () => [],
 })
 
 const collapsed = ref(false)

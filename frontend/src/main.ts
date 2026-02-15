@@ -59,6 +59,30 @@ const routes = [
     meta: { title: 'Discover' },
   },
   {
+    path: '/shared/:token',
+    name: 'shared',
+    component: () => import('./views/SharedView.vue'),
+    meta: { title: 'Shared' },
+  },
+  {
+    path: '/domains',
+    name: 'domains',
+    component: () => import('./views/SemanticDomainBrowser.vue'),
+    meta: { title: 'Semantic Domains' },
+  },
+  {
+    path: '/community',
+    name: 'community',
+    component: () => import('./views/CommunityView.vue'),
+    meta: { title: 'Community' },
+  },
+  {
+    path: '/analysis',
+    name: 'analysis',
+    component: () => import('./views/AnalysisView.vue'),
+    meta: { title: 'Analysis' },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('./views/NotFound.vue'),

@@ -12,13 +12,19 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  genre: { type: String, default: '' },
-  literaryStructures: { type: Array, default: () => [] },
-})
+interface LiteraryStructure {
+  type: string
+  label?: string
+  description?: string
+}
+
+const props = withDefaults(defineProps<{
+  genre: string
+  literaryStructures: LiteraryStructure[]
+}>(), { genre: '', literaryStructures: () => [] })
 
 const hasStructures = computed(
   () => props.literaryStructures && props.literaryStructures.length > 0

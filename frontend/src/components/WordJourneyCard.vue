@@ -40,17 +40,24 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  detail: {
-    type: Object,
-    default: null,
-    // Expected shape:
-    // { original, transliteration, gloss, strongs, morphology, semantic_domain, occurrences }
-  },
-})
+<script setup lang="ts">
+interface WordDetail {
+  original?: string
+  transliteration?: string
+  gloss?: string
+  strongs?: string
+  morphology?: string
+  semantic_domain?: string
+  occurrences?: number
+}
 
-defineEmits(['close'])
+withDefaults(defineProps<{
+  detail: WordDetail | null
+}>(), { detail: null })
+
+defineEmits<{
+  close: []
+}>()
 </script>
 
 <style scoped>

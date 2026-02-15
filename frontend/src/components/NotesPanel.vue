@@ -37,18 +37,25 @@
   </section>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { useApi } from '../composables/useApi.js'
+import { useApi } from '../composables/useApi'
 
-const props = defineProps({
-  bookId: { type: [String, Number], default: '' },
-  chapter: { type: [String, Number], default: '' },
-  verse: { type: [String, Number], default: '' },
-})
+interface NoteItem {
+  id: string
+  content: string
+  note_type?: string
+  created_at?: string
+}
+
+const props = withDefaults(defineProps<{
+  bookId: string | number
+  chapter: string | number
+  verse: string | number
+}>(), { bookId: '', chapter: '', verse: '' })
 
 const api = useApi()
-const notes = ref([])
+const notes = ref<NoteItem[]>([])
 const newNote = ref('')
 const noteType = ref('personal')
 const loading = ref(false)
@@ -58,29 +65,29 @@ onMounted(loadNotes)
 
 watch(() => [props.bookId, props.chapter, props.verse], loadNotes)
 
-async function loadNotes() {
+async function loadNotes(): Promise<void> {
   if (!props.bookId || !props.chapter || !props.verse) return
   loading.value = true
-  const data = await api.getNotes(props.bookId, props.chapter, props.verse)
-  if (data) notes.value = data.notes || data || []
+  const data = await api.getNotes(String(props.bookId), String(props.chapter), String(props.verse)) as Record<string, unknown> | null
+  if (data) notes.value = ((data as Record<string, unknown>).notes || data || []) as NoteItem[]
   loading.value = false
 }
 
-async function saveNote() {
+async function saveNote(): Promise<void> {
   if (!newNote.value.trim()) return
   saving.value = true
-  await api.createNote(props.bookId, props.chapter, props.verse, newNote.value.trim(), noteType.value)
+  await api.createNote(String(props.bookId), String(props.chapter), String(props.verse), newNote.value.trim(), noteType.value)
   newNote.value = ''
   saving.value = false
   await loadNotes()
 }
 
-async function removeNote(noteId) {
+async function removeNote(noteId: string): Promise<void> {
   await api.deleteNote(noteId)
   await loadNotes()
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr: string): string {
   try {
     return new Date(dateStr).toLocaleDateString()
   } catch {

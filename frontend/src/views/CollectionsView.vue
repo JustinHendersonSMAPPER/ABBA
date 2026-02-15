@@ -55,27 +55,37 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useApi } from '../composables/useApi.js'
+import { useApi } from '../composables/useApi'
+import type { CollectionInfo } from '../types/api'
+
+interface CollectionItem {
+  book_id: string
+  book_name?: string
+  chapter: string | number
+  verse: string | number
+  text?: string
+  note?: string
+}
 
 const api = useApi()
 
-const collections = ref([])
-const activeCollection = ref(null)
-const items = ref([])
+const collections = ref<CollectionInfo[]>([])
+const activeCollection = ref<CollectionInfo | null>(null)
+const items = ref<CollectionItem[]>([])
 const showCreate = ref(false)
 const newName = ref('')
 const newDesc = ref('')
 
 onMounted(loadCollections)
 
-async function loadCollections() {
-  const data = await api.getCollections()
-  if (data) collections.value = data.collections || data || []
+async function loadCollections(): Promise<void> {
+  const data = await api.getCollections() as Record<string, unknown> | null
+  if (data) collections.value = ((data as Record<string, unknown>).collections || data || []) as CollectionInfo[]
 }
 
-async function createCol() {
+async function createCol(): Promise<void> {
   if (!newName.value.trim()) return
   await api.createCollection(newName.value.trim(), newDesc.value.trim())
   newName.value = ''
@@ -84,13 +94,13 @@ async function createCol() {
   await loadCollections()
 }
 
-async function viewCollection(col) {
+async function viewCollection(col: CollectionInfo): Promise<void> {
   activeCollection.value = col
-  const data = await api.getCollectionItems(col.id)
-  if (data) items.value = data.items || data || []
+  const data = await api.getCollectionItems(col.id) as Record<string, unknown> | null
+  if (data) items.value = ((data as Record<string, unknown>).items || data || []) as CollectionItem[]
 }
 
-async function removeCollection(id) {
+async function removeCollection(id: string): Promise<void> {
   await api.deleteCollection(id)
   await loadCollections()
 }

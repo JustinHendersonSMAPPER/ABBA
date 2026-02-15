@@ -55,32 +55,51 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useApi } from '../composables/useApi.js'
+import { useApi } from '../composables/useApi'
+import type { ReadingPlan } from '../types/api'
+
+interface PlanReading {
+  book: string
+  chapter: string | number
+  verse?: string | number
+  reference?: string
+}
+
+interface PlanEntry {
+  day: number
+  title?: string
+  readings?: PlanReading[]
+  reflection?: string
+}
+
+interface PlanDetail extends ReadingPlan {
+  entries?: PlanEntry[]
+}
 
 const api = useApi()
 
-const plans = ref([])
-const activePlan = ref(null)
-const planDetail = ref(null)
+const plans = ref<ReadingPlan[]>([])
+const activePlan = ref<ReadingPlan | null>(null)
+const planDetail = ref<PlanDetail | null>(null)
 
 onMounted(async () => {
-  const result = await api.getPlans()
+  const result = await api.getPlans() as Record<string, unknown> | null
   if (result) {
-    plans.value = result.plans || result
+    plans.value = ((result as Record<string, unknown>).plans || result) as ReadingPlan[]
   }
 })
 
-async function viewPlan(plan) {
+async function viewPlan(plan: ReadingPlan): Promise<void> {
   activePlan.value = plan
   const result = await api.getPlan(plan.id)
   if (result) {
-    planDetail.value = result
+    planDetail.value = result as PlanDetail
   }
 }
 
-function readingRoute(reading) {
+function readingRoute(reading: PlanReading): string {
   if (reading.verse) {
     return `/study/${reading.book}/${reading.chapter}/${reading.verse}`
   }

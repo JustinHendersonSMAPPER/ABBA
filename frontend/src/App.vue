@@ -2,15 +2,24 @@
   <div id="abba-app" :class="{ 'dark-mode': isDark }">
     <nav class="app-nav">
       <router-link to="/" class="nav-brand">ABBA</router-link>
-      <div class="nav-links">
+      <button class="nav-hamburger" @click="mobileNavOpen = !mobileNavOpen">Menu</button>
+      <div class="nav-links" :class="{ open: mobileNavOpen }">
         <router-link to="/">Read</router-link>
         <router-link to="/search">Search</router-link>
         <router-link to="/topics">Topics</router-link>
         <router-link to="/plans">Plans</router-link>
-        <router-link to="/compare">Compare</router-link>
-        <router-link to="/lexicon">Words</router-link>
-        <router-link to="/collections">Collections</router-link>
         <router-link to="/discover">Discover</router-link>
+        <div class="nav-more">
+          <button class="nav-more-btn" @click="showMore = !showMore">More</button>
+          <div v-if="showMore" class="nav-dropdown" @mouseleave="showMore = false">
+            <router-link to="/compare" @click="showMore = false">Compare</router-link>
+            <router-link to="/lexicon" @click="showMore = false">Words</router-link>
+            <router-link to="/domains" @click="showMore = false">Domains</router-link>
+            <router-link to="/collections" @click="showMore = false">Collections</router-link>
+            <router-link to="/community" @click="showMore = false">Community</router-link>
+            <router-link to="/analysis" @click="showMore = false">Analysis</router-link>
+          </div>
+        </div>
       </div>
       <div class="nav-actions">
         <form class="nav-search" @submit.prevent="goSearch">
@@ -39,22 +48,26 @@
         :literaryStructures="contextStore.literaryStructures"
       />
     </div>
+    <OnboardingOverlay ref="onboardingRef" />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import DepthDial from './components/DepthDial.vue'
 import ContextSidebar from './components/ContextSidebar.vue'
-import { useContextStore } from './stores/context.js'
+import OnboardingOverlay from './components/OnboardingOverlay.vue'
+import { useContextStore } from './stores/context'
 
 const router = useRouter()
 const contextStore = useContextStore()
 
-const depthLevel = ref('basic')
+const depthLevel = ref<string>('basic')
 const isDark = ref(false)
 const searchQuery = ref('')
+const showMore = ref(false)
+const mobileNavOpen = ref(false)
 
 // Persist dark mode preference
 const saved = typeof localStorage !== 'undefined' && localStorage.getItem('abba-dark')
@@ -239,5 +252,20 @@ body {
     margin: 1rem auto;
     padding: 0 0.5rem;
   }
+}
+
+.nav-more { position: relative; }
+.nav-more-btn { background: none; border: none; font-size: 0.85rem; cursor: pointer; color: var(--color-text); opacity: 0.7; font-family: var(--font-ui); padding: 0; }
+.nav-more-btn:hover { opacity: 1; }
+.nav-dropdown { position: absolute; top: 100%; left: 0; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 0.5rem 0; min-width: 140px; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.nav-dropdown a { display: block; padding: 0.4rem 1rem; text-decoration: none; color: var(--color-text); font-size: 0.85rem; }
+.nav-dropdown a:hover { background: rgba(74, 111, 165, 0.08); }
+.nav-dropdown a.router-link-active { font-weight: 600; }
+
+.nav-hamburger { display: none; background: none; border: 1px solid var(--color-border); border-radius: 4px; padding: 0.3rem 0.6rem; font-family: var(--font-ui); font-size: 0.8rem; cursor: pointer; color: var(--color-text); }
+@media (max-width: 600px) {
+  .nav-hamburger { display: block; }
+  .nav-links { display: none; flex-direction: column; width: 100%; }
+  .nav-links.open { display: flex; }
 }
 </style>

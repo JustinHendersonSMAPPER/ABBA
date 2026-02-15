@@ -81,21 +81,53 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useApi } from '../composables/useApi.js'
+import { useApi } from '../composables/useApi'
+import type { BookInfo } from '../types/api'
+
+interface TranslationOption {
+  id: string
+  abbreviation: string
+}
+
+interface ComparisonWord {
+  text?: string
+  original?: string
+  gloss: string
+}
+
+interface ComparisonTranslation {
+  name?: string
+  translation_id?: string
+  text: string
+}
+
+interface Divergence {
+  word?: string
+  original_word?: string
+  note?: string
+  explanation?: string
+}
+
+interface ComparisonResult {
+  reference?: string
+  original_words?: ComparisonWord[]
+  translations?: ComparisonTranslation[]
+  divergences?: Divergence[]
+}
 
 const api = useApi()
 
-const books = ref([])
+const books = ref<BookInfo[]>([])
 const selectedBook = ref('')
 const selectedChapter = ref('')
 const selectedVerse = ref('1')
 const chapterCount = ref(0)
-const selectedTranslations = ref(['engbsb', 'engkjv'])
-const comparison = ref(null)
+const selectedTranslations = ref<string[]>(['engbsb', 'engkjv'])
+const comparison = ref<ComparisonResult | null>(null)
 
-const availableTranslations = ref([
+const availableTranslations = ref<TranslationOption[]>([
   { id: 'engbsb', abbreviation: 'BSB' },
   { id: 'engkjv', abbreviation: 'KJV' },
   { id: 'engesv', abbreviation: 'ESV' },
@@ -109,17 +141,17 @@ const canCompare = computed(() =>
 )
 
 onMounted(async () => {
-  const result = await api.getBooks()
-  if (result) books.value = result.books || result
+  const result = await api.getBooks() as Record<string, unknown> | null
+  if (result) books.value = ((result as Record<string, unknown>).books || result) as BookInfo[]
 })
 
-function onBookChange() {
+function onBookChange(): void {
   selectedChapter.value = ''
-  const book = books.value.find(b => b.id === selectedBook.value)
+  const book = books.value.find((b: BookInfo) => b.id === selectedBook.value)
   chapterCount.value = book ? book.chapters : 0
 }
 
-async function loadComparison() {
+async function loadComparison(): Promise<void> {
   if (!canCompare.value) return
   comparison.value = null
   const data = await api.compareTranslations(
@@ -128,7 +160,7 @@ async function loadComparison() {
     selectedVerse.value,
     selectedTranslations.value
   )
-  if (data) comparison.value = data
+  if (data) comparison.value = data as ComparisonResult
 }
 </script>
 

@@ -15,11 +15,20 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  node: { type: Object, required: true },
-  depth: { type: Number, default: 0 },
-})
+<script setup lang="ts">
+interface SyntaxNode {
+  node_id: string
+  node_type?: string
+  role?: string
+  clause_type?: string
+  text_content?: string
+  children?: SyntaxNode[]
+}
+
+withDefaults(defineProps<{
+  node: SyntaxNode
+  depth: number
+}>(), { depth: 0 })
 </script>
 
 <style scoped>

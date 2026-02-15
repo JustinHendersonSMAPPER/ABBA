@@ -7,6 +7,7 @@
           <option value="text">Text Search</option>
           <option value="semantic">Semantic Search</option>
           <option value="strongs">Strong's Number</option>
+          <option value="multilingual">Multilingual</option>
         </select>
         <input
           v-model="query"
@@ -18,6 +19,15 @@
         <button class="search-btn" @click="doSearch" :disabled="!query.trim()">Search</button>
       </div>
     </header>
+
+    <div v-if="searchMode === 'multilingual'" class="multilingual-options">
+      <select v-model="sourceLang" class="mode-select">
+        <option value="en">English</option>
+        <option value="he">Hebrew</option>
+        <option value="el">Greek</option>
+      </select>
+      <input v-model="targetTranslations" type="text" placeholder="Target translations (comma-separated)" class="search-input" />
+    </div>
 
     <div v-if="api.loading.value" class="status-msg">Searching...</div>
     <div v-else-if="api.error.value" class="status-msg error">{{ api.error.value }}</div>
@@ -41,29 +51,33 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useApi } from '../composables/useApi.js'
+import { useApi } from '../composables/useApi'
+import type { SearchResult } from '../types/api'
 
 const route = useRoute()
 const router = useRouter()
 const api = useApi()
 
-const query = ref('')
-const searchMode = ref('text')
-const results = ref(null)
-const searched = ref(false)
+const query = ref<string>('')
+const searchMode = ref<string>('text')
+const results = ref<SearchResult[] | null>(null)
+const searched = ref<boolean>(false)
+const sourceLang = ref('en')
+const targetTranslations = ref('')
 
-const placeholders = {
+const placeholders: Record<string, string> = {
   text: 'Search for words or phrases...',
   semantic: 'Describe what you are looking for...',
   strongs: 'Enter a Strong\'s number (e.g., H2617, G26)...',
+  multilingual: 'Search across languages...',
 }
 
 onMounted(() => {
-  if (route.query.q) query.value = route.query.q
-  if (route.query.mode) searchMode.value = route.query.mode
+  if (route.query.q) query.value = route.query.q as string
+  if (route.query.mode) searchMode.value = route.query.mode as string
   if (query.value) doSearch()
 })
 
@@ -81,17 +95,23 @@ async function doSearch() {
     data = await api.semanticSearch(query.value)
   } else if (searchMode.value === 'strongs') {
     data = await api.searchStrongs(query.value.trim())
+  } else if (searchMode.value === 'multilingual') {
+    data = await api.multilingualSearch(query.value, sourceLang.value, targetTranslations.value || null)
   }
 
   if (data) {
-    results.value = data.results || data || []
+    if (Array.isArray(data)) {
+      results.value = data as SearchResult[]
+    } else {
+      results.value = (data as Record<string, unknown>).results as SearchResult[] || []
+    }
   }
 }
 
-function resultLink(r) {
-  const book = r.book_id || r.book || ''
-  const ch = r.chapter || 1
-  const v = r.verse || ''
+function resultLink(r: SearchResult) {
+  const book = (r as Record<string, unknown>).book_id || (r as Record<string, unknown>).book || ''
+  const ch = (r as Record<string, unknown>).chapter || 1
+  const v = (r as Record<string, unknown>).verse || ''
   return v ? `/study/${book}/${ch}/${v}` : `/study/${book}/${ch}`
 }
 </script>
@@ -186,4 +206,5 @@ function resultLink(r) {
   padding: 1rem 0;
 }
 .error { color: #c0392b; opacity: 1; }
+.multilingual-options { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
 </style>

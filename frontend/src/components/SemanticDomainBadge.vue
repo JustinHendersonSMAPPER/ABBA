@@ -11,10 +11,15 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  domains: { type: Array, default: () => [] },
-})
+<script setup lang="ts">
+interface DomainInfo {
+  domain_code: string
+  domain_name: string
+}
+
+withDefaults(defineProps<{
+  domains: DomainInfo[]
+}>(), { domains: () => [] })
 </script>
 
 <style scoped>

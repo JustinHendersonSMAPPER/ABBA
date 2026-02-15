@@ -218,7 +218,45 @@ Per UX expert ("most Bible reading happens on phones"):
 
 ---
 
-## Phase E: Backend Verification & E2E Tests (Priority 5)
+## Phase F: Capacitor + Offline Sync (Priority 5)
+
+**Goal:** Wire up `mobileSync()` with Capacitor so the Vue.js app runs as a native iOS/Android app with offline support, while also working as a PWA in browsers.
+
+### F1. Add Capacitor to the frontend
+- `npm install @capacitor/core @capacitor/cli`
+- `npx cap init "ABBA Bible Study" "org.abba.biblestudy"`
+- `npx cap add ios && npx cap add android`
+- Configure `capacitor.config.ts` to point at `dist/` build output
+- The existing Vue SPA works unmodified inside Capacitor's webview
+
+### F2. Offline Sync Composable
+**New file:** `frontend/src/composables/useOfflineSync.js`
+
+- Uses **IndexedDB** (via `idb` or raw API) for cross-platform storage (browser + Capacitor)
+- `syncChapters(bookId, chapters)` → calls `mobileSync({ book_ids, chapters })` → stores response in IndexedDB
+- `getCachedVerse(book, chapter, verse)` → reads from IndexedDB, falls back to network
+- `getSyncStatus()` → returns which books/chapters are available offline
+- `clearCache()` → purges IndexedDB store
+
+### F3. Offline UI in ReadingPane
+**File:** `frontend/src/views/ReadingPane.vue`
+
+- Add a "Download for offline" button next to chapter selector
+- Shows sync progress indicator during download
+- Offline-available chapters get a small indicator badge
+- When offline (detected via `navigator.onLine`), reads from IndexedDB cache transparently
+
+### F4. Service Worker for PWA
+**New file:** `frontend/public/sw.js` (or via vite-plugin-pwa)
+
+- Cache app shell (HTML/CSS/JS) for offline launch
+- The data layer uses IndexedDB (from F2), not the service worker cache
+- Register in `main.js` for browser-based PWA support
+- Capacitor native builds don't need the SW but it doesn't conflict
+
+---
+
+## Phase E: Backend Verification & E2E Tests (Priority 6)
 
 ### E1. Verify verse endpoint returns scholarly data
 Check that `GET /verses/{translation}/{book}/{chapter}/{verse}?depth=scholarly` actually returns `syntax_tree`, `discourse_units`, and `manuscript_variants` fields. If not, the StudyView fetch-and-merge approach (Phase A1) handles this independently.
@@ -260,9 +298,10 @@ Check that `GET /verses/{translation}/{book}/{chapter}/{verse}?depth=scholarly` 
 | 14 | D2 | Register new routes | 0 | main.js |
 | 15 | D3 | Onboarding overlay | 1 | App.vue |
 | 16 | D4 | Mobile nav improvements | 0 | App.vue |
-| 17 | E1-3 | E2E tests | 7 | 3 existing test files |
+| 17 | F | Capacitor + offline sync | 2 (composable + config) | main.js, ReadingPane.vue, package.json |
+| 18 | E1-3 | E2E tests | 7 | 3 existing test files |
 
-**Total: 6 new Vue files, 13 new E2E test files, ~10 modified files**
+**Total: 8 new Vue/JS files, 13 new E2E test files, ~12 modified files**
 
 ---
 
@@ -283,13 +322,13 @@ Check that `GET /verses/{translation}/{book}/{chapter}/{verse}?depth=scholarly` 
 | `listConceptProposals()` | No | Yes | CommunityView |
 | `submitConceptFeedback()` | No | Yes | ConceptExplorer, StudyView |
 | `getAudioResource()` | No | Yes | ReadingPane, StudyView |
-| `mobileSync()` | No | Yes | (Deferred — PWA/native scope) |
+| `mobileSync()` | No | Yes | OfflineSync composable (Capacitor + IndexedDB) |
 | `getPassages()` | No | Yes | ReadingPane |
 | `getGenreShifts()` | No | Yes | ReadingPane |
 | `getSemanticDomains()` | No | Yes | SemanticDomainBrowser |
 | `getShare()` | No | Yes | SharedView |
 
-**Result: 17 of 18 unused methods now wired up.** Only `mobileSync()` is deferred (requires PWA/native app infrastructure).
+**Result: All 18 unused methods wired up.** 100% API coverage.
 
 ---
 

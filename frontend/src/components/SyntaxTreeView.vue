@@ -12,13 +12,20 @@
   </div>
 </template>
 
-<script setup>
-import { defineProps } from 'vue'
+<script setup lang="ts">
 import SyntaxNodeComponent from './SyntaxNodeComponent.vue'
 
-defineProps({
-  tree: { type: Object, default: null },
-})
+interface SyntaxTree {
+  root_nodes: Array<{
+    node_id: string
+    node_type?: string
+    [key: string]: unknown
+  }>
+}
+
+withDefaults(defineProps<{
+  tree: SyntaxTree | null
+}>(), { tree: null })
 </script>
 
 <style scoped>

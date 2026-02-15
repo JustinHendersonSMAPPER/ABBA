@@ -15,6 +15,8 @@
         </option>
       </select>
 
+      <button v-if="selectedChapter" class="control-btn" @click="toggleAudio">Audio</button>
+
       <LiteraryModeIndicator
         v-if="depth !== 'basic' && chapterData"
         :genre="chapterData.genre || ''"
@@ -22,20 +24,25 @@
       />
     </div>
 
+    <AudioPlayer v-if="audioData" :audio="audioData" />
+
     <div v-if="api.loading.value" class="loading">Loading...</div>
     <div v-else-if="api.error.value" class="error">{{ api.error.value }}</div>
 
     <div v-else-if="chapterData" class="reading-text">
-      <div v-for="verse in chapterData.verses" :key="verse.number" class="verse-block">
-        <sup class="verse-num">{{ verse.number }}</sup>
-        <TranslationLens
-          v-if="depth !== 'basic' && verse.words"
-          :words="verse.words"
-          :rich-flags="verse.richness_flags || []"
-          @word-click="onWordClick"
-        />
-        <span v-else class="verse-text">{{ verse.text }}</span>
-      </div>
+      <template v-for="verse in chapterData.verses" :key="verse.number">
+        <h3 v-if="getPassageTitle(verse.number)" class="passage-heading">{{ getPassageTitle(verse.number) }}</h3>
+        <div class="verse-block">
+          <sup class="verse-num verse-link" @click="router.push('/study/' + selectedBook + '/' + selectedChapter + '/' + verse.number)">{{ verse.number }}</sup>
+          <TranslationLens
+            v-if="depth !== 'basic' && verse.words"
+            :words="verse.words"
+            :rich-flags="(verse.richness_flags || []).map(f => typeof f === 'string' ? { richness: 0, explanation: f } : f)"
+            @word-click="onWordClick"
+          />
+          <span v-else class="verse-text">{{ verse.text }}</span>
+        </div>
+      </template>
     </div>
 
     <p v-else class="reading-placeholder">
@@ -51,30 +58,52 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { useApi } from '../composables/useApi.js'
+import { useRouter } from 'vue-router'
+import { useApi } from '../composables/useApi'
+import type { BookInfo, ChapterData, AudioResource, PassageInfo, GenreShift } from '../types/api'
 import TranslationLens from '../components/TranslationLens.vue'
 import WordJourneyCard from '../components/WordJourneyCard.vue'
 import LiteraryModeIndicator from '../components/LiteraryModeIndicator.vue'
+import AudioPlayer from '../components/AudioPlayer.vue'
 
 const props = defineProps({
   depth: { type: String, default: 'basic' },
 })
 
 const api = useApi()
+const router = useRouter()
 
-const books = ref([])
-const selectedBook = ref('')
-const selectedChapter = ref('')
-const chapterCount = ref(0)
-const chapterData = ref(null)
-const selectedWord = ref(null)
+const books = ref<BookInfo[]>([])
+const selectedBook = ref<string>('')
+const selectedChapter = ref<string>('')
+const chapterCount = ref<number>(0)
+const chapterData = ref<ChapterData | null>(null)
+interface WordDetail {
+  text?: string
+  original?: string
+  transliteration?: string
+  gloss?: string
+  strongs?: string
+  morphology?: string
+  semantic_domain?: string
+  occurrences?: number
+}
+
+const selectedWord = ref<WordDetail | null>(null)
+const audioData = ref<AudioResource | null>(null)
+const passages = ref<PassageInfo[]>([])
+const genreShifts = ref<GenreShift[]>([])
 
 onMounted(async () => {
   const result = await api.getBooks()
   if (result) {
-    books.value = result.books || result
+    if (Array.isArray(result)) {
+      books.value = result as BookInfo[]
+    } else {
+      books.value = (result as Record<string, unknown>).books as BookInfo[] || []
+    }
   }
 })
 
@@ -91,6 +120,16 @@ async function loadChapter() {
   if (result) {
     chapterData.value = result
   }
+  if (props.depth !== 'basic') {
+    const [passageData, genreData, audio] = await Promise.all([
+      api.getPassages(selectedBook.value, selectedChapter.value),
+      api.getGenreShifts(selectedBook.value),
+      api.getAudioResource(selectedBook.value, selectedChapter.value),
+    ])
+    passages.value = (passageData as PassageInfo[]) || []
+    genreShifts.value = (genreData as GenreShift[]) || []
+    if (audio) audioData.value = audio
+  }
 }
 
 watch(() => props.depth, () => {
@@ -99,18 +138,31 @@ watch(() => props.depth, () => {
   }
 })
 
-function onWordClick(word, flags) {
-  if (flags && flags.strongs) {
+function onWordClick(word: string | Record<string, unknown>, flags: Record<string, unknown>) {
+  const wordStr = typeof word === 'string' ? word : (word as Record<string, unknown>).text as string || ''
+  const strongs = flags.strongs as string | undefined
+  if (flags && strongs) {
     selectedWord.value = {
-      original: flags.original || word,
-      transliteration: flags.transliteration || '',
-      gloss: flags.gloss || word,
-      strongs: flags.strongs,
-      morphology: flags.morphology || '',
-      semantic_domain: flags.semantic_domain || '',
-      occurrences: flags.occurrences,
+      original: (flags.original as string | undefined) || wordStr,
+      transliteration: (flags.transliteration as string | undefined) || '',
+      gloss: (flags.gloss as string | undefined) || wordStr,
+      strongs: strongs,
+      morphology: (flags.morphology as string | undefined) || '',
+      semantic_domain: (flags.semantic_domain as string | undefined) || '',
+      occurrences: flags.occurrences as number | undefined,
     }
   }
+}
+
+function getPassageTitle(verseNum: number): string | null {
+  const passage = passages.value.find(p => p.start_verse === verseNum)
+  return passage ? passage.title : null
+}
+
+async function toggleAudio(): Promise<void> {
+  if (audioData.value) { audioData.value = null; return }
+  const data = await api.getAudioResource(selectedBook.value, selectedChapter.value)
+  if (data) audioData.value = data
 }
 </script>
 
@@ -169,4 +221,10 @@ function onWordClick(word, flags) {
   right: 2rem;
   z-index: 30;
 }
+
+.verse-link { cursor: pointer; }
+.verse-link:hover { color: var(--color-accent); text-decoration: underline; }
+.passage-heading { font-family: var(--font-ui); font-size: 0.9rem; font-weight: 600; color: var(--color-accent); margin: 1rem 0 0.5rem; display: block; }
+.control-btn { padding: 0.3rem 0.6rem; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); font-family: var(--font-ui); font-size: 0.8rem; cursor: pointer; color: var(--color-text); }
+.control-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
 </style>

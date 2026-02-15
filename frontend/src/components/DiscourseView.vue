@@ -13,10 +13,23 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  units: { type: Array, default: () => [] },
-})
+<script setup lang="ts">
+interface DiscourseUnit {
+  discourse_id: string
+  discourse_type: string
+  function_label?: string
+  start_chapter: number
+  start_verse: number
+  end_chapter: number
+  end_verse: number
+  description?: string
+  relation_to_context?: string
+  prominence: number
+}
+
+withDefaults(defineProps<{
+  units: DiscourseUnit[]
+}>(), { units: () => [] })
 </script>
 
 <style scoped>

@@ -14,18 +14,24 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  modelValue: {
-    type: String,
-    default: 'basic',
-    validator: (v) => ['basic', 'standard', 'deep', 'scholarly'].includes(v),
-  },
-})
+<script setup lang="ts">
+type DepthLevel = 'basic' | 'standard' | 'deep' | 'scholarly'
 
-defineEmits(['update:modelValue'])
+interface DepthOption {
+  value: DepthLevel
+  label: string
+  description: string
+}
 
-const levels = [
+withDefaults(defineProps<{
+  modelValue: string
+}>(), { modelValue: 'basic' })
+
+defineEmits<{
+  'update:modelValue': [value: string]
+}>()
+
+const levels: DepthOption[] = [
   { value: 'basic', label: 'Read', description: 'Clean reading experience' },
   { value: 'standard', label: 'Understand', description: 'Key words and context' },
   { value: 'deep', label: 'Study', description: 'Cross-references and structure' },

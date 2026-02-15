@@ -47,40 +47,75 @@
   </div>
 </template>
 
-<script setup>
-import { computed, defineProps } from 'vue'
+<script setup lang="ts">
+import { computed } from 'vue'
 
-const props = defineProps({
-  graph: { type: Object, default: null },
-})
+interface GraphNode {
+  name: string
+  is_center?: boolean
+  [key: string]: unknown
+}
+
+interface GraphRelationship {
+  source_concept: string
+  target_concept: string
+  relationship_type: string
+  weight?: number
+}
+
+interface ConceptGraph {
+  center_concept: string
+  nodes: GraphNode[]
+  relationships: GraphRelationship[]
+}
+
+interface PositionedNode extends GraphNode {
+  x: number
+  y: number
+  isCenter: boolean
+}
+
+interface Edge {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  type: string
+  weight: number
+}
+
+const props = withDefaults(defineProps<{
+  graph: ConceptGraph | null
+}>(), { graph: null })
 
 const viewBox = computed(() => '0 0 500 400')
 
-const positions = computed(() => {
+const positions = computed<PositionedNode[]>(() => {
   if (!props.graph || !props.graph.nodes) return []
   const nodes = props.graph.nodes
   const cx = 250, cy = 200
-  return nodes.map((n, i) => {
-    if (n.is_center) return { ...n, x: cx, y: cy, isCenter: true }
+  return nodes.map((n: GraphNode, i: number) => {
+    const name = n.name || n.label || n.id
+    if (n.is_center) return { ...n, name, x: cx, y: cy, isCenter: true }
     const angle = (2 * Math.PI * i) / Math.max(nodes.length - 1, 1)
     const r = 140
-    return { ...n, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), isCenter: false }
-  })
+    return { ...n, name, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), isCenter: false }
+  }) as PositionedNode[]
 })
 
-const edges = computed(() => {
-  if (!props.graph || !props.graph.relationships) return []
-  const posMap = {}
-  positions.value.forEach(p => { posMap[p.name] = p })
-  return props.graph.relationships.map(rel => {
+const edges = computed<Edge[]>(() => {
+  if (!props.graph || !props.graph.relationships || !props.graph.relationships.length) return []
+  const posMap: Record<string, PositionedNode> = {}
+  positions.value.forEach((p: PositionedNode) => { posMap[p.name] = p })
+  return props.graph.relationships.map((rel: GraphRelationship) => {
     const s = posMap[rel.source_concept] || { x: 250, y: 200 }
     const t = posMap[rel.target_concept] || { x: 250, y: 200 }
     return { x1: s.x, y1: s.y, x2: t.x, y2: t.y, type: rel.relationship_type, weight: rel.weight || 0.5 }
   })
 })
 
-function relationshipArrow(type) {
-  const arrows = { synonym: '=', antithetical: '<>', causal: '->', enables: '=>', contrast: '|', temporal: '>>' }
+function relationshipArrow(type: string): string {
+  const arrows: Record<string, string> = { synonym: '=', antithetical: '<>', causal: '->', enables: '=>', contrast: '|', temporal: '>>' }
   return arrows[type] || '--'
 }
 </script>

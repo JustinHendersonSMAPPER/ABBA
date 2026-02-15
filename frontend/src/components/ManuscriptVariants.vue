@@ -20,10 +20,20 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  variants: { type: Array, default: () => [] },
-})
+<script setup lang="ts">
+interface Variant {
+  variant_id: string
+  variant_type: string
+  significance: string
+  base_text?: string
+  variant_text?: string
+  explanation?: string
+  manuscripts?: string
+}
+
+withDefaults(defineProps<{
+  variants: Variant[]
+}>(), { variants: () => [] })
 </script>
 
 <style scoped>

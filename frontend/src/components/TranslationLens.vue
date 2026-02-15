@@ -8,7 +8,7 @@
       @mouseleave="activeTooltip = null"
       @click="isRich(i) && $emit('word-click', word, richFlags[i])"
     >
-      {{ word }}<template v-if="i < words.length - 1">{{ ' ' }}</template>
+      {{ typeof word === 'string' ? word : (word as Record<string, unknown>).text || '' }}<template v-if="i < words.length - 1">{{ ' ' }}</template>
       <span v-if="activeTooltip === i" class="lens-tooltip">
         {{ richFlags[i].explanation || 'Rich meaning in original language' }}
       </span>
@@ -16,22 +16,30 @@
   </span>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 
-const props = defineProps({
-  words: { type: Array, required: true },
-  richFlags: { type: Array, default: () => [] },
-})
+interface RichFlag {
+  richness: number
+  explanation?: string
+  [key: string]: unknown
+}
 
-defineEmits(['word-click'])
+const props = withDefaults(defineProps<{
+  words: Array<string | Record<string, unknown>>
+  richFlags: RichFlag[]
+}>(), { richFlags: () => [] })
 
-const activeTooltip = ref(null)
+defineEmits<{
+  'word-click': [word: string | Record<string, unknown>, flags: RichFlag]
+}>()
 
-function isRich(index) {
+const activeTooltip = ref<number | null>(null)
+
+function isRich(index: number): boolean {
   return (
     props.richFlags &&
-    props.richFlags[index] &&
+    props.richFlags[index] != null &&
     props.richFlags[index].richness > 0.5
   )
 }
