@@ -1,8 +1,8 @@
 """Linguistic analysis API for ABBA biblical analysis."""
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Union
 
 from ..database import SQLiteManager
 
@@ -64,18 +64,18 @@ class AnalysisAPI:
             List of morphology patterns with counts and examples
         """
         query = """
-            SELECT 
+            SELECT
                 w.morphology_code,
                 m.description,
                 COUNT(*) as count,
-                GROUP_CONCAT(w.word_ref || ':' || 
+                GROUP_CONCAT(w.word_ref || ':' ||
                     COALESCE(w.hebrew_text, w.greek_text), '|') as examples
             FROM words w
             LEFT JOIN morphology m ON w.morphology_code = m.code
             WHERE w.language = ?
         """
 
-        params = [language]
+        params: List[Union[str, int]] = [language]
         if pattern:
             query += " AND w.morphology_code LIKE ?"
             params.append(pattern)
@@ -125,7 +125,7 @@ class AnalysisAPI:
             List of word frequency data
         """
         query = """
-            SELECT 
+            SELECT
                 w.strongs_primary,
                 COALESCE(l.original_word, w.hebrew_text, w.greek_text) as word,
                 COUNT(*) as frequency,
@@ -137,7 +137,7 @@ class AnalysisAPI:
             WHERE w.strongs_primary IS NOT NULL
         """
 
-        params = []
+        params: List[Union[str, int]] = []
         if strongs_pattern:
             query += " AND w.strongs_primary LIKE ?"
             params.append(strongs_pattern)
@@ -180,7 +180,7 @@ class AnalysisAPI:
             List of words appearing only once with their context
         """
         query = """
-            SELECT 
+            SELECT
                 w.strongs_primary,
                 COALESCE(w.hebrew_text, w.greek_text) as word,
                 w.transliteration,
@@ -226,7 +226,7 @@ class AnalysisAPI:
         """
         # First, find all Strong's numbers matching the pattern
         query = """
-            SELECT DISTINCT 
+            SELECT DISTINCT
                 l.strongs_number,
                 l.original_word,
                 l.gloss,
@@ -267,9 +267,7 @@ class AnalysisAPI:
 
         return results
 
-    def compare_translations(
-        self, book: str, chapter: int, verse: int, translation_ids: List[str]
-    ) -> Dict[str, Any]:
+    def compare_translations(self, book: str, chapter: int, verse: int, translation_ids: List[str]) -> Dict[str, Any]:
         """Compare verse across multiple translations with linguistic analysis.
 
         Args:
@@ -281,7 +279,7 @@ class AnalysisAPI:
         Returns:
             Comparison data including original languages
         """
-        result = {
+        result: Dict[str, Any] = {
             "reference": f"{book} {chapter}:{verse}",
             "translations": {},
             "original_words": [],
@@ -289,7 +287,7 @@ class AnalysisAPI:
 
         # Get original language words
         word_query = """
-            SELECT 
+            SELECT
                 word_num,
                 COALESCE(hebrew_text, greek_text) as original,
                 transliteration,
@@ -318,15 +316,14 @@ class AnalysisAPI:
             )
 
         # Get translations
-        verse_query = """
+        placeholders = ",".join(["?"] * len(translation_ids))
+        verse_query = f"""
             SELECT translation_id, text
             FROM verses
             WHERE book_id = (SELECT book_id FROM books WHERE name = ? LIMIT 1)
             AND chapter = ? AND verse = ?
-            AND translation_id IN ({})
-        """.format(
-            ",".join(["?"] * len(translation_ids))
-        )
+            AND translation_id IN ({placeholders})
+        """
 
         params = [book, chapter, verse] + translation_ids
         verse_rows = self.db_manager.execute_query(verse_query, tuple(params))
@@ -361,7 +358,7 @@ class AnalysisAPI:
         pattern = construction_patterns.get(construction_type, f"%{construction_type}%")
 
         query = """
-            SELECT 
+            SELECT
                 w.word_ref,
                 COALESCE(w.hebrew_text, w.greek_text) as text,
                 w.transliteration,
@@ -370,7 +367,7 @@ class AnalysisAPI:
                 m.description
             FROM words w
             LEFT JOIN morphology m ON w.morphology_code = m.code
-            WHERE w.language = ? 
+            WHERE w.language = ?
             AND LOWER(w.morphology_code) LIKE LOWER(?)
             LIMIT 100
         """
@@ -472,21 +469,20 @@ class AnalysisAPI:
             return []
 
         # Find verses with similar vocabulary
-        parallel_query = """
-            SELECT 
+        strongs_placeholders = ",".join(["?"] * len(source_strongs))
+        parallel_query = f"""
+            SELECT
                 book, chapter, verse,
                 COUNT(DISTINCT strongs_primary) as shared_count,
                 GROUP_CONCAT(DISTINCT strongs_primary) as shared_strongs
             FROM words
-            WHERE strongs_primary IN ({})
+            WHERE strongs_primary IN ({strongs_placeholders})
             AND NOT (book = ? AND chapter = ? AND verse = ?)
             GROUP BY book, chapter, verse
             HAVING shared_count >= ?
             ORDER BY shared_count DESC
             LIMIT 20
-        """.format(
-            ",".join(["?"] * len(source_strongs))
-        )
+        """
 
         min_shared = int(len(source_strongs) * threshold)
         params = list(source_strongs) + [book, chapter, verse, min_shared]

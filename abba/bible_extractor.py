@@ -6,21 +6,20 @@ Downloads bible.db and extracts translations to JSON files.
 """
 
 import json
+import multiprocessing
 import sqlite3
 import sys
-import multiprocessing
+from concurrent.futures import as_completed
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import requests
-from tqdm import tqdm
 from loguru import logger
+from tqdm import tqdm
 
-from .parallel_import import ParallelImporter, ImportResult, ImportJob
-from .parallel_stepbible import ParallelStepBibleImporter
-from .operation_manager import OperationManager
 from .hash_validator import HashValidator
-from concurrent.futures import as_completed
+from .parallel_import import ImportResult, ParallelImporter
+from .parallel_stepbible import ParallelStepBibleImporter
 
 
 class BibleExtractor:
@@ -28,29 +27,34 @@ class BibleExtractor:
 
     def __init__(self, data_dir: str = "bible_data", config=None):
         self.data_dir = Path(data_dir)
-        self.db_path = self.data_dir / "bible.db"
+        self.config = config
+        if config:
+            self.db_path = config.db_path
+        else:
+            self.db_path = self.data_dir / "bible.db"
         self.translations_dir = self.data_dir / "translations"
         self.stepbible_dir = self.data_dir / "stepbible"
-        self.config = config
 
         # Create directories
         self.data_dir.mkdir(exist_ok=True)
         self.translations_dir.mkdir(exist_ok=True)
         self.stepbible_dir.mkdir(exist_ok=True)
-        
+
         # Initialize components for parallel operations
-        self.parallel_importer = None
+        self.parallel_importer: Optional[ParallelImporter] = None
+        self.parallel_stepbible: Optional[ParallelStepBibleImporter] = None
         self.operation_manager = None
         self.hash_validator = HashValidator()
 
     def download_bible_db(self) -> bool:
-        """Download bible.db from the server."""
+        """Download bible.db (or bible.eng.db) from the server."""
         if self.db_path.exists():
-            logger.debug(f"bible.db already exists at {self.db_path}")
+            logger.debug(f"{self.db_path.name} already exists at {self.db_path}")
             return True
 
-        url = "https://bible.helloao.org/bible.db"
-        logger.info(f"Downloading bible.db from {url}...")
+        url = self.config.bible_db_download_url if self.config else "https://bible.helloao.org/bible.db"
+        db_name = self.db_path.name
+        logger.info(f"Downloading {db_name} from {url}...")
 
         try:
             response = requests.get(url, stream=True, timeout=30)
@@ -59,16 +63,16 @@ class BibleExtractor:
             total_size = int(response.headers.get("content-length", 0))
 
             with open(self.db_path, "wb") as f:
-                with tqdm(total=total_size, unit="B", unit_scale=True, desc="Downloading") as pbar:
+                with tqdm(total=total_size, unit="B", unit_scale=True, desc=f"Downloading {db_name}") as pbar:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
                         pbar.update(len(chunk))
 
-            logger.info(f"✓ Downloaded bible.db to {self.db_path}")
+            logger.info(f"✓ Downloaded {db_name} to {self.db_path}")
             return True
 
         except Exception as e:
-            logger.error(f"✗ Failed to download bible.db: {e}")
+            logger.error(f"✗ Failed to download {db_name}: {e}")
             if self.db_path.exists():
                 self.db_path.unlink()
             return False
@@ -105,14 +109,29 @@ class BibleExtractor:
                 "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Translators%20Amalgamated%20OT%2BNT/"
                 "TAGNT%20Act-Rev%20-%20Translators%20Amalgamated%20Greek%20NT%20-%20STEPBible.org%20CC-BY.txt"
             ),
-            # Lexicons (definitions/meanings)
-            "hebrew_lexicon.txt": (
-                "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Lexicons/"
-                "TBESH - Translators Brief lexicon of Extended Strongs for Hebrew - STEPBible.org CC BY.txt"
+            # Lexicons - free/open-source XML sources (replacing STEPBible TSV lexicons)
+            # OpenScriptures HebrewStrong.xml: CC BY 4.0 / Public Domain
+            "hebrew_strongs.xml": (
+                "https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/HebrewStrong.xml"
             ),
-            "greek_lexicon.txt": (
-                "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Lexicons/"
-                "TBESG - Translators Brief lexicon of Extended Strongs for Greek - STEPBible.org CC BY.txt"
+            # Abbott-Smith Greek Lexicon: Public Domain (1922)
+            "abbott_smith.xml": (
+                "https://raw.githubusercontent.com/"
+                "translatable-exegetical-tools/Abbott-Smith/master/abbott-smith.tei.xml"
+            ),
+            # BDB Hebrew Lexicon: Public Domain (1906) / CC BY 4.0 (markup)
+            "bdb.xml": ("https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/BrownDriverBriggs.xml"),
+            # Lexical Index: bridges Strong's numbers to BDB entry IDs (CC BY 4.0)
+            "lexical_index.xml": (
+                "https://raw.githubusercontent.com/openscriptures/HebrewLexicon/master/LexicalIndex.xml"
+            ),
+            # Dodson Greek Lexicon: Public Domain (CC0), compiled from Abbott-Smith, Berry, Souter, Strong
+            "dodson.csv": (
+                "https://raw.githubusercontent.com/biblicalhumanities/Dodson-Greek-Lexicon/master/dodson.csv"
+            ),
+            # Strong's Greek Dictionary: Public Domain (CC0), XML with real Greek unicode
+            "strongs_greek.xml": (
+                "https://raw.githubusercontent.com/morphgnt/strongs-dictionary-xml/master/strongsgreek.xml"
             ),
             # Morphology code explanations
             "hebrew_morphology.txt": (
@@ -158,34 +177,54 @@ class BibleExtractor:
 
         # Create attribution file
         attribution_path = self.stepbible_dir / "ATTRIBUTION.txt"
-        attribution_content = """STEPBible Data Attribution
+        attribution_content = """Biblical Data Attribution
 ========================
 
-This folder contains data from the STEPBible project, used under the CC BY 4.0 license.
+This folder contains data from multiple open-source projects.
 
-Source: STEPBible.org
-Repository: https://github.com/STEPBible/STEPBible-Data
-License: Creative Commons Attribution 4.0 International (CC BY 4.0)
-License URL: https://creativecommons.org/licenses/by/4.0/
+1. STEPBible (Tyndale House, Cambridge)
+   - Hebrew OT text (TAHOT), Greek NT text (TAGNT)
+   - Hebrew/Greek morphology codes (TEHMC, TEGMC)
+   - Repository: https://github.com/STEPBible/STEPBible-Data
+   - License: Creative Commons Attribution 4.0 International (CC BY 4.0)
 
-Files included:
-- Hebrew OT text (TAHOT - Translators Amalgamated Hebrew OT, 4 files: Gen-Deu, Jos-Est, Job-Sng, Isa-Mal)
-- Greek NT text (TAGNT - Translators Amalgamated Greek NT, 2 files: Mat-Jhn, Act-Rev)
-- Hebrew lexicon (TBESH - Translators Brief lexicon of Extended Strongs for Hebrew)
-- Greek lexicon (TBESG - Translators Brief lexicon of Extended Strongs for Greek)
-- Hebrew morphology codes (TEHMC - Translators Expansion of Hebrew Morphology Codes)
-- Greek morphology codes (TEGMC - Translators Expansion of Greek Morphology Codes)
+2. OpenScriptures Hebrew Lexicon (Strong's Hebrew Dictionary)
+   - File: hebrew_strongs.xml
+   - Repository: https://github.com/openscriptures/HebrewLexicon
+   - License: CC BY 4.0 (markup), Public Domain (dictionary content, 1890)
+   - Attribution: Open Scriptures Hebrew Bible Project
 
-Attribution: This data is provided by STEPBible.org and Tyndale House, Cambridge.
-For more information, corrections, or updates, contact: STEPBible@gmail.com
+3. Abbott-Smith Greek Lexicon
+   - File: abbott_smith.xml
+   - Repository: https://github.com/translatable-exegetical-tools/Abbott-Smith
+   - License: Public Domain (1922, out of copyright)
+   - Source: G. Abbott-Smith, "A Manual Greek Lexicon of the New Testament"
 
-The data includes lexical, morphological, and textual information for Hebrew, Aramaic,
-and Koine Greek biblical texts, designed to support biblical language study and research.
+4. Brown-Driver-Briggs Hebrew Lexicon (BDB)
+   - Files: bdb.xml, lexical_index.xml
+   - Repository: https://github.com/openscriptures/HebrewLexicon
+   - License: Public Domain (1906, out of copyright), CC BY 4.0 (XML markup)
+   - Source: F. Brown, S.R. Driver, C.A. Briggs, "A Hebrew and English Lexicon
+     of the Old Testament" (Oxford: Clarendon Press, 1906)
+
+5. Dodson Greek-English Lexicon
+   - File: dodson.csv
+   - Repository: https://github.com/biblicalhumanities/Dodson-Greek-Lexicon
+   - License: Public Domain (CC0)
+   - Source: Jeffrey Dodson, compiled from Abbott-Smith (1922), Berry (1897),
+     Souter (1917), and Strong (1890)
+
+6. Strong's Greek Dictionary
+   - File: strongs_greek.xml
+   - Repository: https://github.com/morphgnt/strongs-dictionary-xml
+   - License: Public Domain (CC0)
+   - Source: James Strong, "Exhaustive Concordance of the Bible" (1890),
+     XML by Ulrik Sandborg-Petersen with real Greek unicode text
 """
 
         try:
-            with open(attribution_path, "w", encoding="utf-8") as f:
-                f.write(attribution_content)
+            with open(attribution_path, "w", encoding="utf-8") as attr_f:
+                attr_f.write(attribution_content)
             logger.debug(f"✓ Created attribution file at {attribution_path}")
         except Exception as e:
             logger.error(f"✗ Failed to create attribution file: {e}")
@@ -195,11 +234,19 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         # Consider success if we got all essential files
         # We need at least the lexicons and morphology files
         core_files = [
-            "hebrew_lexicon.txt",
-            "greek_lexicon.txt",  # Lexicons
+            "hebrew_strongs.xml",
+            "abbott_smith.xml",  # Primary lexicons
             "hebrew_morphology.txt",
             "greek_morphology.txt",  # Morphology
         ]
+        # Supplementary lexicons (enhance definitions but not required)
+        supplementary_files = ["bdb.xml", "lexical_index.xml", "dodson.csv", "strongs_greek.xml"]
+        supp_count = sum(1 for f in supplementary_files if (self.stepbible_dir / f).exists())
+        if supp_count < len(supplementary_files):
+            logger.warning(
+                f"Some supplementary lexicons missing ({supp_count}/{len(supplementary_files)}). "
+                "BDB/Dodson enrichment may be incomplete."
+            )
         core_success = all((self.stepbible_dir / f).exists() for f in core_files)
 
         # Check if we have at least some text files (ideally all 6)
@@ -216,8 +263,11 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         # Success if we have core files and at least some text files
         return core_success and (text_count >= 2 or success_count == len(stepbible_files))
 
-    def parse_stepbible_lexicon(self, language: str, db_manager) -> bool:
-        """Parse STEPBible lexicon files and import into database.
+    def parse_lexicon(self, language: str, db_manager) -> bool:
+        """Parse lexicon XML files and import into database.
+
+        Uses OpenScriptures HebrewStrong.xml for Hebrew and
+        Abbott-Smith TEI XML for Greek (both free/open-source).
 
         Args:
             language: 'hebrew' or 'greek'
@@ -226,60 +276,113 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         Returns:
             True if successful, False otherwise
         """
-        lexicon_file = f"{language}_lexicon.txt"
-        lexicon_path = self.stepbible_dir / lexicon_file
+        from abba.lexicon_parser import parse_abbott_smith_xml, parse_hebrew_strongs_xml
+
+        if language == "hebrew":
+            lexicon_path = self.stepbible_dir / "hebrew_strongs.xml"
+            parser_fn = parse_hebrew_strongs_xml
+        elif language == "greek":
+            lexicon_path = self.stepbible_dir / "abbott_smith.xml"
+            parser_fn = parse_abbott_smith_xml
+        else:
+            logger.error(f"Unknown lexicon language: {language}")
+            return False
 
         if not lexicon_path.exists():
             logger.warning(f"Lexicon file not found: {lexicon_path}")
             return False
 
         try:
-            with open(lexicon_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            entries = parser_fn(lexicon_path)
 
-            # Parse lexicon entries - STEPBible format varies but generally:
-            # Strong's|Original|Transliteration|PartOfSpeech|Gloss|Definition
-            entries_added = 0
-            for _line_num, line in enumerate(content.split("\n"), 1):
-                line = line.strip()
-                if not line or line.startswith("#") or line.startswith("="):
-                    continue
+            for entry in entries:
+                db_manager.insert_lexicon_entry(entry)
 
-                # Split on tab or pipe character
-                parts = line.split("\t") if "\t" in line else line.split("|")
-                if len(parts) < 4:
-                    continue
-
-                # Extract lexicon data
-                strongs_number = parts[0].strip()
-                original_word = parts[1].strip() if len(parts) > 1 else ""
-                transliteration = parts[2].strip() if len(parts) > 2 else ""
-                part_of_speech = parts[3].strip() if len(parts) > 3 else ""
-                gloss = parts[4].strip() if len(parts) > 4 else ""
-                definition = parts[5].strip() if len(parts) > 5 else ""
-
-                if not strongs_number:
-                    continue
-
-                lexicon_data = {
-                    "strongs_number": strongs_number,
-                    "original_word": original_word,
-                    "transliteration": transliteration,
-                    "part_of_speech": part_of_speech,
-                    "gloss": gloss,
-                    "definition": definition,
-                    "language": language,
-                }
-
-                db_manager.insert_lexicon_entry(lexicon_data)
-                entries_added += 1
-
-            logger.info(f"✓ Imported {entries_added} {language} lexicon entries")
+            logger.info(f"Imported {len(entries)} {language} lexicon entries")
             return True
 
         except Exception as e:
-            logger.error(f"✗ Failed to parse {language} lexicon: {e}")
+            logger.error(f"Failed to parse {language} lexicon: {e}")
             return False
+
+    def _import_supplementary_lexicon(
+        self, filename: str, parser_fn, db_manager, tracker=None, parser_args=None
+    ) -> bool:
+        """Import a single supplementary lexicon file.
+
+        Args:
+            filename: Filename to track in import tracker
+            parser_fn: Parser function returning List[Dict]
+            db_manager: SQLiteManager instance
+            tracker: ImportTracker instance (optional)
+            parser_args: Tuple of arguments for parser_fn
+
+        Returns:
+            True if import succeeded
+        """
+        if tracker and tracker.is_stepbible_file_imported("lexicon", filename):
+            logger.debug(f"  Skipping {filename} - already imported")
+            return False
+
+        try:
+            entries = parser_fn(*parser_args) if parser_args else parser_fn()
+            for entry in entries:
+                db_manager.insert_lexicon_definition(entry)
+            logger.info(f"Imported {len(entries)} definitions from {filename}")
+            if tracker:
+                tracker.mark_stepbible_file_imported("lexicon", filename)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to parse {filename}: {e}")
+            return False
+
+    def parse_supplementary_lexicons(self, db_manager, tracker=None) -> bool:
+        """Parse supplementary lexicon sources (BDB, Dodson, Strong's Greek) into lexicon_definitions.
+
+        These provide additional scholarly definitions keyed to Strong's numbers,
+        stored alongside the primary lexicon entries for multi-source comparison.
+
+        Args:
+            db_manager: SQLiteManager instance
+            tracker: ImportTracker instance for tracking progress (optional)
+
+        Returns:
+            True if at least one supplementary lexicon was imported
+        """
+        from abba.lexicon_parser import parse_bdb_xml, parse_dodson_csv, parse_strongs_greek_xml
+
+        any_success = False
+
+        # BDB Hebrew Lexicon (requires both bdb.xml and lexical_index.xml)
+        bdb_path = self.stepbible_dir / "bdb.xml"
+        index_path = self.stepbible_dir / "lexical_index.xml"
+        if bdb_path.exists() and index_path.exists():
+            if self._import_supplementary_lexicon(
+                "bdb.xml", parse_bdb_xml, db_manager, tracker, (bdb_path, index_path)
+            ):
+                any_success = True
+        else:
+            logger.debug("BDB files not available (bdb.xml and/or lexical_index.xml missing)")
+
+        # Dodson Greek Lexicon
+        dodson_path = self.stepbible_dir / "dodson.csv"
+        if dodson_path.exists():
+            if self._import_supplementary_lexicon("dodson.csv", parse_dodson_csv, db_manager, tracker, (dodson_path,)):
+                any_success = True
+        else:
+            logger.debug("Dodson CSV not available")
+
+        # Strong's Greek Dictionary (CC0, morphgnt)
+        strongs_greek_path = self.stepbible_dir / "strongs_greek.xml"
+        if strongs_greek_path.exists():
+            if self._import_supplementary_lexicon(
+                "strongs_greek.xml", parse_strongs_greek_xml, db_manager, tracker, (strongs_greek_path,)
+            ):
+                any_success = True
+        else:
+            logger.debug("Strong's Greek XML not available")
+
+        return any_success
 
     def parse_stepbible_morphology(self, language: str, db_manager) -> bool:
         """Parse STEPBible morphology files and import into database.
@@ -339,7 +442,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             logger.error(f"✗ Failed to parse {language} morphology: {e}")
             return False
 
-    def parse_stepbible_text(self, filename: str, db_manager) -> bool:
+    def parse_stepbible_text(self, filename: str, db_manager) -> bool:  # noqa: C901
         """Parse STEPBible TAHOT/TAGNT text files and import word data.
 
         Args:
@@ -364,32 +467,44 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 content = f.read()
 
             # Parse word data - STEPBible format differs between Hebrew and Greek:
-            # Hebrew (TAHOT): Book.Chapter.Verse#WordNum=Source<TAB>HebrewText<TAB>Transliteration<TAB>Translation<TAB>StrongsRaw<TAB>Morphology<TAB>...<TAB>StrongsPrimary
-            # Greek (TAGNT): Book.Chapter.Verse#WordNum=Source<TAB>GreekText (transliteration)<TAB>EnglishGloss<TAB>Strongs=Morphology<TAB>LexiconEntry<TAB>...
+            # Hebrew (TAHOT): Book.Chapter.Verse#WordNum=Source<TAB>HebrewText<TAB>
+            #   Transliteration<TAB>Translation<TAB>StrongsRaw<TAB>Morphology<TAB>...<TAB>StrongsPrimary
+            # Greek (TAGNT): Book.Chapter.Verse#WordNum=Source<TAB>GreekText (transliteration)<TAB>
+            #   EnglishGloss<TAB>Strongs=Morphology<TAB>LexiconEntry<TAB>...
             words_added = 0
             lines = content.split("\n")
-            
+
             # Count non-empty, non-comment lines for progress
-            data_lines = [l for l in lines if l.strip() and not l.strip().startswith(("#", "=", "TAHOT", "TAGNT", "FIELD"))]
-            
+            data_lines = [
+                text_line
+                for text_line in lines
+                if text_line.strip() and not text_line.strip().startswith(("#", "=", "TAHOT", "TAGNT", "FIELD"))
+            ]
+
             # Show progress if not in quiet mode
             show_progress = self.config and self.config.should_show_output()
             if show_progress:
                 logger.info(f"  Processing {filename}: {len(data_lines):,} data lines...")
-            
+
             # Process with progress bar
             line_iterator = tqdm(lines, desc=f"    Parsing {filename}", disable=not show_progress, unit="lines")
-            
+
             for _line_num, line in enumerate(line_iterator, 1):
                 line = line.strip()
                 if not line:
                     continue
-                    
+
                 # Skip header lines and comments
-                if (line.startswith("#") or line.startswith("=") or 
-                    line.startswith("TAHOT") or line.startswith("TAGNT") or
-                    "STEPBible.org" in line or "Data created by" in line or
-                    line.startswith("FIELD DESCRIPTIONS") or "licence allows" in line):
+                if (
+                    line.startswith("#")
+                    or line.startswith("=")
+                    or line.startswith("TAHOT")
+                    or line.startswith("TAGNT")
+                    or "STEPBible.org" in line
+                    or "Data created by" in line
+                    or line.startswith("FIELD DESCRIPTIONS")
+                    or "licence allows" in line
+                ):
                     continue
 
                 # Parse data lines that match pattern: Book.Chapter.Verse#WordNum=Source
@@ -404,20 +519,20 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                         ref_part = parts[0]
                         if "=" not in ref_part:
                             continue
-                            
+
                         ref_no_source = ref_part.split("=")[0]  # Remove =L part
-                        
+
                         # Extract book.chapter.verse#word
                         if "#" not in ref_no_source:
                             continue
-                            
+
                         verse_ref, word_num_str = ref_no_source.split("#")
-                        
+
                         # Parse book.chapter.verse
                         ref_parts = verse_ref.split(".")
                         if len(ref_parts) < 3:
                             continue
-                            
+
                         book = ref_parts[0]
                         chapter = int(ref_parts[1])
                         verse = int(ref_parts[2])
@@ -431,11 +546,11 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                             # 2: English gloss ([The] book)
                             # 3: Strong's + morphology (G0976=N-NSF)
                             # 4: Lexicon entry (βίβλος=book)
-                            
+
                             greek_with_trans = parts[1] if len(parts) > 1 else ""
                             english_gloss = parts[2] if len(parts) > 2 else ""
                             strongs_morph = parts[3] if len(parts) > 3 else ""
-                            
+
                             # Extract Greek text and transliteration
                             if "(" in greek_with_trans and ")" in greek_with_trans:
                                 greek_text = greek_with_trans.split("(")[0].strip()
@@ -443,7 +558,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                             else:
                                 greek_text = greek_with_trans
                                 transliteration = ""
-                            
+
                             # Extract Strong's number from format like "G0976=N-NSF"
                             if "=" in strongs_morph:
                                 strongs_primary = strongs_morph.split("=")[0]
@@ -451,12 +566,12 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                             else:
                                 strongs_primary = strongs_morph
                                 morphology_code = ""
-                            
+
                             # Use English gloss as translation
                             translation = english_gloss
                             hebrew_text = ""
                             strongs_raw = strongs_morph
-                            
+
                         else:
                             # Hebrew format (TAHOT) - existing logic
                             hebrew_text = parts[1] if len(parts) > 1 else ""
@@ -469,10 +584,11 @@ and Koine Greek biblical texts, designed to support biblical language study and 
 
                         # Clean up the Hebrew/Greek text (remove pointing markers, etc.)
                         if hebrew_text:
-                            # Remove common STEPBible markers like / and \ 
+                            # Remove common STEPBible markers like / and \
                             hebrew_text = hebrew_text.replace("/", "").replace("\\", "")
-                            # Remove trailing punctuation markers
-                            hebrew_text = hebrew_text.rstrip("׃־֑֖֥֣֖֑֣֥֛֢֣֤֥֦֧֪֭֮֔֔֗֙֜֝֞֟֠֡֨֩֫֬֯")
+                            # Remove trailing punctuation/cantillation markers (each char individually)
+                            _hebrew_marks = "׃־֑֖֥֣֖֑֣֥֛֢֣֤֥֦֧֪֭֮֔֔֗֙֜֝֞֟֠֡֨֩֫֬֯"
+                            hebrew_text = hebrew_text.rstrip(_hebrew_marks)  # noqa: B005
 
                         # Extract primary Strong's number
                         if strongs_primary:
@@ -509,7 +625,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                         db_manager.insert_word(word_data)
                         words_added += 1
 
-                    except (ValueError, IndexError) as e:
+                    except (ValueError, IndexError):
                         # Skip lines that don't parse correctly (likely headers or metadata)
                         continue
                     except Exception as e:
@@ -517,9 +633,9 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                         continue
 
             # Close progress bar if it exists
-            if 'line_iterator' in locals() and hasattr(line_iterator, 'close'):
+            if "line_iterator" in locals() and hasattr(line_iterator, "close"):
                 line_iterator.close()
-                
+
             logger.info(f"✓ Imported {words_added:,} words from {filename}")
             return True
 
@@ -527,7 +643,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             logger.error(f"✗ Failed to parse {filename}: {e}")
             return False
 
-    def import_stepbible_data(self, db_manager, tracker=None, force_reimport=False) -> bool:
+    def import_stepbible_data(self, db_manager, tracker=None, force_reimport=False) -> bool:  # noqa: C901
         """Import all STEPBible data into the database.
 
         Args:
@@ -547,9 +663,15 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                     cursor.execute("DELETE FROM lexicon")
                     cursor.execute("DELETE FROM morphology")
                     cursor.execute("DELETE FROM stepbible_validation")  # Clear validation history
+                    # Clear supplementary lexicon definitions if table exists
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='lexicon_definitions'"
+                    )
+                    if cursor.fetchone()[0] > 0:
+                        cursor.execute("DELETE FROM lexicon_definitions")
                     conn.commit()
                 logger.info("Cleared existing STEPBible data for re-import")
-                
+
                 # Clear tracking for STEPBible files
                 if tracker:
                     tracker.clear_stepbible_tracking()
@@ -557,7 +679,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             except Exception as e:
                 logger.error(f"Error clearing STEPBible data: {e}")
                 return False
-        
+
         if not self.stepbible_dir.exists():
             logger.warning("STEPBible data directory not found")
             return False
@@ -567,6 +689,9 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             all_files = [
                 ("lexicon", "tbesh.txt"),
                 ("lexicon", "tbesg.txt"),
+                ("lexicon", "bdb.xml"),
+                ("lexicon", "dodson.csv"),
+                ("lexicon", "strongs_greek.xml"),
                 ("morphology", "tehmc.txt"),
                 ("morphology", "tegmc.txt"),
                 ("tahot", "tahot_gen_deu.txt"),
@@ -576,58 +701,58 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 ("tagnt", "tagnt_mat_jhn.txt"),
                 ("tagnt", "tagnt_act_rev.txt"),
             ]
-            
+
             all_imported = all(
-                tracker.is_stepbible_file_imported(file_type, filename)
-                for file_type, filename in all_files
+                tracker.is_stepbible_file_imported(file_type, filename) for file_type, filename in all_files
             )
-            
+
             if all_imported:
                 logger.debug("All STEPBible files already imported - nothing to do")
                 return True
 
         logger.info("Importing STEPBible data into database...")
-        
+
         if self.config and self.config.get_parallel_workers() > 1:
             logger.debug(f"Using parallel processing with {self.config.get_parallel_workers()} workers")
         else:
             logger.debug("Using sequential processing")
 
-        # Parse lexicons
+        # Parse lexicons (OpenScriptures Hebrew + Abbott-Smith Greek)
         lexicon_files = [
-            ("lexicon", "tbesh.txt"),  # Hebrew lexicon
-            ("lexicon", "tbesg.txt"),  # Greek lexicon
+            ("lexicon", "hebrew_strongs.xml"),
+            ("lexicon", "abbott_smith.xml"),
         ]
-        
+
         for file_type, filename in lexicon_files:
             if tracker and tracker.is_stepbible_file_imported(file_type, filename):
                 logger.debug(f"  Skipping {filename} - already imported")
                 continue
-                
-            if filename.startswith("tbesh"):
-                success = self.parse_stepbible_lexicon("hebrew", db_manager)
-            else:
-                success = self.parse_stepbible_lexicon("greek", db_manager)
-                
+
+            language = "hebrew" if "hebrew" in filename else "greek"
+            success = self.parse_lexicon(language, db_manager)
+
             if success and tracker:
                 tracker.mark_stepbible_file_imported(file_type, filename)
+
+        # Parse supplementary lexicons (BDB Hebrew, Dodson Greek)
+        self.parse_supplementary_lexicons(db_manager, tracker)
 
         # Parse morphology
         morph_files = [
             ("morphology", "tehmc.txt"),  # Hebrew morphology
             ("morphology", "tegmc.txt"),  # Greek morphology
         ]
-        
+
         for file_type, filename in morph_files:
             if tracker and tracker.is_stepbible_file_imported(file_type, filename):
                 logger.debug(f"  Skipping {filename} - already imported")
                 continue
-                
+
             if filename.startswith("teh"):
                 self.parse_stepbible_morphology("hebrew", db_manager)
             else:
                 self.parse_stepbible_morphology("greek", db_manager)
-                
+
             if tracker:
                 tracker.mark_stepbible_file_imported(file_type, filename)
 
@@ -651,22 +776,20 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             use_parallel = True
             if self.config:
                 use_parallel = self.config.get_parallel_workers() > 1
-            
+
             if use_parallel:
                 # Use parallel STEPBible importer
-                if not hasattr(self, 'parallel_stepbible'):
+                if self.parallel_stepbible is None:
                     self.parallel_stepbible = ParallelStepBibleImporter(
                         stepbible_dir=self.stepbible_dir,
                         dest_db_path=db_manager.db_path,
-                        max_workers=self.config.get_parallel_workers() if self.config else None
+                        max_workers=self.config.get_parallel_workers() if self.config else None,
                     )
-                
-                success, word_count = self.parallel_stepbible.parse_file_parallel(
-                    text_file,
-                    file_type,
-                    show_progress=self.config and self.config.should_show_output()
+
+                success, _word_count = self.parallel_stepbible.parse_file_parallel(
+                    text_file, file_type, show_progress=self.config and self.config.should_show_output()
                 )
-                
+
                 if success:
                     text_success_count += 1
                     if tracker:
@@ -680,18 +803,18 @@ and Koine Greek biblical texts, designed to support biblical language study and 
 
         # Consider success if we imported at least some files
         # Count already-imported files as successful
-        total_expected = len(lexicon_files) + len(morph_files) + len(text_files)
+        _total_expected = len(lexicon_files) + len(morph_files) + len(text_files)  # noqa: F841
         imported_count = 0
-        
+
         if tracker:
             summary = tracker.get_import_summary()
             for file_type in ["lexicon", "morphology", "tahot", "tagnt"]:
                 imported_count += summary["stepbible_files"].get(file_type, 0)
-        
+
         success = imported_count > 0 or text_success_count > 0
 
         if success:
-            logger.info(f"✓ STEPBible import complete")
+            logger.info("✓ STEPBible import complete")
         else:
             logger.error("✗ STEPBible import failed")
 
@@ -726,7 +849,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             logger.error(f"Error listing translations: {e}")
             return []
 
-    def extract_translation(self, translation_id: str) -> bool:
+    def extract_translation(self, translation_id: str) -> bool:  # noqa: C901
         """Extract a single translation to JSON format."""
         if not self.db_path.exists():
             logger.error("bible.db not found. Please download it first.")
@@ -834,7 +957,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
             logger.error(f"✗ Failed to extract {translation_id}: {e}")
             return False
 
-    def import_translation_to_db(self, translation_id: str, db_manager) -> bool:
+    def import_translation_to_db(self, translation_id: str, db_manager) -> bool:  # noqa: C901
         """Import a translation directly into the ABBA database.
 
         Args:
@@ -867,7 +990,7 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 logger.error(f"Translation {translation_id} not found")
                 return False
 
-            name, english_name, language = result
+            _, _, _ = result
 
             # Get all books for this translation
             cursor.execute(
@@ -990,20 +1113,17 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 success_count += 1
 
         logger.info(f"\n✓ Successfully extracted {success_count}/{len(translations)} translations")
-    
+
     def extract_translations_to_db_parallel(
-        self, 
-        db_manager,
-        translation_ids: Optional[List[str]] = None,
-        use_parallel: bool = True
+        self, db_manager, translation_ids: Optional[List[str]] = None, use_parallel: bool = True
     ) -> Dict[str, ImportResult]:
         """Extract translations directly to ABBA database using parallel processing.
-        
+
         Args:
             db_manager: SQLiteManager for destination database
             translation_ids: List of translation IDs to import (None for all)
             use_parallel: Whether to use parallel processing
-            
+
         Returns:
             Dictionary mapping translation_id to ImportResult
         """
@@ -1011,62 +1131,56 @@ and Koine Greek biblical texts, designed to support biblical language study and 
         if translation_ids is None:
             translations = self.list_translations()
             translation_ids = [t["id"] for t in translations]
-        
+
         if not translation_ids:
             logger.warning("No translations to import")
             return {}
-        
+
         # Initialize parallel importer if needed
         if self.parallel_importer is None:
             self.parallel_importer = ParallelImporter(
                 source_db_path=self.db_path,
                 dest_db_path=db_manager.db_path,
                 operation_manager=self.operation_manager,
-                max_workers=self.config.get_parallel_workers() if self.config else None
+                max_workers=self.config.get_parallel_workers() if self.config else None,
             )
-        
+
+        assert self.parallel_importer is not None
+
         # Determine if we should show progress (not in quiet mode)
         show_progress = True
         if self.config:
             show_progress = self.config.should_show_output()
-        
+
         if not use_parallel or (self.config and self.config.parallel_workers == 1):
             # Sequential import - still use the parallel importer for consistency
             # It will detect single translation and show detailed progress
-            return self.parallel_importer.import_translations_parallel(
-                translation_ids=translation_ids,
-                use_processes=False,
-                batch_size=1000,
-                show_progress=show_progress
+            return self.parallel_importer.import_translations_parallel(  # type: ignore[no-any-return]
+                translation_ids=translation_ids, use_processes=False, batch_size=1000, show_progress=show_progress
             )
-        
+
         # Determine best parallelism type based on task
         # Database import is I/O bound - use threads
         use_processes = False
-        if self.config and hasattr(self.config, 'use_threads_for_io_bound'):
+        if self.config and hasattr(self.config, "use_threads_for_io_bound"):
             use_processes = not self.config.use_threads_for_io_bound
-        
+
         # Run parallel import (messages are printed in main.py)
-        return self.parallel_importer.import_translations_parallel(
-            translation_ids=translation_ids,
-            use_processes=use_processes,
-            batch_size=1000,
-            show_progress=show_progress
+        return self.parallel_importer.import_translations_parallel(  # type: ignore[no-any-return]
+            translation_ids=translation_ids, use_processes=use_processes, batch_size=1000, show_progress=show_progress
         )
-    
-    def verify_import_parallel(
-        self,
-        db_manager,
-        translation_ids: Optional[List[str]] = None
+
+    def verify_import_parallel(  # noqa: C901
+        self, db_manager, translation_ids: Optional[List[str]] = None
     ) -> Dict[str, bool]:
         """Verify imported translations using parallel hash validation.
-        
+
         This is CPU-bound so we use processes.
-        
+
         Args:
             db_manager: SQLiteManager for destination database
             translation_ids: List of translation IDs to verify (None for all)
-            
+
         Returns:
             Dictionary mapping translation_id to verification status
         """
@@ -1075,60 +1189,52 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                 cursor = conn.cursor()
                 cursor.execute("SELECT DISTINCT translation_id FROM verses")
                 translation_ids = [row[0] for row in cursor.fetchall()]
-        
+
         if not translation_ids:
             logger.warning("No translations to verify")
             return {}
-        
+
         # Get worker count
         num_workers = self.config.get_parallel_workers() if self.config else multiprocessing.cpu_count()
-        
+
         # Verification is CPU-bound (hashing) - use processes
         use_processes = True
-        if self.config and hasattr(self.config, 'use_processes_for_cpu_bound'):
+        if self.config and hasattr(self.config, "use_processes_for_cpu_bound"):
             use_processes = self.config.use_processes_for_cpu_bound
-        
+
         logger.info(f"Verifying {len(translation_ids)} translations...")
         logger.info(f"Using {num_workers} {'processes' if use_processes else 'threads'} (CPU bound task)")
-        
+
         results = {}
-        
+
         if num_workers == 1 or not use_processes:
             # Sequential verification
             with tqdm(total=len(translation_ids), desc="Verifying translations", unit="translations") as pbar:
                 valid_count = 0
                 for tid in translation_ids:
                     is_valid, message = self.hash_validator.quick_validate(
-                        str(self.db_path),
-                        str(db_manager.db_path),
-                        tid
+                        str(self.db_path), str(db_manager.db_path), tid
                     )
                     results[tid] = is_valid
                     if is_valid:
                         valid_count += 1
                     else:
                         pbar.write(f"✗ {tid}: {message}")
-                    pbar.set_postfix({
-                        'valid': valid_count,
-                        'invalid': len(results) - valid_count
-                    })
+                    pbar.set_postfix({"valid": valid_count, "invalid": len(results) - valid_count})
                     pbar.update(1)
         else:
             # Parallel verification using processes
             from concurrent.futures import ProcessPoolExecutor
-            
+
             with ProcessPoolExecutor(max_workers=num_workers) as executor:
                 # Submit all verification jobs
                 future_to_tid = {
                     executor.submit(
-                        HashValidator().quick_validate,
-                        str(self.db_path),
-                        str(db_manager.db_path),
-                        tid
+                        HashValidator().quick_validate, str(self.db_path), str(db_manager.db_path), tid
                     ): tid
                     for tid in translation_ids
                 }
-                
+
                 # Process results
                 with tqdm(total=len(translation_ids), desc="Verifying translations", unit="translations") as pbar:
                     valid_count = 0
@@ -1141,19 +1247,16 @@ and Koine Greek biblical texts, designed to support biblical language study and 
                                 valid_count += 1
                             else:
                                 pbar.write(f"✗ {tid}: {message}")
-                            pbar.set_postfix({
-                                'valid': valid_count,
-                                'invalid': len(results) - valid_count
-                            })
+                            pbar.set_postfix({"valid": valid_count, "invalid": len(results) - valid_count})
                         except Exception as e:
                             results[tid] = False
                             pbar.write(f"✗ {tid}: Error - {e}")
                         pbar.update(1)
-        
+
         # Summary
         valid_count = sum(1 for v in results.values() if v)
         logger.info(f"\n✓ Verification complete: {valid_count}/{len(results)} translations valid")
-        
+
         return results
 
 

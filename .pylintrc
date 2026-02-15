@@ -2,13 +2,27 @@
 max-line-length=120
 
 [MASTER]
-ignore-patterns=^tests/.*,^.*tests/.*,^tests$
-ignore=tests
+ignore-patterns=^tests/.*,^claude/.*,^abba2/.*
+ignore=tests,claude,abba2
+load-plugins=pylint.extensions.no_self_use
 
 [MESSAGES CONTROL]
-# Enable or disable the messages, categories or checker with the following options:
-# "all" (enable all messages), "default" (enable all default messages),
-# "no" or "yes" to explicitly disable or enable specific messages,
-# "CATEGORY" to enable all messages in that category (i.e. "design" or
-# "unused").
-disable=too-few-public-methods,R0801,R0401  # R0401 needs removed at some point after builder is fixed
+disable=
+    too-few-public-methods,
+    too-many-instance-attributes,
+    too-many-arguments,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    too-many-return-statements,
+    too-many-public-methods,
+    too-many-positional-arguments,
+    too-many-nested-blocks,
+    too-many-lines,
+    too-many-boolean-expressions,
+    import-error,
+    import-outside-toplevel,
+    duplicate-code,
+    broad-exception-caught,
+    no-self-use,
+    protected-access

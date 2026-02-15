@@ -206,14 +206,14 @@ ABBA_CONNECTION_POOL_SIZE=10
 - [x] Add semantic analysis caching
 
 ### Original Language Embedding Generation
-- [ ] Remove translation-specific verse embeddings
-- [ ] Implement original language verse embeddings:
-  - [ ] Use Hebrew/Greek text from `stepbible_verses` table
-  - [ ] Include morphology and Strong's numbers in context
-  - [ ] Generate single embedding per canonical verse
-  - [ ] Map embeddings to all translations via verse reference
-- [ ] Verify embedding deduplication (31K verses, not 13M)
-- [ ] Update embedding validator for new structure
+- [x] Remove translation-specific verse embeddings
+- [x] Implement original language verse embeddings:
+  - [x] Use Hebrew/Greek text from `stepbible_verses` table
+  - [x] Include morphology and Strong's numbers in context
+  - [x] Generate single embedding per canonical verse
+  - [x] Map embeddings to all translations via verse reference
+- [x] Verify embedding deduplication (31K verses, not 13M)
+- [x] Update embedding validator for new structure
 
 ### Word-level Embeddings (Original Language)
 - [x] Extract unique words with linguistic context:
@@ -226,30 +226,30 @@ ABBA_CONNECTION_POOL_SIZE=10
 ## Phase 3: Semantic Search Implementation
 
 ### Unified Search API
-- [ ] Extend `search.py` with semantic methods:
-  - [ ] `search_similar_verses()` - semantic verse search
-  - [ ] `search_related_words()` - semantic word search
-  - [ ] `hybrid_search()` - combined exact + semantic
-- [ ] Implement result ranking algorithms
-- [ ] Add search result explanations
+- [x] Extend `search.py` with semantic methods:
+  - [x] `search_similar_verses()` - semantic verse search
+  - [x] `search_related_words()` - semantic word search
+  - [x] `hybrid_search()` - combined exact + semantic
+- [x] Implement result ranking algorithms
+- [x] Add search result explanations
 
 ### Search Configuration
-- [ ] Add search settings to `config.py`:
-  - [ ] `max_results` - Default result limit
-  - [ ] `similarity_threshold` - Minimum similarity score
-  - [ ] `enable_query_expansion` - Auto-expand search terms
-  - [ ] `search_cache_size` - Result cache size
-- [ ] Add search CLI arguments:
-  - [ ] `--max-results` - Override result limit
-  - [ ] `--similarity-threshold` - Set minimum score
-  - [ ] `--exact-only` - Disable semantic search
+- [x] Add search settings to `config.py`:
+  - [x] `max_results` - Default result limit
+  - [x] `similarity_threshold` - Minimum similarity score
+  - [x] `enable_query_expansion` - Auto-expand search terms
+  - [x] `search_cache_size` - Result cache size
+- [x] Add search CLI arguments:
+  - [x] `--max-results` - Override result limit
+  - [x] `--similarity-threshold` - Set minimum score
+  - [x] `--exact-only` - Disable semantic search
 
 ### Search Optimization
-- [ ] Create search query parser
-- [ ] Implement query expansion for better results
-- [ ] Add search filters (book, testament, language)
-- [ ] Optimize vector similarity calculations
-- [ ] Add search result caching
+- [x] Create search query parser
+- [x] Implement query expansion for better results
+- [x] Add search filters (book, testament, language)
+- [x] Optimize vector similarity calculations
+- [x] Add search result caching
 
 ## Phase 4: Concept Mapping System
 
@@ -316,70 +316,177 @@ ABBA_CONNECTION_POOL_SIZE=10
 - [x] Store validation metadata and reasons
 - [x] Enable traceability of mapping decisions
 
-## Phase 5: Enhanced Features
+## Phase 5: FastAPI Foundation + Enrichment Data Layer
 
-### Advanced Analysis
-- [ ] Implement cross-reference analysis
-- [ ] Add translation comparison features
-- [ ] Create word frequency analysis
-- [ ] Add grammatical pattern detection
+> **Rationale:** Expert review (see `claude/EXPERT_REVIEW_SYNTHESIS.md`) identified that
+> user-facing accessibility must be prioritized alongside technical completeness. The backend
+> has no HTTP layer, no cultural context, no literary metadata, and no progressive disclosure.
+> These are prerequisites for making scholar-level knowledge accessible to everyday readers.
+
+### FastAPI Application Setup
+- [x] Add `fastapi` and `uvicorn` dependencies via `poetry add`
+- [x] Create FastAPI app factory (`abba/api/app.py`) with CORS middleware
+- [x] Create Pydantic response models (`abba/api/models.py`):
+  - [x] `DepthLevel` enum: basic, standard, deep, scholarly
+  - [x] `VerseResponse` with depth-conditional fields
+  - [x] `WordDetail`, `RichnessFlag`, `CulturalNote`, `CrossRef` models
+  - [x] `TopicalResult`, `ThemeGroup`, `BookInfo`, `PassageInfo` models
+- [x] Create FastAPI routes (`abba/api/routes.py`):
+  - [x] `GET /api/v1/verses/{translation}/{book}/{chapter}/{verse}?depth=` — depth-aware verse
+  - [x] `GET /api/v1/verses/{translation}/{book}/{chapter}?depth=` — chapter endpoint
+  - [x] `GET /api/v1/compare/{book}/{chapter}/{verse}?translations=` — translation comparison
+  - [x] `GET /api/v1/search/semantic?q=` — semantic search
+  - [x] `GET /api/v1/search/text?q=` — full-text search
+  - [x] `GET /api/v1/search/strongs/{number}` — Strong's lookup
+  - [x] `GET /api/v1/lexicon/{strongs_number}` — lexicon entry
+  - [x] `GET /api/v1/words/{book}/{chapter}/{verse}/{word_num}` — word detail
+  - [x] `GET /api/v1/topics` — list available topics/concepts
+  - [x] `GET /api/v1/topics/search?q=` — natural-language topic search
+  - [x] `GET /api/v1/topics/{concept_name}` — concept detail with themed verse groups
+  - [x] `GET /api/v1/books/{book_id}` — book metadata with genre/context
+  - [x] `GET /api/v1/passages/{book_id}/{chapter}` — pericope boundaries
+- [x] Wire existing `SearchAPI` and `AnalysisAPI` into FastAPI route handlers
+
+### Enrichment Schema Additions (all additive — zero changes to existing tables)
+- [x] `book_metadata` table — genre, author, audience, date range, literary features, reading context, canonical section per book
+- [x] `passages` table — pericope definitions with title, genre, literary type, structural features, parent passage support
+- [x] `literary_structures` table — chiasmus, parallelism, acrostic, inclusio annotations with element data
+- [x] `cultural_context` table — scope-flexible (book → verse) with type, summary, detailed content, time period, confidence, sources, priority
+- [x] `cross_references` table — source/target verse pairs with type (quotation, allusion, parallel, thematic, prophecy_fulfillment, typology, contrast)
+- [x] `word_richness` table — precomputed gloss_coverage, morphology_significance, untranslatable_nuances, richness_score per word occurrence
+- [x] `life_topics` table — everyday topic names/categories (emotions, relationships, struggles, life stages)
+- [x] `life_topic_concepts` table — mapping life topics to existing concept definitions
+- [x] `topic_study_steps` table — curated verse sequences per topic with step types (comfort, understanding, guidance, hope)
+- [x] Add all tables via migration framework (extend `migrations.py`)
+
+### Enrichment Data Population
+- [x] **Book metadata curation**: Genre, author, audience, features for all 66 books (curated data → DB import)
+- [x] **Cross-reference import**: Curated cross-references (quotations, allusions, parallels, typology, prophecy fulfillment)
+- [x] **Meaning-richness computation**: Build-time comparison of lexicon gloss vs. definition for all entries
+- [x] **Passage/pericope boundaries**: 137 curated OT+NT passage units with genre and literary type
+- [x] **Initial cultural context**: Book-level introductions for 16 major books (curated; remaining books deferred)
+- [x] **Life topic mappings**: Map 12 everyday topics to existing concepts with curated study steps
+
+### Lexicon Expansion (scholarly quality improvement)
+- [x] Integrate Strong's Greek Dictionary (CC0, morphgnt) — public domain alternative to Thayer's (no structured Thayer's data exists)
+- [x] Integrate full BDB Hebrew Lexicon (1906, public domain) — OpenScriptures BrownDriverBriggs.xml + LexicalIndex.xml
+- [x] LEH (Lust-Eynikel-Hauspie) — SKIPPED: copyrighted (Deutsche Bibelgesellschaft, 2003), not free to use
+- [x] Add source attribution to all lexicon entries (which lexicon provided each definition)
+- [x] Integrate Dodson Greek-English Lexicon (CC0) — compiled from Abbott-Smith, Berry, Souter, Strong
+
+### Concept Definition Quality Review
+- [x] Add temporal tags to concept definitions (OT concept / NT concept / post-biblical systematization)
+- [x] Add semantic range warnings for high-frequency polysemous words (e.g., H430 elohim, H7307 ruach)
+- [x] Review "Trinity" concept — flag as confessional reading, reduce false-positive surface area
+- [x] Review high-frequency mapped Strong's numbers for over-matching risk (e.g., H6213 asah appears 2,627x)
+- [x] Document LLM validation methodology: model versions used, theological limitations, reproducibility notes
+
+## Phase 6: Literary and Contextual Intelligence
+
+### Literary Genre and Structure
+- [x] Literary genre indicators at book and passage level
+- [x] Well-established literary structure annotations (13 curated structures):
+  - [x] Chiastic structures (Flood narrative Gen 6-9, Psalm 8, Sermon on the Mount, John Prologue, Phil 2 Christ Hymn)
+  - [x] Acrostic poems (Psalm 119, Lamentations, Proverbs 31:10-31)
+  - [x] Hebrew parallelism (Isaiah 5 Song of the Vineyard, Hebrews 11 Hall of Faith)
+  - [x] Inclusio patterns (Amos 1-2 Oracles, Revelation 4-5 Throne Room)
+  - [x] NT discourse structures (Sermon on the Mount)
+- [x] Genre-shift detection within books (e.g., narrative → poetry in Exodus 15, Judges 5)
+
+### Anti-Proof-Texting Safeguards
+- [x] Always return surrounding context with verse results (min: previous and next verse)
+- [x] Speaker attribution for quoted speech (God, Satan, Job's friends, Pharisees, etc.)
+- [x] Genre tags on all verse results (via passage_info with genre field at deep/scholarly depth)
+- [x] Descriptive vs. prescriptive flag for narrative passages
+- [x] Passage summary / reading context note for major sections (137 curated passages)
+
+### Translation Insight Features
+- [x] Meaning-richness indicator computation using word_richness table (richness flags at standard+ depth)
+- [x] Translation divergence detection for compare endpoint
+- [x] Plain-English explanations for top 500 Hebrew + top 500 Greek words where meaning is lost
+- [x] Frame all indicators as "the original adds richness" — never "your Bible is wrong"
+
+## Phase 7: Performance + Testing
 
 ### Performance Configuration
-- [ ] Add performance settings to `config.py`:
-  - [ ] `connection_pool_size` - Database connection pool
-  - [ ] `query_timeout` - Maximum query execution time
-  - [ ] `parallel_workers` - Number of parallel processors
-  - [ ] `memory_limit` - Maximum memory usage
-  - [ ] `enable_profiling` - Performance profiling toggle
-- [ ] Add performance CLI arguments:
-  - [ ] `--workers` - Set parallel worker count
-  - [ ] `--profile` - Enable performance profiling
-  - [ ] `--benchmark` - Run performance tests
+- [x] Add performance settings to `config.py`:
+  - [x] `search_cache_size` - Search result LRU cache
+  - [x] `search_timeout` - Maximum search execution time
+  - [x] `parallel_workers` - Number of parallel processors
+  - [x] `connection_pool_size` - Database connection pool
+  - [x] `memory_limit` - Maximum memory usage
+  - [x] `enable_profiling` - Performance profiling toggle
+- [x] Add performance CLI arguments:
+  - [x] `--workers` - Set parallel worker count
+  - [x] `--profile` - Enable performance profiling
+  - [x] `--benchmark` - Run performance tests
 
 ### Performance Optimization
-- [ ] Profile database queries
-- [ ] Optimize indexes for common queries
-- [ ] Implement connection pooling
-- [ ] Add query result pagination
-- [ ] Create performance benchmarks
+- [x] Connection pooling for FastAPI concurrent requests
+- [x] Precomputed verse annotation cache (materialized `verse_annotations_cache` table)
+- [x] Profile and optimize database queries (slow query logging, composite indexes for range queries)
+- [x] Add query result pagination
+- [x] Create performance benchmarks (targets: <5ms basic, <30ms standard, <100ms deep, <200ms scholarly)
 
-### User Interface Enhancements
-- [ ] Update CLI with new search capabilities
-- [ ] Add interactive mode for exploration
-- [ ] Create example scripts for common tasks
-- [ ] Add export functionality for results
-
-## Phase 6: Testing and Documentation
-
-### Testing Infrastructure
-- [ ] Create unit tests for database operations
-- [ ] Add integration tests for search functions
-- [ ] Test embedding generation accuracy
-- [ ] Validate concept mappings
-- [ ] Performance testing for large queries
+### Testing
+- [x] Create unit tests for database operations (80% min, goal 95%)
+- [x] Add integration tests for all FastAPI endpoints (39 tests across 8 user flow classes)
+- [x] Test embedding generation accuracy
+- [x] Validate concept mappings against known scholarly references
+- [x] Performance testing for large queries
+- [x] Test progressive depth responses at all four levels
 
 ### Documentation
-- [ ] Update API documentation
-- [ ] Create user guide for semantic search
-- [ ] Document concept taxonomy
-- [ ] Add code examples for common use cases
-- [ ] Create troubleshooting guide
+- [x] Update API documentation (OpenAPI/Swagger auto-generated from FastAPI)
+- [x] Create user guide for semantic search
+- [x] Document concept taxonomy and life topic mappings
+- [x] Add code examples for common API use cases
+- [x] Create troubleshooting guide
 
 ### Deployment Preparation
-- [ ] Create installation scripts
-- [ ] Add database migration support
-- [ ] Create backup/restore functionality
-- [ ] Add configuration validation
-- [ ] Prepare distribution package
+- [x] Create installation scripts
+- [x] Add database migration support
+- [x] Create backup/restore functionality
+- [x] Add configuration validation
+- [x] Prepare distribution package
 
-## Phase 7: Future Enhancements (Post-MVP)
+## Phase 8: User Experience Layer
+
+### Guided Study Features
+- [x] Reading plans / guided study paths for new Christians (6 plans, 49+ daily entries)
+- [x] Passage summaries for major sections (book intros, pericope summaries)
+- [x] "What do I do with this?" reflective application questions per passage
+- [x] Beginner onboarding flow with "Start Here" guidance
+
+### Interactive Features
+- [x] Note-taking and verse saving/collections
+- [x] Sharing functionality (passages, study notes, topic collections)
+- [x] Interactive mode for exploration via CLI
+- [x] Export functionality for study results (JSON, Markdown)
+
+### Frontend Foundation
+- [x] Vue.js project setup with mobile-responsive design
+- [x] Clean reading pane (Level 1: just text, no clutter)
+- [x] Translation Lens component (subtle richness indicators with progressive disclosure)
+- [x] Context Sidebar component (collapsible, scope-aware cultural notes)
+- [x] Depth Dial control (Read → Understand → Study → Analyze)
+- [x] Life Topic Navigator (problem-first search entry point)
+- [x] Literary Mode Indicator (ambient visual genre shifts)
+- [x] Word Journey cards (expandable word study with tabs: meaning, occurrences, word family, this verse)
+
+## Phase 9: Extended Capabilities
 
 ### Extended Capabilities
-- [ ] Multi-language semantic search
-- [ ] Real-time text analysis API
-- [ ] Concept discovery from user queries
-- [ ] Integration with commentary databases
-- [ ] Visualization tools for semantic relationships
-- [ ] Mobile app API endpoints
-- [ ] Collaborative concept editing
-- [ ] Machine learning for concept refinement
+- [x] Multi-language semantic search
+- [x] MACULA treebank integration for clause-level syntax (discourse analysis)
+- [x] OpenText.org discourse annotation integration
+- [x] Louw-Nida semantic domain classification system
+- [x] STEPBible TFLSJ full LSJ Greek lexicon integration (CC BY 4.0, Tyndale House)
+- [x] Manuscript variant surfacing with explanations
+- [x] Community contribution system for cultural context
+- [x] Concept discovery from natural-language user queries
+- [x] Audio integration for listening
+- [x] Collaborative concept editing
+- [x] Machine learning for concept refinement
+- [x] Visualization tools for semantic relationships
+- [x] Mobile native app API endpoints

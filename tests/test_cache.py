@@ -55,7 +55,7 @@ class TestQueryCache(unittest.TestCase):
         self.assertEqual(key1, key2)
         # Different args should produce different key
         self.assertNotEqual(key1, key3)
-        
+
         # Test that keys are actually different with different args
         key4 = self.cache._make_key("func", (1, "test"), {})
         key5 = self.cache._make_key("func", (1, "different"), {})
@@ -75,7 +75,7 @@ class TestQueryCache(unittest.TestCase):
         """Test removing expired entries."""
         # Add entries with different timestamps
         self.cache.set("keep", "value")
-        
+
         # Manually add an expired entry
         self.cache._cache["expire"] = ("old_value", time.time() - 10)
 
@@ -122,6 +122,7 @@ class TestCachedDecorator(unittest.TestCase):
 
     def test_decorator_methods(self):
         """Test decorator added methods."""
+
         @cached(self.cache)
         def test_func(x):
             return x * 2
@@ -155,10 +156,11 @@ class TestCachedAPIs(unittest.TestCase):
         mock_api = MagicMock()
         mock_api.get_verse.return_value = "Test verse"
         mock_api.search_strongs.return_value = ["Result 1", "Result 2"]
-        
+
         # Create a regular function for search_verses (not a MagicMock)
         def mock_search_verses(query):
             return ["Search result"]
+
         mock_api.search_verses = mock_search_verses
 
         # Create cached wrapper

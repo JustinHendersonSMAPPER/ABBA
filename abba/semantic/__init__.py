@@ -6,23 +6,14 @@ biblical concept searching based on lexicographic sources, enhanced with
 embedding-based semantic search and LLM validation.
 """
 
-from .strongs_concordance import (
-    StrongsConcordance,
-    ConceptDefinition,
-    ConcordanceMatch
-)
-
-from .semantic_concordance import (
-    SemanticConcordance,
-    SemanticMatch,
-    ValidationResult
-)
+from .semantic_concordance import SemanticConcordance, SemanticMatch, ValidationResult
+from .strongs_concordance import ConceptDefinition, ConcordanceMatch, StrongsConcordance
 
 __all__ = [
-    'StrongsConcordance',
-    'ConceptDefinition', 
-    'ConcordanceMatch',
-    'SemanticConcordance',
-    'SemanticMatch',
-    'ValidationResult'
+    "StrongsConcordance",
+    "ConceptDefinition",
+    "ConcordanceMatch",
+    "SemanticConcordance",
+    "SemanticMatch",
+    "ValidationResult",
 ]

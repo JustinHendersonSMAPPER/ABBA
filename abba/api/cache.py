@@ -73,9 +73,8 @@ class QueryCache:
             value, timestamp = self._cache[key]
             if time.time() - timestamp < self.ttl:
                 return value
-            else:
-                # Remove expired entry
-                del self._cache[key]
+            # Remove expired entry
+            del self._cache[key]
 
         return None
 
@@ -103,9 +102,7 @@ class QueryCache:
             return 0
 
         current_time = time.time()
-        expired_keys = [
-            key for key, (_, timestamp) in self._cache.items() if current_time - timestamp >= self.ttl
-        ]
+        expired_keys = [key for key, (_, timestamp) in self._cache.items() if current_time - timestamp >= self.ttl]
 
         for key in expired_keys:
             del self._cache[key]
@@ -146,14 +143,12 @@ def cached(cache_instance: Optional[QueryCache] = None):
             return result
 
         # Add cache management methods to wrapper
-        wrapper.clear_cache = lambda: cache_instance.clear() if cache_instance else None
-        wrapper.cache_info = (
-            lambda: {
-                "enabled": cache_instance.enabled if cache_instance else False,
-                "size": len(cache_instance._cache) if cache_instance else 0,
-                "ttl": cache_instance.ttl if cache_instance else 0,
-            }
-        )
+        wrapper.clear_cache = lambda: cache_instance.clear() if cache_instance else None  # type: ignore[attr-defined]
+        wrapper.cache_info = lambda: {  # type: ignore[attr-defined]
+            "enabled": cache_instance.enabled if cache_instance else False,
+            "size": len(cache_instance._cache) if cache_instance else 0,
+            "ttl": cache_instance.ttl if cache_instance else 0,
+        }
 
         return wrapper
 
@@ -175,26 +170,28 @@ class CachedSearchAPI:
         self._cache = cache
 
         # Define which methods should be cached
-        cached_methods = ['get_verse', 'search_strongs', 'get_word_analysis']
-        uncached_methods = ['search_verses']
-        
+        cached_methods = ["get_verse", "search_strongs", "get_word_analysis"]
+        uncached_methods = ["search_verses"]
+
         # Wrap methods that should be cached
         for method_name in cached_methods:
             if hasattr(self._api, method_name):
                 original_method = getattr(self._api, method_name)
                 cached_method = cached(cache)(original_method)
                 setattr(self, method_name, cached_method)
-        
+
         # Pass through methods that shouldn't be cached
         for method_name in uncached_methods:
             if hasattr(self._api, method_name):
                 setattr(self, method_name, getattr(self._api, method_name))
-        
+
         # Copy over other methods that might exist
         for attr_name in dir(self._api):
-            if (not attr_name.startswith('_') and 
-                not hasattr(self, attr_name) and
-                callable(getattr(self._api, attr_name))):
+            if (
+                not attr_name.startswith("_")
+                and not hasattr(self, attr_name)
+                and callable(getattr(self._api, attr_name))
+            ):
                 setattr(self, attr_name, getattr(self._api, attr_name))
 
 

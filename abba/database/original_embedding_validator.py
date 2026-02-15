@@ -6,11 +6,11 @@ Validates that embeddings in ChromaDB match the source data in SQLite,
 including hash validation and count verification.
 """
 
-import sqlite3
 import logging
-from pathlib import Path
-from typing import Dict, List, Any, Tuple
+import sqlite3
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import chromadb
 from chromadb.config import Settings
@@ -23,11 +23,12 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EmbeddingValidationResult:
     """Result of embedding validation check."""
+
     check_name: str
     passed: bool
     message: str
-    details: Dict[str, Any] = None
-    
+    details: Optional[Dict[str, Any]] = None
+
     @property
     def is_warning(self) -> bool:
         """Check if this is a warning result."""
@@ -36,10 +37,10 @@ class EmbeddingValidationResult:
 
 class OriginalEmbeddingValidator:
     """Validates original language embeddings against source data."""
-    
-    def __init__(self, db_path: Path, vector_path: Path = None, chroma_manager=None):
+
+    def __init__(self, db_path: Path, vector_path: Optional[Path] = None, chroma_manager=None):
         """Initialize validator.
-        
+
         Args:
             db_path: Path to SQLite database
             vector_path: Path to vector database directory (ignored if chroma_manager provided)
@@ -48,7 +49,7 @@ class OriginalEmbeddingValidator:
         self.db_path = db_path
         self.vector_path = vector_path
         self.hash_validator = HashValidator()
-        
+
         # Use existing ChromaManager or create new ChromaDB client
         if chroma_manager:
             self.chroma_client = chroma_manager.client
@@ -56,135 +57,150 @@ class OriginalEmbeddingValidator:
         else:
             # Initialize ChromaDB client
             self.chroma_client = chromadb.PersistentClient(
-                path=str(vector_path),
-                settings=Settings(anonymized_telemetry=False)
+                path=str(vector_path), settings=Settings(anonymized_telemetry=False)
             )
             self.using_external_manager = False
-    
+
     def validate_all(self) -> Tuple[List[EmbeddingValidationResult], bool]:
         """Run all validation checks.
-        
+
         Returns:
             Tuple of (results list, overall success boolean)
         """
         results = []
-        
+
         # Connect to SQLite
         with sqlite3.connect(self.db_path) as conn:
             # Check original verse embeddings
             results.extend(self._validate_original_verse_embeddings(conn))
-            
+
             # Check word embeddings (unchanged)
             results.extend(self._validate_word_embeddings(conn))
-            
+
             # Check for orphaned embeddings
             results.extend(self._validate_orphaned_embeddings(conn))
-            
+
             # Check embedding completeness
             results.extend(self._validate_completeness(conn))
-        
+
         # Determine overall success
         has_failures = any(not r.passed and not r.is_warning for r in results)
         success = not has_failures
-        
+
         return results, success
-    
+
     def _validate_original_verse_embeddings(self, conn: sqlite3.Connection) -> List[EmbeddingValidationResult]:
         """Validate original language verse embeddings."""
         results = []
-        
+
         try:
             # Get original verses collection
             verses_collection = self.chroma_client.get_collection("original_verses")
             collection_count = verses_collection.count()
-            
+
             # Count canonical verses in database
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT COUNT(DISTINCT book || ':' || chapter || ':' || verse) 
-                FROM stepbible_verses 
+            cursor.execute(
+                """
+                SELECT COUNT(DISTINCT book || ':' || chapter || ':' || verse)
+                FROM stepbible_verses
                 WHERE original_word IS NOT NULL AND original_word != ''
-            """)
+            """
+            )
             canonical_verse_count = cursor.fetchone()[0]
-            
+
             # Check count match
             if collection_count == 0:
-                results.append(EmbeddingValidationResult(
-                    check_name="original_verse_count",
-                    passed=False,
-                    message=f"No original verse embeddings found (expected {canonical_verse_count:,} canonical verses)",
-                    details={
-                        "expected": canonical_verse_count,
-                        "actual": 0
-                    }
-                ))
+                results.append(
+                    EmbeddingValidationResult(
+                        check_name="original_verse_count",
+                        passed=False,
+                        message=(
+                            f"No original verse embeddings found "
+                            f"(expected {canonical_verse_count:,} canonical verses)"
+                        ),
+                        details={"expected": canonical_verse_count, "actual": 0},
+                    )
+                )
             elif collection_count != canonical_verse_count:
-                results.append(EmbeddingValidationResult(
-                    check_name="original_verse_count_warning",
-                    passed=False,
-                    message=f"Original verse embedding count mismatch: {collection_count:,} embeddings vs {canonical_verse_count:,} canonical verses",
-                    details={
-                        "embeddings": collection_count,
-                        "canonical_verses": canonical_verse_count,
-                        "difference": abs(collection_count - canonical_verse_count)
-                    }
-                ))
+                results.append(
+                    EmbeddingValidationResult(
+                        check_name="original_verse_count_warning",
+                        passed=False,
+                        message=(
+                            f"Original verse embedding count mismatch: "
+                            f"{collection_count:,} embeddings vs {canonical_verse_count:,} canonical verses"
+                        ),
+                        details={
+                            "embeddings": collection_count,
+                            "canonical_verses": canonical_verse_count,
+                            "difference": abs(collection_count - canonical_verse_count),
+                        },
+                    )
+                )
             else:
-                results.append(EmbeddingValidationResult(
-                    check_name="original_verse_count",
-                    passed=True,
-                    message=f"Original verse embedding count matches: {collection_count:,} embeddings"
-                ))
-            
+                results.append(
+                    EmbeddingValidationResult(
+                        check_name="original_verse_count",
+                        passed=True,
+                        message=f"Original verse embedding count matches: {collection_count:,} embeddings",
+                    )
+                )
+
             # Sample validation with content
             if collection_count > 0:
                 results.extend(self._validate_original_verse_content(conn, verses_collection))
-            
-        except ValueError as e:
+
+        except ValueError:
             # Collection doesn't exist
-            results.append(EmbeddingValidationResult(
-                check_name="original_verse_embeddings",
-                passed=False,
-                message="Original verse embeddings collection does not exist"
-            ))
+            results.append(
+                EmbeddingValidationResult(
+                    check_name="original_verse_embeddings",
+                    passed=False,
+                    message="Original verse embeddings collection does not exist",
+                )
+            )
         except Exception as e:
-            results.append(EmbeddingValidationResult(
-                check_name="original_verse_embeddings",
-                passed=False,
-                message=f"Error validating original verse embeddings: {str(e)}"
-            ))
-        
+            results.append(
+                EmbeddingValidationResult(
+                    check_name="original_verse_embeddings",
+                    passed=False,
+                    message=f"Error validating original verse embeddings: {str(e)}",
+                )
+            )
+
         return results
-    
+
     def _validate_original_verse_content(self, conn: sqlite3.Connection, collection) -> List[EmbeddingValidationResult]:
         """Validate original verse content using sampling."""
-        results = []
-        
+        results: List[EmbeddingValidationResult] = []
+
         cursor = conn.cursor()
-        
+
         # Sample 100 random embeddings for validation
         try:
             sample_data = collection.get(limit=100)
-            
-            if not sample_data['ids']:
+
+            if not sample_data["ids"]:
                 return results
-            
+
             mismatches = 0
-            for i, embed_id in enumerate(sample_data['ids']):
-                metadata = sample_data['metadatas'][i]
-                
+            for i, embed_id in enumerate(sample_data["ids"]):
+                _metadata = sample_data["metadatas"][i]  # noqa: F841
+
                 # Parse ID to get verse reference
                 # ID format: "book_id:chapter:verse"
-                parts = embed_id.split(':')
+                parts = embed_id.split(":")
                 if len(parts) != 3:
                     mismatches += 1
                     continue
-                
+
                 book_id, chapter, verse = int(parts[0]), int(parts[1]), int(parts[2])
-                
+
                 # Get original text from database
                 # Need to convert book_id back to book name for query
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT GROUP_CONCAT(original_word, ' ') as text
                     FROM stepbible_verses sv
                     WHERE CASE sv.book
@@ -205,127 +221,147 @@ class OriginalEmbeddingValidator:
                         ELSE 0
                     END = ? AND sv.chapter = ? AND sv.verse = ?
                     GROUP BY sv.book, sv.chapter, sv.verse
-                """, (book_id, chapter, verse))
-                
+                """,
+                    (book_id, chapter, verse),
+                )
+
                 row = cursor.fetchone()
                 if not row:
                     mismatches += 1
                     continue
-                
+
                 # Basic validation that we have content
                 if not row[0]:
                     mismatches += 1
-            
+
             if mismatches > 0:
-                results.append(EmbeddingValidationResult(
-                    check_name="original_verse_content_validation",
-                    passed=False,
-                    message=f"Found {mismatches} content mismatches in sample of 100 embeddings",
-                    details={"mismatches": mismatches, "sample_size": 100}
-                ))
+                results.append(
+                    EmbeddingValidationResult(
+                        check_name="original_verse_content_validation",
+                        passed=False,
+                        message=f"Found {mismatches} content mismatches in sample of 100 embeddings",
+                        details={"mismatches": mismatches, "sample_size": 100},
+                    )
+                )
             else:
-                results.append(EmbeddingValidationResult(
-                    check_name="original_verse_content_validation",
-                    passed=True,
-                    message="Content validation passed for sampled embeddings"
-                ))
-                
+                results.append(
+                    EmbeddingValidationResult(
+                        check_name="original_verse_content_validation",
+                        passed=True,
+                        message="Content validation passed for sampled embeddings",
+                    )
+                )
+
         except Exception as e:
-            logger.error(f"Error during content validation: {str(e)}")
-        
+            logger.error("Error during content validation: %s", str(e))
+
         return results
-    
+
     def _validate_word_embeddings(self, conn: sqlite3.Connection) -> List[EmbeddingValidationResult]:
         """Validate word embeddings (unchanged from original)."""
         results = []
-        
+
         try:
             # Get words collection
             words_collection = self.chroma_client.get_collection("words")
             collection_count = words_collection.count()
-            
+
             # Count unique words in database
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(DISTINCT strongs_primary || '|' || COALESCE(morphology, ''))
                 FROM stepbible_verses
                 WHERE strongs_primary IS NOT NULL AND strongs_primary != ''
-            """)
+            """
+            )
             db_word_count = cursor.fetchone()[0]
-            
+
             # Check count match
             if collection_count == 0:
-                results.append(EmbeddingValidationResult(
-                    check_name="word_count",
-                    passed=False,
-                    message=f"No word embeddings found (expected ~{db_word_count:,} unique forms)",
-                    details={
-                        "expected": db_word_count,
-                        "actual": 0
-                    }
-                ))
+                results.append(
+                    EmbeddingValidationResult(
+                        check_name="word_count",
+                        passed=False,
+                        message=f"No word embeddings found (expected ~{db_word_count:,} unique forms)",
+                        details={"expected": db_word_count, "actual": 0},
+                    )
+                )
             elif abs(collection_count - db_word_count) > db_word_count * 0.1:  # Allow 10% variance
-                results.append(EmbeddingValidationResult(
-                    check_name="word_count_warning",
-                    passed=False,
-                    message=f"Word embedding count differs: {collection_count:,} embeddings vs ~{db_word_count:,} expected",
-                    details={
-                        "embeddings": collection_count,
-                        "expected": db_word_count,
-                        "variance": abs(collection_count - db_word_count) / db_word_count
-                    }
-                ))
+                results.append(
+                    EmbeddingValidationResult(
+                        check_name="word_count_warning",
+                        passed=False,
+                        message=(
+                            f"Word embedding count differs: "
+                            f"{collection_count:,} embeddings vs ~{db_word_count:,} expected"
+                        ),
+                        details={
+                            "embeddings": collection_count,
+                            "expected": db_word_count,
+                            "variance": abs(collection_count - db_word_count) / db_word_count,
+                        },
+                    )
+                )
             else:
-                results.append(EmbeddingValidationResult(
-                    check_name="word_count",
-                    passed=True,
-                    message=f"Word embedding count verified: {collection_count:,} embeddings"
-                ))
-            
+                results.append(
+                    EmbeddingValidationResult(
+                        check_name="word_count",
+                        passed=True,
+                        message=f"Word embedding count verified: {collection_count:,} embeddings",
+                    )
+                )
+
         except Exception as e:
-            results.append(EmbeddingValidationResult(
-                check_name="word_embeddings",
-                passed=False,
-                message=f"Error validating word embeddings: {str(e)}"
-            ))
-        
+            results.append(
+                EmbeddingValidationResult(
+                    check_name="word_embeddings", passed=False, message=f"Error validating word embeddings: {str(e)}"
+                )
+            )
+
         return results
-    
-    def _validate_orphaned_embeddings(self, conn: sqlite3.Connection) -> List[EmbeddingValidationResult]:
+
+    def _validate_orphaned_embeddings(self, _conn: sqlite3.Connection) -> List[EmbeddingValidationResult]:
         """Check for embeddings without corresponding source data."""
         results = []
-        
+
         # Check for old translation-specific verse embeddings
         try:
             old_verses_collection = self.chroma_client.get_collection("verses")
             if old_verses_collection.count() > 0:
-                results.append(EmbeddingValidationResult(
-                    check_name="legacy_embeddings_warning",
-                    passed=False,
-                    message=f"Found {old_verses_collection.count():,} legacy translation-specific embeddings that should be removed",
-                    details={"collection": "verses", "count": old_verses_collection.count()}
-                ))
-        except:
+                results.append(
+                    EmbeddingValidationResult(
+                        check_name="legacy_embeddings_warning",
+                        passed=False,
+                        message=(
+                            f"Found {old_verses_collection.count():,} legacy "
+                            "translation-specific embeddings that should be removed"
+                        ),
+                        details={"collection": "verses", "count": old_verses_collection.count()},
+                    )
+                )
+        except Exception:
             # Collection doesn't exist, which is good
             pass
-        
-        results.append(EmbeddingValidationResult(
-            check_name="orphaned_embeddings",
-            passed=True,
-            message="No orphaned embeddings detected"
-        ))
-        
+
+        results.append(
+            EmbeddingValidationResult(
+                check_name="orphaned_embeddings", passed=True, message="No orphaned embeddings detected"
+            )
+        )
+
         return results
-    
+
     def _validate_completeness(self, conn: sqlite3.Connection) -> List[EmbeddingValidationResult]:
         """Validate embedding completeness."""
         results = []
-        
+
         cursor = conn.cursor()
-        
+
         # Check for books without embeddings
-        cursor.execute("""
-            SELECT DISTINCT 
+        cursor.execute(
+            """
+            SELECT DISTINCT
                 CASE sv.book
                     WHEN 'Gen' THEN 1 WHEN 'Exo' THEN 2 WHEN 'Lev' THEN 3 WHEN 'Num' THEN 4 WHEN 'Deu' THEN 5
                     WHEN 'Jos' THEN 6 WHEN 'Jdg' THEN 7 WHEN 'Rut' THEN 8 WHEN '1Sa' THEN 9 WHEN '2Sa' THEN 10
@@ -346,87 +382,87 @@ class OriginalEmbeddingValidator:
             FROM stepbible_verses sv
             WHERE sv.original_word IS NOT NULL AND sv.original_word != ''
             ORDER BY book_id
-        """)
-        
+        """
+        )
+
         all_books = [row[0] for row in cursor.fetchall()]
-        
+
         try:
             verses_collection = self.chroma_client.get_collection("original_verses")
-            
+
             missing_books = []
             for book_id in all_books:
                 # Check if this book has embeddings
-                sample = verses_collection.get(
-                    where={"book_id": book_id},
-                    limit=1
-                )
-                
-                if not sample['ids']:
+                sample = verses_collection.get(where={"book_id": book_id}, limit=1)
+
+                if not sample["ids"]:
                     missing_books.append(book_id)
-            
+
             if missing_books:
-                results.append(EmbeddingValidationResult(
-                    check_name="book_completeness",
-                    passed=False,
-                    message=f"Found {len(missing_books)} books without embeddings",
-                    details={"missing_books": missing_books[:10]}  # Show first 10
-                ))
+                results.append(
+                    EmbeddingValidationResult(
+                        check_name="book_completeness",
+                        passed=False,
+                        message=f"Found {len(missing_books)} books without embeddings",
+                        details={"missing_books": missing_books[:10]},  # Show first 10
+                    )
+                )
             else:
-                results.append(EmbeddingValidationResult(
-                    check_name="book_completeness",
-                    passed=True,
-                    message="All books have embeddings"
-                ))
-                
+                results.append(
+                    EmbeddingValidationResult(
+                        check_name="book_completeness", passed=True, message="All books have embeddings"
+                    )
+                )
+
         except Exception as e:
-            logger.error(f"Error checking completeness: {str(e)}")
-        
+            logger.error("Error checking completeness: %s", str(e))
+
         return results
-    
-    def print_summary(self, results: List[EmbeddingValidationResult], success: bool):
+
+    def print_summary(self, results: List[EmbeddingValidationResult], success: bool):  # noqa: C901
         """Print validation summary.
-        
+
         Args:
             results: List of validation results
             success: Overall success status
         """
-        logger.info("\n" + "=" * 70)
+        logger.info("\n%s", "=" * 70)
         logger.info("ORIGINAL LANGUAGE EMBEDDING VALIDATION SUMMARY")
-        logger.info("=" * 70)
-        
+        logger.info("%s", "=" * 70)
+
         passed_count = sum(1 for r in results if r.passed)
         warning_count = sum(1 for r in results if not r.passed and r.is_warning)
         failed_count = sum(1 for r in results if not r.passed and not r.is_warning)
-        
-        logger.info(f"\nTotal checks: {len(results)}")
-        logger.info(f"Passed: {passed_count}")
-        logger.info(f"Failed: {failed_count}")
-        
+
+        logger.info("\nTotal checks: %d", len(results))
+        logger.info("Passed: %d", passed_count)
+        logger.info("Failed: %d", failed_count)
+
         if warning_count > 0:
-            logger.warning(f"\n⚠️  WARNINGS ({warning_count}):")
+            logger.warning("\nWARNINGS (%d):", warning_count)
             logger.warning("-" * 70)
             for result in results:
                 if not result.passed and result.is_warning:
-                    logger.warning(f"  {result.message}")
+                    logger.warning("  %s", result.message)
                     if result.details:
                         for key, value in result.details.items():
-                            logger.warning(f"    {key}: {value}")
-        
+                            logger.warning("    %s: %s", key, value)
+
         if failed_count > 0:
-            logger.error(f"\n❌ FAILURES ({failed_count}):")
+            logger.error("\nFAILURES (%d):", failed_count)
             logger.error("-" * 70)
             for result in results:
                 if not result.passed and not result.is_warning:
-                    logger.error(f"  {result.message}")
+                    logger.error("  %s", result.message)
                     if result.details:
                         for key, value in result.details.items():
-                            logger.error(f"    {key}: {value}")
-        
-        logger.info("\n" + "=" * 70)
-        
+                            logger.error("    %s: %s", key, value)
+
+        logger.info("\n%s", "=" * 70)
+
         if success:
-            logger.info("✅ ORIGINAL LANGUAGE EMBEDDING VALIDATION PASSED")
+            logger.info("ORIGINAL LANGUAGE EMBEDDING VALIDATION PASSED")
         else:
-            logger.error("❌ ORIGINAL LANGUAGE EMBEDDING VALIDATION FAILED")
-        
-        logger.info("=" * 70 + "\n")
+            logger.error("ORIGINAL LANGUAGE EMBEDDING VALIDATION FAILED")
+
+        logger.info("%s\n", "=" * 70)

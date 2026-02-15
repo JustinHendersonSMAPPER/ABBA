@@ -42,60 +42,100 @@ Examples:
 
         parser.add_argument("--force-download", action="store_true", help="Force download bible.db even if it exists")
 
+        parser.add_argument(
+            "--english-only",
+            action="store_true",
+            help="Use bible.eng.db (475 MB, English translations only) instead of bible.db (11.8 GB, all languages)",
+        )
+
         # Database options
         parser.add_argument("--db-path", type=Path, help="Override ABBA database location")
 
-        parser.add_argument("--rebuild-db", action="store_true", help="Rebuild database - remove and reimport all translations")
-        
-        parser.add_argument("--rebuild-stepbible", action="store_true", help="Rebuild STEPBible data - remove and reimport Hebrew/Greek texts")
-        
-        parser.add_argument("--rebuild-embeddings", action="store_true", help="Rebuild embeddings - remove and regenerate all embeddings")
+        parser.add_argument(
+            "--rebuild-db", action="store_true", help="Rebuild database - remove and reimport all translations"
+        )
 
-        parser.add_argument("--purge-all", action="store_true", help="Remove all data, databases, embeddings, and tracking files before starting (WARNING: This deletes everything!)")
+        parser.add_argument(
+            "--rebuild-stepbible",
+            action="store_true",
+            help="Rebuild STEPBible data - remove and reimport Hebrew/Greek texts",
+        )
+
+        parser.add_argument(
+            "--rebuild-embeddings",
+            action="store_true",
+            help="Rebuild embeddings - remove and regenerate all embeddings",
+        )
+
+        parser.add_argument(
+            "--purge-all",
+            action="store_true",
+            help=(
+                "Remove all data, databases, embeddings, and tracking files "
+                "before starting (WARNING: This deletes everything!)"
+            ),
+        )
 
         parser.add_argument("--no-cache", action="store_true", help="Disable query caching")
 
         # Embedding options
         parser.add_argument("--embed-verses", action="store_true", help="Generate embeddings for verses")
-        
+
         parser.add_argument("--embed-words", action="store_true", help="Generate embeddings for words")
-        
+
         parser.add_argument("--embed-all", action="store_true", help="Generate all embeddings (verses and words)")
-        
+
         parser.add_argument("--embedding-batch-size", type=int, default=100, help="Batch size for embedding generation")
-        
+
         # Ollama options
         parser.add_argument("--ollama-host", help="Override Ollama API endpoint (default: http://localhost:11434)")
-        
+
         parser.add_argument("--ollama-models", help="Comma-separated list of Ollama models for semantic analysis")
-        
+
         parser.add_argument("--ollama-consensus", type=float, help="Set consensus threshold for multi-model agreement")
-        
+
         # Concept mapping options
         parser.add_argument("--concepts-file", type=Path, help="Path to user-defined concepts YAML file")
-        
+
         parser.add_argument("--validate-concepts", action="store_true", help="Run LLM validation on concepts")
-        
-        parser.add_argument("--validate-concept-data", action="store_true", help="Validate Hebrew/Greek terms and Strong's numbers exist in databases")
-        
+
+        parser.add_argument(
+            "--validate-concept-data",
+            action="store_true",
+            help="Validate Hebrew/Greek terms and Strong's numbers exist in databases",
+        )
+
         parser.add_argument("--concept-report", action="store_true", help="Generate detailed concept validation report")
-        
-        parser.add_argument("--map-concepts", action="store_true", help="Map all concepts to verses using semantic concordance")
-        
+
+        parser.add_argument(
+            "--map-concepts", action="store_true", help="Map all concepts to verses using semantic concordance"
+        )
+
         parser.add_argument("--search-concept", help="Search for a specific biblical concept (e.g., love, faith)")
-        
+
         parser.add_argument("--export-concept-mappings", help="Export concept mappings to file (CSV or JSON)")
-        
+
         # Performance options
-        parser.add_argument("--parallel-workers", type=int, default=None, help="Number of parallel workers for import (default: auto-detect CPU count)")
-        
+        parser.add_argument(
+            "--parallel-workers",
+            type=int,
+            default=None,
+            help="Number of parallel workers for import (default: auto-detect CPU count)",
+        )
+
         parser.add_argument("--no-parallel", action="store_true", help="Disable parallel processing for imports")
-        
-        parser.add_argument("--use-processes", action="store_true", help="Use processes instead of threads for parallel import")
-        
+
+        parser.add_argument(
+            "--use-processes", action="store_true", help="Use processes instead of threads for parallel import"
+        )
+
         parser.add_argument("--verify", action="store_true", help="Verify imports using hash validation after import")
-        
-        parser.add_argument("--check-for-updates", action="store_true", help="Check for updates to STEPBible data and re-import if changed")
+
+        parser.add_argument(
+            "--check-for-updates",
+            action="store_true",
+            help="Check for updates to STEPBible data and re-import if changed",
+        )
 
         # Configuration
         parser.add_argument("--env-file", type=Path, help="Path to .env file (default: .env)")
@@ -103,22 +143,55 @@ Examples:
         parser.add_argument("--config-file", type=Path, help="Path to configuration file")
 
         # Output options
-        parser.add_argument("--verbose", "-v", action="store_true", 
-                          help="Enable verbose output (equivalent to --log-level DEBUG)")
-        
-        parser.add_argument("--log-level", 
-                          choices=["TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-                          default="INFO",
-                          help="Set logging level (default: INFO, --verbose sets DEBUG)")
-        
+        parser.add_argument(
+            "--verbose", "-v", action="store_true", help="Enable verbose output (equivalent to --log-level DEBUG)"
+        )
+
+        parser.add_argument(
+            "--log-level",
+            choices=["TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+            default="INFO",
+            help="Set logging level (default: INFO, --verbose sets DEBUG)",
+        )
+
         parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts (assume yes)")
+
+        # Search options
+        parser.add_argument("--max-results", type=int, help="Maximum number of search results (default: 50)")
+
+        parser.add_argument(
+            "--similarity-threshold", type=float, help="Minimum similarity score for semantic search (0.0-1.0)"
+        )
+
+        parser.add_argument(
+            "--exact-only", action="store_true", help="Disable semantic search, use only exact text match"
+        )
+
+        # Performance tuning options
+        parser.add_argument("--workers", type=int, help="Set number of parallel workers")
+
+        parser.add_argument("--profile", action="store_true", help="Enable performance profiling")
+
+        parser.add_argument("--benchmark", action="store_true", help="Run performance benchmarks and exit")
+
+        parser.add_argument("--memory-limit", type=int, help="Set memory limit in MB")
+
+        parser.add_argument("--pool-size", type=int, help="Database connection pool size")
+
+        # Server options
+        parser.add_argument("--serve", action="store_true", help="Start the ABBA API server (uvicorn)")
+
+        parser.add_argument("--host", default="127.0.0.1", help="API server bind address (default: 127.0.0.1)")
+
+        parser.add_argument("--port", type=int, default=8000, help="API server port (default: 8000)")
 
         return parser
 
     def parse_args(self, args: Optional[List[str]] = None) -> argparse.Namespace:
         """Parse command line arguments."""
         self.args = self.parser.parse_args(args)
-        return self.args
+        result: argparse.Namespace = self.args
+        return result
 
     def get_data_dir(self) -> Optional[Path]:
         """Get data directory from CLI args."""
@@ -147,15 +220,17 @@ Examples:
 
         if self.args.no_download:
             return False
-        elif self.args.force_download:
+        if self.args.force_download:
             return True
-        else:
-            return None  # Use default logic
+        return None  # Use default logic
 
     def is_verbose(self) -> bool:
         """Check if verbose mode is enabled."""
         return self.args.verbose if self.args else False
 
+    def is_english_only(self) -> bool:
+        """Check if english-only mode is enabled."""
+        return self.args.english_only if self.args else False
 
     def get_db_path(self) -> Optional[Path]:
         """Get database path from CLI args."""
@@ -164,11 +239,11 @@ Examples:
     def should_rebuild_db(self) -> bool:
         """Check if should rebuild database."""
         return self.args.rebuild_db if self.args else False
-    
+
     def should_rebuild_stepbible(self) -> bool:
         """Check if should rebuild STEPBible data."""
         return self.args.rebuild_stepbible if self.args else False
-    
+
     def should_rebuild_embeddings(self) -> bool:
         """Check if should rebuild embeddings."""
         return self.args.rebuild_embeddings if self.args else False
@@ -180,7 +255,7 @@ Examples:
     def skip_confirmations(self) -> bool:
         """Check if confirmation prompts should be skipped."""
         return self.args.yes if self.args else False
-    
+
     def should_check_for_updates(self) -> bool:
         """Check if should check for STEPBible data updates."""
         return self.args.check_for_updates if self.args else False
@@ -203,81 +278,132 @@ Examples:
         """Check if should generate all embeddings."""
         return self.args.embed_all if self.args else False
 
-
     def get_embedding_batch_size(self) -> int:
         """Get embedding batch size."""
         return self.args.embedding_batch_size if self.args else 100
-    
+
     def get_parallel_workers(self) -> Optional[int]:
         """Get number of parallel workers."""
-        if self.args and hasattr(self.args, 'parallel_workers'):
-            return self.args.parallel_workers
+        if self.args and hasattr(self.args, "parallel_workers"):
+            result: Optional[int] = self.args.parallel_workers
+            return result
         return None
-    
+
     def should_use_parallel(self) -> bool:
         """Check if parallel processing should be used."""
-        if self.args and hasattr(self.args, 'no_parallel'):
+        if self.args and hasattr(self.args, "no_parallel"):
             return not self.args.no_parallel
         return True  # Default to parallel
-    
+
     def should_use_processes(self) -> bool:
         """Check if processes should be used instead of threads."""
-        if self.args and hasattr(self.args, 'use_processes'):
-            return self.args.use_processes
+        if self.args and hasattr(self.args, "use_processes"):
+            result: bool = self.args.use_processes
+            return result
         return False  # Default to threads
-    
+
     def get_log_level(self) -> str:
         """Get logging level from CLI args, considering --verbose flag."""
         if not self.args:
             return "INFO"
-        
+
         # --verbose overrides --log-level
         if self.args.verbose:
             return "DEBUG"
-        else:
-            return self.args.log_level
-    
+        level: str = self.args.log_level
+        return level
+
     def get_ollama_host(self) -> Optional[str]:
         """Get Ollama host from CLI args."""
         return self.args.ollama_host if self.args else None
-    
+
     def get_ollama_models(self) -> Optional[List[str]]:
         """Get Ollama models list from CLI args."""
         if self.args and self.args.ollama_models:
-            return [model.strip() for model in self.args.ollama_models.split(',')]
+            return [model.strip() for model in self.args.ollama_models.split(",")]
         return None
-    
+
     def get_ollama_consensus(self) -> Optional[float]:
         """Get Ollama consensus threshold from CLI args."""
         return self.args.ollama_consensus if self.args else None
-    
+
     def get_concepts_file(self) -> Optional[Path]:
         """Get concepts file path from CLI args."""
         return self.args.concepts_file if self.args else None
-    
+
     def should_validate_concepts(self) -> bool:
         """Check if should validate concepts."""
         return self.args.validate_concepts if self.args else False
-    
+
     def should_validate_concept_data(self) -> bool:
         """Check if should validate concept data against databases."""
         return self.args.validate_concept_data if self.args else False
-    
+
     def get_search_concept(self) -> Optional[str]:
         """Get concept to search for."""
         return self.args.search_concept if self.args else None
-    
+
     def get_export_concept_mappings(self) -> Optional[str]:
         """Get export file path for concept mappings."""
         return self.args.export_concept_mappings if self.args else None
-    
+
     def should_generate_concept_report(self) -> bool:
         """Check if should generate concept report."""
         return self.args.concept_report if self.args else False
-    
+
     def should_map_concepts(self) -> bool:
         """Check if should map concepts to verses."""
         return self.args.map_concepts if self.args else False
+
+    def get_max_results(self) -> Optional[int]:
+        """Get max results override from CLI args."""
+        if self.args and hasattr(self.args, "max_results"):
+            result: Optional[int] = self.args.max_results
+            return result
+        return None
+
+    def get_similarity_threshold(self) -> Optional[float]:
+        """Get similarity threshold override from CLI args."""
+        if self.args and hasattr(self.args, "similarity_threshold"):
+            result: Optional[float] = self.args.similarity_threshold
+            return result
+        return None
+
+    def is_exact_only(self) -> bool:
+        """Check if exact-only search mode is requested."""
+        return self.args.exact_only if self.args and hasattr(self.args, "exact_only") else False
+
+    def get_workers(self) -> Optional[int]:
+        """Get worker count override from CLI args."""
+        return self.args.workers if self.args and hasattr(self.args, "workers") else None
+
+    def should_profile(self) -> bool:
+        """Check if profiling should be enabled."""
+        return self.args.profile if self.args and hasattr(self.args, "profile") else False
+
+    def should_benchmark(self) -> bool:
+        """Check if benchmarks should be run."""
+        return self.args.benchmark if self.args and hasattr(self.args, "benchmark") else False
+
+    def get_memory_limit(self) -> Optional[int]:
+        """Get memory limit in MB from CLI args."""
+        return self.args.memory_limit if self.args and hasattr(self.args, "memory_limit") else None
+
+    def get_pool_size(self) -> Optional[int]:
+        """Get connection pool size override from CLI args."""
+        return self.args.pool_size if self.args and hasattr(self.args, "pool_size") else None
+
+    def should_serve(self) -> bool:
+        """Check if should start the API server."""
+        return self.args.serve if self.args else False
+
+    def get_host(self) -> str:
+        """Get the API server host."""
+        return self.args.host if self.args else "127.0.0.1"
+
+    def get_port(self) -> int:
+        """Get the API server port."""
+        return self.args.port if self.args else 8000
 
 
 # Global CLI configuration instance

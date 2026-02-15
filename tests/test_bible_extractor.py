@@ -25,33 +25,33 @@ class TestBibleExtractor(unittest.TestCase):
     def test_data_dir_creation(self):
         """Test data directory is created."""
         new_dir = Path(self.temp_dir) / "new_data"
-        extractor = BibleExtractor(str(new_dir))
-        
+        _extractor = BibleExtractor(str(new_dir))  # noqa: F841
+
         # Directory should be created during initialization
         self.assertTrue(new_dir.exists())
 
-    @patch('abba.bible_extractor.requests.get')
+    @patch("abba.bible_extractor.requests.get")
     def test_download_bible_db_success(self, mock_get):
         """Test successful bible.db download."""
         # Mock successful response
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
-        mock_response.iter_content.return_value = [b'test content']
+        mock_response.iter_content.return_value = [b"test content"]
         mock_get.return_value = mock_response
 
         result = self.extractor.download_bible_db()
-        
+
         self.assertTrue(result)
         mock_get.assert_called_once()
 
-    @patch('abba.bible_extractor.requests.get')
+    @patch("abba.bible_extractor.requests.get")
     def test_download_bible_db_failure(self, mock_get):
         """Test failed bible.db download."""
         # Mock failed response
         mock_get.side_effect = Exception("Download failed")
 
         result = self.extractor.download_bible_db()
-        
+
         self.assertFalse(result)
 
     def test_list_translations_no_db(self):
@@ -59,25 +59,25 @@ class TestBibleExtractor(unittest.TestCase):
         translations = self.extractor.list_translations()
         self.assertEqual(translations, [])
 
-    @patch('abba.bible_extractor.sqlite3.connect')
+    @patch("abba.bible_extractor.sqlite3.connect")
     def test_list_translations_with_db(self, mock_connect):
         """Test listing translations from database."""
         # Create fake db file
         db_path = self.data_dir / "bible.db"
         db_path.touch()
-        
+
         # Mock database response
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [
             ("ESV", "English Standard Version", "English Standard Version", "en"),
-            ("NIV", "New International Version", "New International Version", "en")
+            ("NIV", "New International Version", "New International Version", "en"),
         ]
         mock_conn.cursor.return_value = mock_cursor
         mock_connect.return_value = mock_conn
 
         translations = self.extractor.list_translations()
-        
+
         self.assertEqual(len(translations), 2)
         self.assertEqual(translations[0]["id"], "ESV")
         self.assertEqual(translations[1]["id"], "NIV")
@@ -91,10 +91,10 @@ class TestBibleExtractor(unittest.TestCase):
     def test_stepbible_data_directory_structure(self):
         """Test STEPBible data directory creation."""
         stepbible_dir = self.data_dir / "stepbible"
-        
+
         # Should be created during download attempt
         self.extractor.download_stepbible_data()
-        
+
         self.assertTrue(stepbible_dir.exists())
 
 

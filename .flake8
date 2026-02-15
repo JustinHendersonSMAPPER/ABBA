@@ -2,15 +2,16 @@
 max-line-length = 120
 max-complexity = 10
 select = C,E,F,W,B,B950
-ignore = E203,E501,W503,B008
-exclude = .git,
+ignore = E203,E501,W503
+exclude =
+    .git,
     __pycache__,
     *.egg-info,
     .nox,
-    noxfile.py
+    .mypy_cache,
     .pytest_cache,
-	    .mypy_cache,
-	    tests
-extend-immutable-calls = fastapi.Depends, fastapi.params.Depends
+    claude/,
+    abba2/
 per-file-ignores =
-    tests/*: F811,F811,F401
+    tests/*: F811,F401
+    abba/api/routes.py: B008
