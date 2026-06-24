@@ -11,7 +11,9 @@ from abba.provenance import Provenance, ProvenanceStore, TrustTier
 
 def _client(tmp_path: Path) -> TestClient:
     db_path = tmp_path / "test.db"
-    store = ProvenanceStore(SQLiteManager(db_path))  # migrates + seeds
+    db = SQLiteManager(db_path)
+    db.initialize_database()
+    store = ProvenanceStore(db)
     store.record(
         Provenance(
             entity_type="cross_reference",
