@@ -12,7 +12,7 @@
       />
     </div>
 
-    <div v-if="api.loading.value" class="loading">Loading topics...</div>
+    <LoadingState v-if="api.loading.value" label="Loading topics…" />
     <div v-else-if="api.error.value" class="error">{{ api.error.value }}</div>
 
     <div v-else-if="filteredTopics.length" class="topic-grid">
@@ -66,6 +66,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useApi } from '../composables/useApi'
 import type { TopicSummary, TopicDetail } from '../types/api'
+import LoadingState from '../components/LoadingState.vue'
 
 const api = useApi()
 
@@ -143,7 +144,7 @@ async function selectTopic(topic: TopicSummary) {
   border-radius: 6px;
   font-size: 0.95rem;
   font-family: var(--font-ui);
-  background: white;
+  background: var(--color-surface);
   color: var(--color-text);
 }
 
@@ -178,7 +179,7 @@ async function selectTopic(topic: TopicSummary) {
   padding: 1rem;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
-  background: white;
+  background: var(--color-surface);
 }
 
 .topic-card:hover {

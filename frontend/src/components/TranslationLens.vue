@@ -4,9 +4,12 @@
       v-for="(word, i) in words"
       :key="i"
       :class="['lens-word', { 'has-richness': isRich(i) }]"
+      :tabindex="isRich(i) ? 0 : undefined"
       @mouseenter="activeTooltip = isRich(i) ? i : null"
       @mouseleave="activeTooltip = null"
       @click="isRich(i) && $emit('word-click', word, richFlags[i])"
+      @keydown.enter="isRich(i) && $emit('word-click', word, richFlags[i])"
+      @keydown.space.prevent="isRich(i) && $emit('word-click', word, richFlags[i])"
     >
       {{ typeof word === 'string' ? word : (word as Record<string, unknown>).text || '' }}<template v-if="i < words.length - 1">{{ ' ' }}</template>
       <span v-if="activeTooltip === i" class="lens-tooltip">

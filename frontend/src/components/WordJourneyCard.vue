@@ -63,7 +63,7 @@ defineEmits<{
 <style scoped>
 .word-journey-card {
   position: relative;
-  background: white;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 1.25rem;

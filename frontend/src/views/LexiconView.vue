@@ -14,7 +14,7 @@
       </div>
     </header>
 
-    <div v-if="api.loading.value" class="status-msg">Loading...</div>
+    <LoadingState v-if="api.loading.value" label="Loading…" />
     <div v-else-if="api.error.value" class="status-msg error">{{ api.error.value }}</div>
 
     <div v-if="entry" class="word-entry">
@@ -83,6 +83,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi'
 import type { LexiconEntry, WordExplanation, SemanticDomain } from '../types/api'
+import LoadingState from '../components/LoadingState.vue'
 
 const route = useRoute()
 const api = useApi()

@@ -103,9 +103,11 @@ export interface UseApiReturn {
 export function useApi(): UseApiReturn {
   const loading: Ref<boolean> = ref(false)
   const error: Ref<string | null> = ref(null)
+  let _pendingCount = 0
 
   async function call<T>(fn: () => Promise<T>): Promise<T | null> {
-    loading.value = true
+    _pendingCount++
+    if (_pendingCount === 1) loading.value = true
     error.value = null
     try {
       return await fn()
@@ -113,7 +115,8 @@ export function useApi(): UseApiReturn {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       return null
     } finally {
-      loading.value = false
+      _pendingCount--
+      if (_pendingCount === 0) loading.value = false
     }
   }
 

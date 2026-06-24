@@ -29,7 +29,7 @@
       <input v-model="targetTranslations" type="text" placeholder="Target translations (comma-separated)" class="search-input" />
     </div>
 
-    <div v-if="api.loading.value" class="status-msg">Searching...</div>
+    <LoadingState v-if="api.loading.value" label="Searching…" />
     <div v-else-if="api.error.value" class="status-msg error">{{ api.error.value }}</div>
 
     <div v-if="results && results.length" class="results-list">
@@ -56,6 +56,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi'
 import type { SearchResult } from '../types/api'
+import LoadingState from '../components/LoadingState.vue'
 
 const route = useRoute()
 const router = useRouter()

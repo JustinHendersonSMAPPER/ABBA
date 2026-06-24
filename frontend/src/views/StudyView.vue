@@ -1,6 +1,6 @@
 <template>
   <div class="study-view">
-    <div v-if="api.loading.value" class="loading">Loading verse...</div>
+    <LoadingState v-if="api.loading.value" label="Loading verse…" />
     <div v-else-if="api.error.value" class="error">{{ api.error.value }}</div>
 
     <template v-else-if="verseData">
@@ -147,7 +147,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi'
 import { useContextStore } from '../stores/context'
 import type { VerseData, ContextData, CrossReference, AudioResource, CollectionInfo } from '../types/api'
@@ -160,6 +160,7 @@ import DiscourseView from '../components/DiscourseView.vue'
 import SemanticDomainBadge from '../components/SemanticDomainBadge.vue'
 import NotesPanel from '../components/NotesPanel.vue'
 import AudioPlayer from '../components/AudioPlayer.vue'
+import LoadingState from '../components/LoadingState.vue'
 
 interface WordDetail {
   original?: string
@@ -176,6 +177,7 @@ const props = defineProps<{
 }>()
 
 const route = useRoute()
+const router = useRouter()
 const api = useApi()
 const contextStore = useContextStore()
 
@@ -196,6 +198,12 @@ const verse = computed<string>(() => (route.params.verse as string) || '')
 
 async function loadVerse(): Promise<void> {
   if (!book.value || !chapter.value) return
+
+  // Redirect /study/:book/:chapter → /study/:book/:chapter/1 so we always have a verse
+  if (!verse.value) {
+    router.replace(`/study/${book.value}/${chapter.value}/1`)
+    return
+  }
 
   verseData.value = null
   contextData.value = null
