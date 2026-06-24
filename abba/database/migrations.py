@@ -542,6 +542,61 @@ def add_cross_references_table(db_path: Path) -> bool:
         raise
 
 
+def add_cross_reference_candidates_table(db_path: Path) -> bool:
+    """Add cross_reference_candidates staging table for TSK and other sources.
+
+    Stores raw cross-reference data from public-domain datasets (TSK, OpenBible,
+    etc.) before editorial review.  A unique constraint on the 6-tuple
+    (source_book_id, source_chapter, source_verse, target_book_id, target_chapter,
+    target_verse) deduplicates repeated imports; INSERT OR IGNORE makes every
+    import idempotent.
+
+    Args:
+        db_path: Path to the database
+
+    Returns:
+        True if migration was needed and succeeded, False if already exists
+    """
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='cross_reference_candidates'"
+            )
+            if cursor.fetchone()[0] > 0:
+                logger.debug("cross_reference_candidates table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cross_reference_candidates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_book_id INTEGER NOT NULL,
+                    source_chapter INTEGER NOT NULL,
+                    source_verse INTEGER NOT NULL,
+                    target_book_id INTEGER NOT NULL,
+                    target_chapter INTEGER NOT NULL,
+                    target_verse INTEGER NOT NULL,
+                    anchor_phrase TEXT,
+                    source_dataset TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(source_book_id, source_chapter, source_verse,
+                           target_book_id, target_chapter, target_verse)
+                )
+            """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_xref_candidates_source "
+                "ON cross_reference_candidates(source_book_id, source_chapter, source_verse)"
+            )
+            conn.commit()
+            logger.info("Added cross_reference_candidates table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add cross_reference_candidates table: %s", e)
+        raise
+
+
 def add_stepbible_lexical_strongs_column(db_path: Path) -> bool:
     """Add lexical_strongs column to stepbible_verses table if it doesn't exist.
 
@@ -1488,6 +1543,8 @@ _MIGRATIONS = [
     (add_provenance_table, "provenance table"),
     # Strong's concordance: pre-computed lexical key for fast concordance queries
     (add_stepbible_lexical_strongs_column, "stepbible lexical_strongs column"),
+    # TSK cross-reference staging table
+    (add_cross_reference_candidates_table, "cross_reference_candidates table"),
 ]
 
 
