@@ -1571,38 +1571,66 @@ def _get_cross_refs(book_id: int, chapter: int, verse: int) -> List[CrossRef]:
         66: "Rev",
     }
     try:
+        # Build a book_name lookup from the books table (translation-aware, full names)
+        books_rows = db.execute_query(
+            "SELECT book_id, name FROM books WHERE translation_id = ?",
+            (DEFAULT_TRANSLATION_ID,),
+        )
+        db_book_names: dict[int, str] = {r[0]: r[1] for r in books_rows} if books_rows else {}
+
+        def _resolve_name(bid: int) -> str:
+            return db_book_names.get(bid) or book_names.get(bid, str(bid))
+
         rows = db.execute_query(
-            "SELECT target_book_id, target_chapter, target_verse, ref_type, confidence, notes "
+            "SELECT ref_id, target_book_id, target_chapter, target_verse, ref_type, confidence, notes "
             "FROM cross_references "
-            "WHERE source_book_id = ? AND source_chapter = ? AND source_verse = ?",
+            "WHERE source_book_id = ? AND source_chapter = ? AND source_verse = ? "
+            "ORDER BY target_book_id, target_chapter, target_verse",
             (book_id, chapter, verse),
         )
         refs = []
         for r in rows:
-            tgt_name = book_names.get(r[0], str(r[0]))
+            tgt_name = _resolve_name(r[1])
+            lbl = f"{tgt_name} {r[2]}:{r[3]}"
             refs.append(
                 CrossRef(
-                    target_reference=f"{tgt_name} {r[1]}:{r[2]}",
-                    ref_type=r[3],
-                    confidence=r[4] or 0.8,
-                    notes=r[5],
+                    target_reference=lbl,
+                    ref_type=r[4],
+                    confidence=r[5] or 0.8,
+                    notes=r[6],
+                    id=r[0],
+                    book_id=r[1],
+                    chapter=r[2],
+                    verse=r[3],
+                    book_name=tgt_name,
+                    label=lbl,
+                    note=r[6],
                 )
             )
         # Also include incoming references
         rows2 = db.execute_query(
-            "SELECT source_book_id, source_chapter, source_verse, ref_type, confidence, notes "
+            "SELECT ref_id, source_book_id, source_chapter, source_verse, ref_type, confidence, notes "
             "FROM cross_references "
-            "WHERE target_book_id = ? AND target_chapter = ? AND target_verse = ?",
+            "WHERE target_book_id = ? AND target_chapter = ? AND target_verse = ? "
+            "ORDER BY source_book_id, source_chapter, source_verse",
             (book_id, chapter, verse),
         )
         for r in rows2:
-            src_name = book_names.get(r[0], str(r[0]))
+            src_name = _resolve_name(r[1])
+            lbl = f"{src_name} {r[2]}:{r[3]}"
             refs.append(
                 CrossRef(
-                    target_reference=f"{src_name} {r[1]}:{r[2]}",
-                    ref_type=r[3],
-                    confidence=r[4] or 0.8,
-                    notes=r[5],
+                    target_reference=lbl,
+                    ref_type=r[4],
+                    confidence=r[5] or 0.8,
+                    notes=r[6],
+                    id=r[0],
+                    book_id=r[1],
+                    chapter=r[2],
+                    verse=r[3],
+                    book_name=src_name,
+                    label=lbl,
+                    note=r[6],
                 )
             )
         return refs
