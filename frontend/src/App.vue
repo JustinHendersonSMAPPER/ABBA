@@ -9,9 +9,13 @@
         <router-link to="/topics">Topics</router-link>
         <router-link to="/plans">Plans</router-link>
         <router-link to="/discover">Discover</router-link>
-        <div class="nav-more">
-          <button class="nav-more-btn" @click="showMore = !showMore">More</button>
-          <div v-if="showMore" class="nav-dropdown" @mouseleave="showMore = false">
+        <div class="nav-more" ref="navMoreRef">
+          <button
+            class="nav-more-btn"
+            :aria-expanded="showMore"
+            @click="showMore = !showMore"
+          >More</button>
+          <div v-if="showMore" class="nav-dropdown">
             <router-link to="/compare" @click="showMore = false">Compare</router-link>
             <router-link to="/lexicon" @click="showMore = false">Words</router-link>
             <router-link to="/domains" @click="showMore = false">Domains</router-link>
@@ -32,9 +36,16 @@
           <button type="submit" class="nav-search-btn" :disabled="!searchQuery.trim()">Go</button>
         </form>
         <DepthDial v-model="depthLevel" />
-        <button class="dark-toggle" :aria-label="isDark ? 'Light mode' : 'Dark mode'" @click="isDark = !isDark">
-          {{ isDark ? 'Light' : 'Dark' }}
-        </button>
+        <button
+          class="dark-toggle"
+          :aria-label="isDark ? 'Light mode' : 'Dark mode'"
+          @click="isDark = !isDark"
+        >{{ isDark ? 'Light' : 'Dark' }}</button>
+        <button
+          class="help-btn"
+          aria-label="Show help / onboarding"
+          @click="onboardingRef?.show()"
+        >?</button>
       </div>
     </nav>
     <div class="app-layout">
@@ -53,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import DepthDial from './components/DepthDial.vue'
 import ContextSidebar from './components/ContextSidebar.vue'
@@ -68,6 +79,8 @@ const isDark = ref(false)
 const searchQuery = ref('')
 const showMore = ref(false)
 const mobileNavOpen = ref(false)
+const onboardingRef = ref<InstanceType<typeof OnboardingOverlay> | null>(null)
+const navMoreRef = ref<HTMLElement | null>(null)
 
 // Persist dark mode preference
 const saved = typeof localStorage !== 'undefined' && localStorage.getItem('abba-dark')
@@ -75,6 +88,34 @@ if (saved === 'true') isDark.value = true
 
 watch(isDark, (v) => {
   if (typeof localStorage !== 'undefined') localStorage.setItem('abba-dark', String(v))
+})
+
+// Click-outside + Escape to close the More dropdown
+function onWindowMousedown(e: MouseEvent) {
+  if (navMoreRef.value && !navMoreRef.value.contains(e.target as Node)) {
+    showMore.value = false
+  }
+}
+
+function onWindowKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && showMore.value) {
+    showMore.value = false
+  }
+}
+
+watch(showMore, (open) => {
+  if (open) {
+    window.addEventListener('mousedown', onWindowMousedown)
+    window.addEventListener('keydown', onWindowKeydown)
+  } else {
+    window.removeEventListener('mousedown', onWindowMousedown)
+    window.removeEventListener('keydown', onWindowKeydown)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('mousedown', onWindowMousedown)
+  window.removeEventListener('keydown', onWindowKeydown)
 })
 
 function goSearch() {
@@ -209,6 +250,24 @@ body {
 
 .dark-toggle:hover {
   border-color: var(--color-accent);
+}
+
+.help-btn {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.help-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .app-layout {
