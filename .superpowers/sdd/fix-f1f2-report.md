@@ -104,3 +104,46 @@ Quality gates: `ruff check` — 0 errors, `ruff format --check` — 0 issues, `p
 - One entry per `book_id` (no duplicates across multiple translation rows).
 - Ordered by `book_id` ascending.
 - `chapter_count` is derived from `MAX(chapter)` in the verses table.
+
+---
+
+## F4 FTS — Rebuild FTS search index after import
+
+### Problem
+
+`verses_fts` is an **external-content** FTS5 table (`content=verses`).
+Bulk inserts into `verses` do not automatically update the FTS index, so
+`MATCH` queries returned 0 results on every import.  The live DB had been
+manually fixed with `INSERT INTO verses_fts(verses_fts) VALUES('rebuild')`,
+but this was not durable in code.
+
+### What Was Changed
+
+**New file:** `abba/database/search_index.py`
+- `rebuild_search_index(db_path: Path) -> int`
+  - Checks if `verses_fts` exists in `sqlite_master`; if not, logs warning and returns 0 (no crash).
+  - Runs `INSERT INTO verses_fts(verses_fts) VALUES('rebuild')` + commit.
+  - Returns `COUNT(*)` from `verses_fts` as a "did it build" signal.
+  - Uses `sqlite3` directly, matching the style of `books_populator.py`.
+
+**Wired into `abba/main.py` at two sites:**
+
+| Location | Lines | Description |
+|----------|-------|-------------|
+| Pipeline import path | ~556–564 | After `populate_books(...)` in the main verse-import flow; wrapped in try/except so FTS failure never aborts the import |
+| `--populate-books` CLI path | ~341–356 | Called immediately after `populate_books(...)` in the standalone backfill handler |
+
+### Test Output
+
+All 6 tests in `tests/test_search_index.py` pass:
+
+```
+tests/test_search_index.py::test_rebuild_returns_positive_count PASSED
+tests/test_search_index.py::test_fts_match_finds_verses_after_rebuild PASSED
+tests/test_search_index.py::test_fts_match_translation_scoped PASSED
+tests/test_search_index.py::test_fts_no_match_for_absent_word PASSED
+tests/test_search_index.py::test_rebuild_is_idempotent PASSED
+tests/test_search_index.py::test_rebuild_returns_zero_if_fts_table_missing PASSED
+```
+
+Quality gates: `ruff check` — 0 errors, `ruff format --check` — 0 issues, `pyright` — 0 errors on `abba/database/search_index.py` and `abba/main.py`.
