@@ -15,6 +15,10 @@
         </option>
       </select>
 
+      <select v-model="selectedTranslation" class="control-select" @change="onTranslationChange">
+        <option v-for="t in translations" :key="t.id" :value="t.id">{{ t.name }}</option>
+      </select>
+
       <button v-if="selectedChapter" class="control-btn" @click="toggleAudio">Audio</button>
 
       <LiteraryModeIndicator
@@ -66,7 +70,8 @@
 import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi'
-import type { BookInfo, VerseResponse, AudioResource, PassageInfo, GenreShift } from '../types/api'
+import { useTranslationStore } from '../stores/translation'
+import type { BookInfo, TranslationInfo, VerseResponse, AudioResource, PassageInfo, GenreShift } from '../types/api'
 import TranslationLens from '../components/TranslationLens.vue'
 import WordJourneyCard from '../components/WordJourneyCard.vue'
 import LiteraryModeIndicator from '../components/LiteraryModeIndicator.vue'
@@ -79,10 +84,13 @@ const props = defineProps({
 
 const api = useApi()
 const router = useRouter()
+const translationStore = useTranslationStore()
 
 const books = ref<BookInfo[]>([])
+const translations = ref<TranslationInfo[]>([])
 const selectedBook = ref<number>(0)
 const selectedChapter = ref<number>(0)
+const selectedTranslation = ref<string>(translationStore.current)
 const chapterCount = ref<number>(0)
 const chapterVerses = ref<VerseResponse[]>([])
 
@@ -103,14 +111,31 @@ const passages = ref<PassageInfo[]>([])
 const genreShifts = ref<GenreShift[]>([])
 
 onMounted(async () => {
-  const result = await api.getBooks()
-  if (result) {
-    if (Array.isArray(result)) {
-      books.value = result as BookInfo[]
+  const [booksResult, translationsResult] = await Promise.all([
+    api.getBooks(),
+    api.getTranslations(),
+  ])
+
+  if (booksResult) {
+    if (Array.isArray(booksResult)) {
+      books.value = booksResult as BookInfo[]
     } else {
-      books.value = (result as Record<string, unknown>).books as BookInfo[] || []
+      books.value = (booksResult as Record<string, unknown>).books as BookInfo[] || []
     }
   }
+
+  if (translationsResult && translationsResult.length > 0) {
+    translations.value = translationsResult
+    // Ensure selectedTranslation is valid; fall back to first available
+    if (!translations.value.some(t => t.id === selectedTranslation.value)) {
+      selectedTranslation.value = translations.value[0].id
+      translationStore.setCurrent(selectedTranslation.value)
+    }
+  } else {
+    // Fallback: seed a single BSB entry so the select is never empty
+    translations.value = [{ id: api.DEFAULT_TRANSLATION, name: api.DEFAULT_TRANSLATION, language: 'eng' }]
+  }
+
   // Default to John (book_id = 43) on first load
   if (selectedBook.value === 0) {
     const defaultBook = books.value.find((b) => b.book_id === 43) || books.value[0]
@@ -130,9 +155,16 @@ function onBookChange() {
   chapterCount.value = book ? book.chapter_count : 0
 }
 
+function onTranslationChange() {
+  translationStore.setCurrent(selectedTranslation.value)
+  if (selectedBook.value && selectedChapter.value) {
+    loadChapter()
+  }
+}
+
 async function loadChapter() {
   if (!selectedBook.value || !selectedChapter.value) return
-  const result = await api.getChapter(api.DEFAULT_TRANSLATION, selectedBook.value, selectedChapter.value, props.depth)
+  const result = await api.getChapter(translationStore.current, selectedBook.value, selectedChapter.value, props.depth)
   if (result) {
     chapterVerses.value = result
   }

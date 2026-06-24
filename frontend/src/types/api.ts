@@ -401,3 +401,10 @@ export interface MorphologyResult {
   label?: string
   example?: string
 }
+
+export interface TranslationInfo {
+  id: string
+  name: string
+  language: string
+  english_name?: string | null
+}

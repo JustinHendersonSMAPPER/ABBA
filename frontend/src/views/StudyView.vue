@@ -183,6 +183,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi'
 import { useContextStore } from '../stores/context'
+import { useTranslationStore } from '../stores/translation'
 import type { VerseResponse, AudioResource, CollectionInfo, CulturalNote } from '../types/api'
 import TranslationLens from '../components/TranslationLens.vue'
 import WordJourneyCard from '../components/WordJourneyCard.vue'
@@ -215,6 +216,7 @@ const route = useRoute()
 const router = useRouter()
 const api = useApi()
 const contextStore = useContextStore()
+const translationStore = useTranslationStore()
 
 const verseData = ref<VerseResponse | null>(null)
 const selectedWord = ref<WordDetail | null>(null)
@@ -256,7 +258,7 @@ async function loadVerse(): Promise<void> {
   // Always fetch at least 'standard' depth so original-language words are always included.
   // If the user has chosen a richer depth (deep/scholarly), honour that instead.
   const fetchDepth = depth.value === 'basic' ? 'standard' : depth.value
-  const result = await api.getVerse(api.DEFAULT_TRANSLATION, bookIdNum, chapter.value, verse.value, fetchDepth)
+  const result = await api.getVerse(translationStore.current, bookIdNum, chapter.value, verse.value, fetchDepth)
   if (result) verseData.value = result
 
   if (verse.value && depth.value !== 'basic') {
