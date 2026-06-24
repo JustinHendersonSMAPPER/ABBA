@@ -426,24 +426,50 @@ async def search_by_strongs(
     strongs_number: str,
     limit: int = Query(100, ge=1, le=500),
 ) -> List[StrongsResult]:
-    """Find all occurrences of a specific Strong's number."""
-    search = _get_search()
-    results = search.search_strongs(strongs_number)
-    return [
-        StrongsResult(
-            book=r.book,
-            chapter=r.chapter,
-            verse=r.verse,
-            word_num=r.word_num,
-            original_text=r.hebrew_text or r.greek_text,
-            transliteration=r.transliteration,
-            english_gloss=r.translation,
-            strongs_number=r.strongs_primary,
-            morphology_code=r.morphology_code,
-            language=r.language,
+    """Find all verses containing a specific Strong's number.
+
+    Queries the ``stepbible_verses.lexical_strongs`` index (pre-computed
+    normalized key) and joins with the BSB English ``verses`` table so each
+    result carries the human-readable verse text.  The input ``strongs_number``
+    is normalized before querying, so ``G3056``, ``G03056``, and ``g3056``
+    all return the same set of results.
+    """
+    from ..strongs import normalize_strongs
+
+    db = _get_db()
+
+    # Build reverse map: 3-letter STEP code -> numeric book_id
+    step_code_to_book_id: Dict[str, int] = {code: bid for bid, code in SemanticSearchAPI.BOOK_ID_TO_NAME.items()}
+
+    normalized = normalize_strongs(strongs_number)
+    rows = db.search_strongs(normalized, limit=limit)
+
+    results: List[StrongsResult] = []
+    for row in rows:
+        step_code: str = row["book"]
+        book_id = step_code_to_book_id.get(step_code)
+        if book_id is None:
+            continue
+
+        # Fetch English verse text from BSB
+        verse_row = db.get_verse(DEFAULT_TRANSLATION_ID, book_id, row["chapter"], row["verse"])
+        text: Optional[str] = verse_row["text"] if verse_row else None
+
+        book_name = SemanticSearchAPI.BOOK_ID_TO_NAME.get(book_id, step_code)
+        results.append(
+            StrongsResult(
+                strongs_number=normalized,
+                book_id=book_id,
+                book_name=book_name,
+                chapter=row["chapter"],
+                verse=row["verse"],
+                text=text,
+            )
         )
-        for r in results[:limit]
-    ]
+
+    # Sort by canonical book order, then chapter, then verse
+    results.sort(key=lambda r: (r.book_id, r.chapter, r.verse))
+    return results
 
 
 # --- Lexicon Endpoints ---
