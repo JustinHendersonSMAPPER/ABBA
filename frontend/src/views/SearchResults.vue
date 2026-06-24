@@ -29,7 +29,7 @@
       <input v-model="targetTranslations" type="text" placeholder="Target translations (comma-separated)" class="search-input" />
     </div>
 
-    <div v-if="api.loading.value" class="status-msg">Searching...</div>
+    <LoadingState v-if="api.loading.value" label="Searching…" />
     <div v-else-if="api.error.value" class="status-msg error">{{ api.error.value }}</div>
 
     <div v-if="results && results.length" class="results-list">
@@ -40,14 +40,24 @@
           class="result-ref"
         >{{ r.reference || r.book_name + ' ' + r.chapter + ':' + r.verse }}</router-link>
         <p class="result-text">{{ r.text || r.snippet || '' }}</p>
-        <span v-if="r.match_type" class="match-badge">{{ r.match_type }}</span>
+        <div v-if="r.score != null" class="relevance-row">
+          <div class="relevance-bar-track">
+            <div class="relevance-bar-fill" :style="{ width: Math.round(Math.min(1, r.score) * 100) + '%' }"></div>
+          </div>
+          <span class="relevance-label">{{ Math.round(Math.min(1, r.score) * 100) }}% match</span>
+        </div>
+        <span v-if="r.match_type" class="match-badge">{{ matchTypeLabel(r.match_type) }}</span>
         <span v-if="r.explanation" class="match-explain">{{ r.explanation }}</span>
       </div>
     </div>
 
-    <p v-else-if="searched && !api.loading.value" class="status-msg">
+    <p v-else-if="searched && !api.loading.value && searchMode !== 'semantic'" class="status-msg">
       No results found. Try different search terms.
     </p>
+    <div v-else-if="searched && !api.loading.value && searchMode === 'semantic'" class="status-msg semantic-empty">
+      <p>No conceptually related passages found.</p>
+      <p class="semantic-hint">Semantic search works best with a natural-language theme — try <em>"comfort in suffering"</em> rather than exact words.</p>
+    </div>
   </div>
 </template>
 
@@ -56,6 +66,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi'
 import type { SearchResult } from '../types/api'
+import LoadingState from '../components/LoadingState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -113,6 +124,15 @@ function resultLink(r: SearchResult) {
   const ch = (r as Record<string, unknown>).chapter || 1
   const v = (r as Record<string, unknown>).verse || ''
   return v ? `/study/${book}/${ch}/${v}` : `/study/${book}/${ch}`
+}
+
+function matchTypeLabel(raw: string): string {
+  switch (raw) {
+    case 'exact': return 'Exact text'
+    case 'semantic': return 'Semantic'
+    case 'both': return 'Text + meaning'
+    default: return raw
+  }
 }
 </script>
 
@@ -207,4 +227,46 @@ function resultLink(r: SearchResult) {
 }
 .error { color: #c0392b; opacity: 1; }
 .multilingual-options { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+
+.relevance-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  margin-bottom: 0.15rem;
+}
+
+.relevance-bar-track {
+  width: 80px;
+  height: 5px;
+  background: var(--color-border, #ddd);
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.relevance-bar-fill {
+  height: 100%;
+  background: var(--color-accent, #4a6fa5);
+  border-radius: 3px;
+  transition: width 0.2s;
+}
+
+.relevance-label {
+  font-size: 0.72rem;
+  font-family: var(--font-ui);
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+.semantic-empty {
+  opacity: 1;
+}
+
+.semantic-hint {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  opacity: 0.7;
+  line-height: 1.5;
+}
 </style>

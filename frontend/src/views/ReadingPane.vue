@@ -26,14 +26,18 @@
 
     <AudioPlayer v-if="audioData" :audio="audioData" />
 
-    <div v-if="api.loading.value" class="loading">Loading...</div>
+    <div v-if="books.length === 0 && !api.loading.value && !api.error.value" class="skeleton-controls">
+      <div class="skeleton-bar" style="width: 90px;"></div>
+      <div class="skeleton-bar" style="width: 60px;"></div>
+    </div>
+    <LoadingState v-if="api.loading.value" label="Loading…" />
     <div v-else-if="api.error.value" class="error">{{ api.error.value }}</div>
 
     <div v-else-if="chapterData" class="reading-text">
       <template v-for="verse in chapterData.verses" :key="verse.number">
         <h3 v-if="getPassageTitle(verse.number)" class="passage-heading">{{ getPassageTitle(verse.number) }}</h3>
         <div class="verse-block">
-          <sup class="verse-num verse-link" @click="router.push('/study/' + selectedBook + '/' + selectedChapter + '/' + verse.number)">{{ verse.number }}</sup>
+          <button class="verse-num verse-link" @click="router.push('/study/' + selectedBook + '/' + selectedChapter + '/' + verse.number)">{{ verse.number }}</button>
           <TranslationLens
             v-if="depth !== 'basic' && verse.words"
             :words="verse.words"
@@ -67,6 +71,7 @@ import TranslationLens from '../components/TranslationLens.vue'
 import WordJourneyCard from '../components/WordJourneyCard.vue'
 import LiteraryModeIndicator from '../components/LiteraryModeIndicator.vue'
 import AudioPlayer from '../components/AudioPlayer.vue'
+import LoadingState from '../components/LoadingState.vue'
 
 const props = defineProps({
   depth: { type: String, default: 'basic' },
@@ -103,6 +108,16 @@ onMounted(async () => {
       books.value = result as BookInfo[]
     } else {
       books.value = (result as Record<string, unknown>).books as BookInfo[] || []
+    }
+  }
+  // Default to John 1 on first load
+  if (!selectedBook.value) {
+    const defaultBook = books.value.find((b) => b.id === 'JHN') || books.value[0]
+    if (defaultBook) {
+      selectedBook.value = defaultBook.id
+      onBookChange()
+      selectedChapter.value = '1'
+      await loadChapter()
     }
   }
 })
@@ -179,13 +194,12 @@ async function toggleAudio(): Promise<void> {
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--color-border);
   border-radius: 4px;
-  background: white;
+  background: var(--color-surface);
   font-size: 0.9rem;
   font-family: var(--font-ui);
   color: var(--color-text);
 }
 
-.loading,
 .error,
 .reading-placeholder {
   font-family: var(--font-ui);
@@ -201,14 +215,16 @@ async function toggleAudio(): Promise<void> {
 
 .verse-block {
   display: inline;
+  margin-bottom: 0.35em;
 }
 
 .verse-num {
-  font-size: 0.7em;
-  font-weight: 600;
+  font-size: 0.72em;
+  font-weight: 700;
   color: var(--color-accent);
-  margin-right: 0.2em;
+  margin-right: 0.25em;
   font-family: var(--font-ui);
+  opacity: 0.85;
 }
 
 .verse-text {
@@ -222,9 +238,35 @@ async function toggleAudio(): Promise<void> {
   z-index: 30;
 }
 
-.verse-link { cursor: pointer; }
+.verse-link {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  vertical-align: super;
+  line-height: 1;
+  font: inherit;
+}
 .verse-link:hover { color: var(--color-accent); text-decoration: underline; }
 .passage-heading { font-family: var(--font-ui); font-size: 0.9rem; font-weight: 600; color: var(--color-accent); margin: 1rem 0 0.5rem; display: block; }
 .control-btn { padding: 0.3rem 0.6rem; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-surface); font-family: var(--font-ui); font-size: 0.8rem; cursor: pointer; color: var(--color-text); }
 .control-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+.skeleton-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.skeleton-bar {
+  height: 34px;
+  background: var(--color-border);
+  border-radius: 4px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
 </style>

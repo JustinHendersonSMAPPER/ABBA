@@ -16,7 +16,7 @@
       <button class="search-btn" @click="search" :disabled="!query.trim()">Discover</button>
     </div>
 
-    <div v-if="api.loading.value" class="loading">Searching...</div>
+    <LoadingState v-if="api.loading.value" label="Searching…" />
     <div v-else-if="api.error.value" class="error">{{ api.error.value }}</div>
 
     <template v-if="result">
@@ -75,6 +75,7 @@ import { ref } from 'vue'
 import { useApi } from '../composables/useApi'
 import type { ConceptDiscoveryResult, ConceptGraph } from '../types/api'
 import ConceptGraphView from '../components/ConceptGraphView.vue'
+import LoadingState from '../components/LoadingState.vue'
 
 const api = useApi()
 const query = ref<string>('')

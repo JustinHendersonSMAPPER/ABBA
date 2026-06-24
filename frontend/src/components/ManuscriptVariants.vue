@@ -5,6 +5,11 @@
       <div class="variant-header">
         <span class="variant-type">{{ v.variant_type }}</span>
         <span class="variant-significance" :class="'sig-' + v.significance">{{ v.significance }}</span>
+        <ProvenanceChip
+          v-if="v.id != null"
+          entity-type="manuscript_variant"
+          :entity-id="v.id"
+        />
       </div>
       <div v-if="v.base_text" class="variant-row">
         <span class="label">Base text:</span>
@@ -21,18 +26,11 @@
 </template>
 
 <script setup lang="ts">
-interface Variant {
-  variant_id: string
-  variant_type: string
-  significance: string
-  base_text?: string
-  variant_text?: string
-  explanation?: string
-  manuscripts?: string
-}
+import ProvenanceChip from './ProvenanceChip.vue'
+import type { ManuscriptVariant } from '../types/api'
 
 withDefaults(defineProps<{
-  variants: Variant[]
+  variants: ManuscriptVariant[]
 }>(), { variants: () => [] })
 </script>
 

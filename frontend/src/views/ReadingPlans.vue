@@ -2,7 +2,7 @@
   <div class="reading-plans">
     <h1 class="page-title">Reading Plans</h1>
 
-    <div v-if="api.loading.value" class="loading">Loading plans...</div>
+    <LoadingState v-if="api.loading.value" label="Loading plans…" />
     <div v-else-if="api.error.value" class="error">{{ api.error.value }}</div>
 
     <template v-else-if="!activePlan">
@@ -59,6 +59,7 @@
 import { ref, onMounted } from 'vue'
 import { useApi } from '../composables/useApi'
 import type { ReadingPlan } from '../types/api'
+import LoadingState from '../components/LoadingState.vue'
 
 interface PlanReading {
   book: string
@@ -140,7 +141,7 @@ function readingRoute(reading: PlanReading): string {
   padding: 1.25rem;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
-  background: white;
+  background: var(--color-surface);
 }
 
 .plan-card:hover {

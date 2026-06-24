@@ -105,6 +105,11 @@ function goSearch() {
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 body {
   font-family: var(--font-ui);
   background: var(--color-bg);
@@ -217,6 +222,7 @@ body {
   padding: 0 1rem;
   font-family: var(--font-reading);
   line-height: 1.8;
+  font-size: 1.125rem;
 }
 
 .app-main.has-sidebar {
