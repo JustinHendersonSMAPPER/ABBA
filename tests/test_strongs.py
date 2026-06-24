@@ -37,19 +37,19 @@ class TestNormalizeStrongs:
 
 class TestExtractLexicalStrongs:
     def test_greek_padded_primary(self) -> None:
-        # G0746 is valid (not H9000-H9999), normalize it
-        assert extract_lexical_strongs("G0746", None) == "G746"
+        # G0746 is a valid lexical primary; returned in source (padded) form (lookups normalize).
+        assert extract_lexical_strongs("G0746", None) == "G0746"
 
     def test_hebrew_step_prefix_with_raw(self) -> None:
         # H9003 is a STEP prefix, fall back to strongs_raw
         assert extract_lexical_strongs("H9003", "H9003/{H7225G}") == "H7225"
 
     def test_hebrew_elohim_from_raw(self) -> None:
-        # H0430G in braces -> strip G -> H0430 -> normalize -> H430
-        assert extract_lexical_strongs("H9001", "{H0430G}") == "H430"
+        # H0430G in braces -> strip STEP tag G -> H0430 (source/padded form; lookups normalize to H430)
+        assert extract_lexical_strongs("H9001", "{H0430G}") == "H0430"
 
     def test_hebrew_creation_word(self) -> None:
-        # H1254A in braces -> strip A -> H1254 -> normalize -> H1254
+        # H1254A in braces -> strip STEP tag A -> H1254
         assert extract_lexical_strongs("H9002", "{H1254A}") == "H1254"
 
     def test_valid_hebrew_primary(self) -> None:

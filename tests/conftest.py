@@ -7,7 +7,7 @@ from abba.database import SQLiteManager
 
 
 @pytest.fixture
-def seeded_db(tmp_path):
+def seeded_db(tmp_path):  # noqa: C901 - linear seed inserts; complexity is inherent, not a code smell
     """Create a fully seeded test database with realistic biblical data.
 
     This fixture provides a database populated with a small but representative
@@ -28,6 +28,11 @@ def seeded_db(tmp_path):
         "INSERT OR REPLACE INTO translations (id, name, english_name, language, canon) VALUES (?, ?, ?, ?, ?)",
         ("engkjv", "King James Version", "King James Version", "en", "protestant"),
     )
+    # Real default-translation id used by the app (DEFAULT_TRANSLATION_ID = "BSB").
+    db.execute_update(
+        "INSERT OR REPLACE INTO translations (id, name, english_name, language, canon) VALUES (?, ?, ?, ?, ?)",
+        ("BSB", "Berean Standard Bible", "Berean Standard Bible", "eng", "protestant"),
+    )
 
     # --- Books ---
     books = [
@@ -35,6 +40,8 @@ def seeded_db(tmp_path):
         ("engbsb", 43, "John", "John", 43, 21, "new"),
         ("engkjv", 1, "Genesis", "Genesis", 1, 50, "old"),
         ("engkjv", 43, "John", "John", 43, 21, "new"),
+        ("BSB", 1, "Genesis", "Genesis", 1, 50, "old"),
+        ("BSB", 43, "John", "John", 43, 21, "new"),
     ]
     for tid, bid, name, common, order, chapters, testament in books:
         db.execute_update(
@@ -169,6 +176,69 @@ def seeded_db(tmp_path):
             "INSERT OR REPLACE INTO morphology (code, description, components, language) VALUES (?, ?, ?, ?)",
             (code, desc, components, lang),
         )
+
+    # --- Verses mirrored under the real default translation id "BSB" ---
+    # The app defaults to translation_id "BSB" (DEFAULT_TRANSLATION_ID); mirror the BSB text + FTS
+    # so default-translation endpoints (mobile sync, text search, /books) work in tests.
+    for ch, vs, text in bsb_gen1:
+        db.execute_update(
+            "INSERT OR REPLACE INTO verses (translation_id, book_id, chapter, verse, text) VALUES (?, ?, ?, ?, ?)",
+            ("BSB", 1, ch, vs, text),
+        )
+        db.execute_update(
+            "INSERT INTO verses_fts (translation_id, book_id, chapter, verse, text) VALUES (?, ?, ?, ?, ?)",
+            ("BSB", 1, ch, vs, text),
+        )
+    for ch, vs, text in bsb_john1:
+        db.execute_update(
+            "INSERT OR REPLACE INTO verses (translation_id, book_id, chapter, verse, text) VALUES (?, ?, ?, ?, ?)",
+            ("BSB", 43, ch, vs, text),
+        )
+        db.execute_update(
+            "INSERT INTO verses_fts (translation_id, book_id, chapter, verse, text) VALUES (?, ?, ?, ?, ?)",
+            ("BSB", 43, ch, vs, text),
+        )
+
+    # --- Original-language words in stepbible_verses (the current word source for the API) ---
+    # STEP uses 3-letter book codes (Gen, Jhn). get_words_for_verse maps numeric book_id -> code.
+    gen_step_words = [
+        (1, "בְּרֵאשִׁ֖ית", "bereshit", "In beginning", "H9003/{H7225G}", "H9003", "HR/Ncfsa"),
+        (2, "בָּרָ֣א", "bara", "created", "{H1254A}", "", "HVqp3ms"),
+        (3, "אֱלֹהִ֑ים", "elohim", "God", "{H0430}", "", "HNcmpa"),
+        (4, "אֵ֥ת", "et", "[obj]", "{H0853}", "", "HTo"),
+        (5, "הַשָּׁמַ֖יִם", "hashamayim", "the heavens", "H9009/{H8064}", "H9009", "HTd/Ncmpa"),
+        (6, "וְאֵ֥ת", "ve'et", "and", "H9002/{H0853}", "H9002", "HC/To"),
+        (7, "הָאָֽרֶץ", "ha'aretz", "the earth", "H9009/{H0776}", "H9009", "HTd/Ncbsa"),
+    ]
+    for wnum, orig, translit, eng, sraw, sprimary, morph in gen_step_words:
+        db.execute_update(
+            "INSERT OR REPLACE INTO stepbible_verses "
+            "(source_file, book, chapter, verse, word_number, original_word, transliteration, english, "
+            "strongs_raw, strongs_primary, morphology, language) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("test", "Gen", 1, 1, wnum, orig, translit, eng, sraw, sprimary, morph, "hebrew"),
+        )
+    john_step_words = [
+        (1, "Ἐν", "en", "In", "{G1722}", "G1722", "GP"),
+        (2, "ἀρχῇ", "arche", "beginning", "{G0746}", "G0746", "GNdfs"),
+        (3, "ἦν", "en", "was", "{G1510V}", "G1510", "GVIia3s"),
+        (4, "ὁ", "ho", "the", "{G3588}", "G3588", "GEdnms"),
+        (5, "Λόγος", "Logos", "Word", "{G3056}", "G3056", "GNnms"),
+    ]
+    for wnum, orig, translit, eng, sraw, sprimary, morph in john_step_words:
+        db.execute_update(
+            "INSERT OR REPLACE INTO stepbible_verses "
+            "(source_file, book, chapter, verse, word_number, original_word, transliteration, english, "
+            "strongs_raw, strongs_primary, morphology, language) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("test", "Jhn", 1, 1, wnum, orig, translit, eng, sraw, sprimary, morph, "greek"),
+        )
+
+    # verses_fts is an external-content FTS5 table; direct row inserts don't build a searchable
+    # index. Rebuild it from the verses content so MATCH works for every seeded translation.
+    from abba.database.search_index import rebuild_search_index  # noqa: PLC0415
+
+    rebuild_search_index(db_path)
 
     yield db_path
 

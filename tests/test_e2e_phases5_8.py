@@ -39,7 +39,7 @@ from abba.enrichment import (
 
 
 @pytest.fixture(scope="module")
-def enriched_db(tmp_path_factory):
+def enriched_db(tmp_path_factory):  # noqa: C901 - linear seed inserts + populators; inherent complexity
     """Create a fully seeded and enriched database for the entire test module.
 
     This duplicates the seeded_db fixture logic so we have a module-scoped
@@ -59,6 +59,11 @@ def enriched_db(tmp_path_factory):
         "INSERT OR REPLACE INTO translations (id, name, english_name, language, canon) VALUES (?, ?, ?, ?, ?)",
         ("engkjv", "King James Version", "King James Version", "en", "protestant"),
     )
+    # Real default-translation id used by the app (DEFAULT_TRANSLATION_ID = "BSB").
+    db.execute_update(
+        "INSERT OR REPLACE INTO translations (id, name, english_name, language, canon) VALUES (?, ?, ?, ?, ?)",
+        ("BSB", "Berean Standard Bible", "Berean Standard Bible", "eng", "protestant"),
+    )
 
     # --- Books ---
     books = [
@@ -68,6 +73,8 @@ def enriched_db(tmp_path_factory):
         ("engbsb", 43, "John", "John", 43, 21, "new"),
         ("engkjv", 1, "Genesis", "Genesis", 1, 50, "old"),
         ("engkjv", 43, "John", "John", 43, 21, "new"),
+        ("BSB", 1, "Genesis", "Genesis", 1, 50, "old"),
+        ("BSB", 43, "John", "John", 43, 21, "new"),
     ]
     for tid, bid, name, common, order, chapters, testament in books:
         db.execute_update(
@@ -228,6 +235,22 @@ def enriched_db(tmp_path_factory):
     BookMetadataPopulator(db_path).populate()
     CrossReferencePopulator(db_path).populate()
     WordRichnessComputer(db_path).compute_all()
+
+    # Mirror the BSB verses under the real default translation id so default-translation endpoints
+    # (text search, mobile sync) work, then build the external-content FTS index from the content.
+    for ch, vs, text in bsb_gen1:
+        db.execute_update(
+            "INSERT OR REPLACE INTO verses (translation_id, book_id, chapter, verse, text) VALUES (?, ?, ?, ?, ?)",
+            ("BSB", 1, ch, vs, text),
+        )
+    for ch, vs, text in bsb_john1:
+        db.execute_update(
+            "INSERT OR REPLACE INTO verses (translation_id, book_id, chapter, verse, text) VALUES (?, ?, ?, ?, ?)",
+            ("BSB", 43, ch, vs, text),
+        )
+    from abba.database.search_index import rebuild_search_index  # noqa: PLC0415
+
+    rebuild_search_index(db_path)
 
     return db_path
 
