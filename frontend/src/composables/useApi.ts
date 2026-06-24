@@ -122,6 +122,21 @@ export function useApi(): UseApiReturn {
     }
   }
 
+  // Like call(), but for OPTIONAL enrichments (syntax trees, discourse, variants): a failure/404
+  // means "not available for this verse", not a page error — resolve null without setting error.
+  async function optionalCall<T>(fn: () => Promise<T>): Promise<T | null> {
+    _pendingCount++
+    if (_pendingCount === 1) loading.value = true
+    try {
+      return await fn()
+    } catch {
+      return null
+    } finally {
+      _pendingCount--
+      if (_pendingCount === 0) loading.value = false
+    }
+  }
+
   function getTranslations(): Promise<TranslationInfo[] | null> {
     return call(() => request<TranslationInfo[]>('/translations'))
   }
@@ -191,23 +206,23 @@ export function useApi(): UseApiReturn {
   }
 
   function getSyntaxTree(bookId: string, chapter: string | number, verse: string | number): Promise<VerseResponse['syntax_tree']> {
-    return call(() => request<NonNullable<VerseResponse['syntax_tree']>>(`/syntax/${bookId}/${chapter}/${verse}`))
+    return optionalCall(() => request<NonNullable<VerseResponse['syntax_tree']>>(`/syntax/${bookId}/${chapter}/${verse}`))
   }
 
   function getDiscourseUnits(bookId: string, chapter: string | number, verse: string | number): Promise<{ units?: unknown[] } | null> {
-    return call(() => request<{ units?: unknown[] }>(`/discourse/${bookId}/${chapter}/${verse}`))
+    return optionalCall(() => request<{ units?: unknown[] }>(`/discourse/${bookId}/${chapter}/${verse}`))
   }
 
   function getBookDiscourse(bookId: string): Promise<unknown[] | null> {
-    return call(() => request<unknown[]>(`/discourse/${bookId}`))
+    return optionalCall(() => request<unknown[]>(`/discourse/${bookId}`))
   }
 
   function getManuscriptVariants(bookId: string, chapter: string | number, verse: string | number): Promise<{ variants?: unknown[] } | null> {
-    return call(() => request<{ variants?: unknown[] }>(`/variants/${bookId}/${chapter}/${verse}`))
+    return optionalCall(() => request<{ variants?: unknown[] }>(`/variants/${bookId}/${chapter}/${verse}`))
   }
 
   function getSignificantVariants(): Promise<unknown[] | null> {
-    return call(() => request<unknown[]>('/variants/significant'))
+    return optionalCall(() => request<unknown[]>('/variants/significant'))
   }
 
   function multilingualSearch(query: string, sourceLang = 'en', translations: string | null = null): Promise<SearchResult[] | null> {

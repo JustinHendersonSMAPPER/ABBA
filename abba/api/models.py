@@ -115,6 +115,14 @@ class CrossRef(BaseModel):
     ref_type: str
     confidence: float = 0.8
     notes: Optional[str] = None
+    # Extended fields populated by the explanation engine
+    id: Optional[int] = None
+    book_id: Optional[int] = None
+    chapter: Optional[int] = None
+    verse: Optional[int] = None
+    book_name: Optional[str] = None
+    label: Optional[str] = None
+    note: Optional[str] = None
 
 
 # --- Literary Structure Models ---
