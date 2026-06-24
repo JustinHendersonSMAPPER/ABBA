@@ -441,34 +441,37 @@ async def search_by_strongs(
     # Build reverse map: 3-letter STEP code -> numeric book_id
     step_code_to_book_id: Dict[str, int] = {code: bid for bid, code in SemanticSearchAPI.BOOK_ID_TO_NAME.items()}
 
+    # Full display book names for the default translation (one query, reused below).
+    book_names: Dict[int, str] = {}
+    for brow in db.execute_query("SELECT book_id, name FROM books WHERE translation_id = ?", (DEFAULT_TRANSLATION_ID,)):
+        book_names[int(brow["book_id"])] = brow["name"]
+
     normalized = normalize_strongs(strongs_number)
-    rows = db.search_strongs(normalized, limit=limit)
+    # Fetch a generous cap (NOT the user limit): search_strongs orders alphabetically by STEP code,
+    # so applying the user limit there would drop canonically-early books (Genesis/Matthew). We order
+    # by canonical book_id here, then truncate.
+    rows = db.search_strongs(normalized, limit=5000)
+
+    refs = sorted(
+        (step_code_to_book_id[row["book"]], row["chapter"], row["verse"])
+        for row in rows
+        if row["book"] in step_code_to_book_id
+    )[:limit]
 
     results: List[StrongsResult] = []
-    for row in rows:
-        step_code: str = row["book"]
-        book_id = step_code_to_book_id.get(step_code)
-        if book_id is None:
-            continue
-
-        # Fetch English verse text from BSB
-        verse_row = db.get_verse(DEFAULT_TRANSLATION_ID, book_id, row["chapter"], row["verse"])
+    for book_id, chapter, verse in refs:
+        verse_row = db.get_verse(DEFAULT_TRANSLATION_ID, book_id, chapter, verse)
         text: Optional[str] = verse_row["text"] if verse_row else None
-
-        book_name = SemanticSearchAPI.BOOK_ID_TO_NAME.get(book_id, step_code)
         results.append(
             StrongsResult(
                 strongs_number=normalized,
                 book_id=book_id,
-                book_name=book_name,
-                chapter=row["chapter"],
-                verse=row["verse"],
+                book_name=book_names.get(book_id) or SemanticSearchAPI.BOOK_ID_TO_NAME.get(book_id, ""),
+                chapter=chapter,
+                verse=verse,
                 text=text,
             )
         )
-
-    # Sort by canonical book order, then chapter, then verse
-    results.sort(key=lambda r: (r.book_id, r.chapter, r.verse))
     return results
 
 
