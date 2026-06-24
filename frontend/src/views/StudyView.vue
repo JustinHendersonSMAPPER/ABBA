@@ -214,13 +214,8 @@ async function loadVerse(): Promise<void> {
   feedbackGiven.value = null
   contextStore.clear()
 
-  if (verse.value) {
-    const result = await api.getVerse(book.value, chapter.value, verse.value, depth.value)
-    if (result) verseData.value = result
-  } else {
-    const result = await api.getChapter(book.value, chapter.value, depth.value)
-    if (result) verseData.value = result as unknown as VerseData
-  }
+  const result = await api.getVerse(book.value, chapter.value, verse.value, depth.value)
+  if (result) verseData.value = result
 
   if (verse.value && depth.value !== 'basic') {
     const fetches: Promise<unknown>[] = [

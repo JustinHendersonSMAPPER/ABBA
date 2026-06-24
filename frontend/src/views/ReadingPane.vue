@@ -26,7 +26,7 @@
 
     <AudioPlayer v-if="audioData" :audio="audioData" />
 
-    <div v-if="books.length === 0 && !api.error.value" class="skeleton-controls">
+    <div v-if="books.length === 0 && !api.loading.value && !api.error.value" class="skeleton-controls">
       <div class="skeleton-bar" style="width: 90px;"></div>
       <div class="skeleton-bar" style="width: 60px;"></div>
     </div>
@@ -200,7 +200,6 @@ async function toggleAudio(): Promise<void> {
   color: var(--color-text);
 }
 
-.loading,
 .error,
 .reading-placeholder {
   font-family: var(--font-ui);
