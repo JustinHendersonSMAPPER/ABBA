@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query
 from ..config import ABBAConfig, ConfigManager
 from ..database import SQLiteManager
 from ..provenance import ProvenanceStore
+from ..strongs import extract_lexical_strongs
 from .analysis import AnalysisAPI
 from .constants import DEFAULT_TRANSLATION_ID
 from .models import (
@@ -1331,21 +1332,56 @@ def _resolve_book_name(book_id: int, translation_id: str) -> Optional[str]:
     return full_name
 
 
-def _get_words_for_verse(book: str, chapter: int, verse: int) -> List[WordDetail]:
-    """Get original language words for a verse as WordDetail models."""
-    search = _get_search()
-    results = search.get_words_for_verse(book, chapter, verse)
+def _get_words_for_verse(book_name: str, chapter: int, verse: int) -> List[WordDetail]:
+    """Get original language words for a verse as WordDetail models.
+
+    Resolves the 3-letter STEP book code from the numeric book_id via
+    SemanticSearchAPI.BOOK_ID_TO_NAME, then queries stepbible_verses directly.
+
+    Args:
+        book_name: Book name string (may be a full name like "Genesis" or numeric string).
+                   The function uses SemanticSearchAPI.BOOK_ID_TO_NAME to look up the
+                   STEP 3-letter code when a numeric book_id is provided; otherwise it
+                   passes the value through directly (already a STEP code such as "Gen").
+        chapter: Chapter number
+        verse: Verse number
+
+    Returns:
+        List of WordDetail models with Strong's numbers normalized.
+    """
+    db = _get_db()
+    # The book_name arriving here is typically the full English name from the books table
+    # (e.g. "Genesis") or the STEP abbreviation (e.g. "Gen").  We need the STEP 3-letter
+    # code to match stepbible_verses.  Build a reverse lookup from the SemanticSearchAPI map.
+    step_code = book_name
+    # If the value looks like a full book name (longer than 3 chars or title-case), try to
+    # map it via the SemanticSearchAPI.BOOK_ID_TO_NAME reverse index.
+    _name_to_step: Dict[str, str] = {}
+    for _bid, _code in SemanticSearchAPI.BOOK_ID_TO_NAME.items():
+        _name_to_step[_code.lower()] = _code
+    if book_name.lower() not in _name_to_step:
+        # Try prefix match: "Genesis" -> "Gen", "John" -> "Jhn", etc.
+        for _code in SemanticSearchAPI.BOOK_ID_TO_NAME.values():
+            if book_name.lower().startswith(_code.lower()):
+                step_code = _code
+                break
+    else:
+        step_code = _name_to_step[book_name.lower()]
+
+    rows = db.get_words_for_verse(step_code, chapter, verse)
     return [
         WordDetail(
-            word_num=w.word_num,
-            original_text=w.hebrew_text or w.greek_text,
-            transliteration=w.transliteration,
-            english_gloss=w.translation,
-            strongs_number=w.strongs_primary,
-            morphology_code=w.morphology_code,
-            language=w.language,
+            word_num=row["word_number"],
+            original_text=row["original_word"],
+            transliteration=row["transliteration"],
+            english_gloss=row["english"],
+            strongs_number=extract_lexical_strongs(row["strongs_primary"], row["strongs_raw"]),
+            morphology_code=row["morphology"],
+            language=row["language"],
+            morphology_description=None,
+            part_of_speech=None,
         )
-        for w in results
+        for row in rows
     ]
 
 
