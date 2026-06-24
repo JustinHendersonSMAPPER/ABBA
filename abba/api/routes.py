@@ -582,6 +582,15 @@ async def list_books() -> List[BookInfo]:
         "ORDER BY book_id",
         (DEFAULT_TRANSLATION_ID,),
     )
+    if not rows:
+        # Fallback: if no books exist for the default translation, return one row
+        # per distinct book_id across whatever translations are present.
+        rows = db.execute_query(
+            "SELECT book_id, name, common_name, number_of_chapters, testament "
+            "FROM books "
+            "GROUP BY book_id "
+            "ORDER BY book_id",
+        )
     results = []
     for row in rows:
         book = BookInfo(

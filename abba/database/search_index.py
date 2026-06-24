@@ -46,12 +46,11 @@ def rebuild_search_index(db_path: Path) -> int:
         # Rebuild the FTS index from the content table.
         conn.execute("INSERT INTO verses_fts(verses_fts) VALUES('rebuild')")
         conn.commit()
-        logger.info("rebuild_search_index: FTS index rebuilt from verses table")
 
         # Return indexed document count as a "did it build" signal.
         row = conn.execute("SELECT COUNT(*) FROM verses_fts").fetchone()
         count: int = row[0] if row else 0
-        logger.info("rebuild_search_index: %d documents now indexed", count)
+        logger.info("rebuild_search_index: FTS index rebuilt from verses table — %d documents now indexed", count)
         return count
     finally:
         conn.close()

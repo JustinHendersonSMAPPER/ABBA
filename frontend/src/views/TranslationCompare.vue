@@ -8,7 +8,7 @@
     <div class="compare-controls">
       <select v-model="selectedBook" class="control-select" @change="onBookChange">
         <option value="" disabled>Book</option>
-        <option v-for="book in books" :key="book.book_id" :value="String(book.book_id)">{{ book.name }}</option>
+        <option v-for="book in books" :key="book.book_id" :value="book.name">{{ book.name }}</option>
       </select>
       <select v-model="selectedChapter" class="control-select" @change="selectedVerse = '1'">
         <option value="" disabled>Ch.</option>
@@ -127,13 +127,11 @@ const chapterCount = ref(0)
 const selectedTranslations = ref<string[]>(['BSB'])
 const comparison = ref<ComparisonResult | null>(null)
 
+// Only BSB is a known-valid translation id; a /translations endpoint does not yet
+// exist in the backend, so we seed one entry here. Add more entries once the
+// backend exposes GET /api/v1/translations.
 const availableTranslations = ref<TranslationOption[]>([
   { id: 'BSB', abbreviation: 'BSB' },
-  { id: 'engkjv', abbreviation: 'KJV' },
-  { id: 'engesv', abbreviation: 'ESV' },
-  { id: 'engniv', abbreviation: 'NIV' },
-  { id: 'engnlt', abbreviation: 'NLT' },
-  { id: 'engnasb', abbreviation: 'NASB' },
 ])
 
 const canCompare = computed(() =>
@@ -153,7 +151,7 @@ onMounted(async () => {
 
 function onBookChange(): void {
   selectedChapter.value = ''
-  const book = books.value.find((b: BookInfo) => String(b.book_id) === selectedBook.value)
+  const book = books.value.find((b: BookInfo) => b.name === selectedBook.value)
   chapterCount.value = book ? book.chapter_count : 0
 }
 

@@ -142,16 +142,24 @@ def populate_books(db_path: Path) -> int:
                 )
             )
 
-        with conn:  # transaction
-            conn.execute("DELETE FROM books")
-            conn.executemany(
-                """
-                INSERT INTO books
-                    (translation_id, book_id, name, common_name, book_order, number_of_chapters, testament)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                rows_to_insert,
+        try:
+            with conn:  # transaction
+                conn.execute("DELETE FROM books")
+                conn.executemany(
+                    """
+                    INSERT INTO books
+                        (translation_id, book_id, name, common_name, book_order, number_of_chapters, testament)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    rows_to_insert,
+                )
+        except sqlite3.OperationalError as exc:
+            logger.error(
+                "populate_books: failed to insert into books table (%s) — "
+                "run initialize_database() first to create the schema",
+                exc,
             )
+            raise
 
         inserted = len(rows_to_insert)
         logger.info("populate_books: inserted %d rows into books table", inserted)
