@@ -63,14 +63,17 @@ export interface VerseData {
 }
 
 export interface WordData {
-  text: string
-  original?: string
+  word_num?: number
+  original_text?: string
   transliteration?: string
-  gloss?: string
-  strongs?: string
-  morphology?: string
-  semantic_domain?: string
-  occurrences?: number
+  english_gloss?: string
+  strongs_number?: string
+  morphology_code?: string
+  morphology_description?: string
+  part_of_speech?: string
+  language?: string
+  /** legacy / UI-only fields kept for TranslationLens display */
+  text?: string
 }
 
 export interface TranslationEntry {
@@ -250,18 +253,14 @@ export interface PlanReading {
 }
 
 export interface LexiconEntry {
-  word?: string
-  original?: string
   strongs_number?: string
+  original_word?: string
   transliteration?: string
-  pronunciation?: string
-  short_definition?: string
+  part_of_speech?: string
   gloss?: string
-  full_definition?: string
   definition?: string
-  etymology?: string
-  occurrences?: number
-  frequency?: number
+  language?: string
+  source?: string
 }
 
 export interface WordExplanation {

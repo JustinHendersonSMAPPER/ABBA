@@ -11,7 +11,7 @@
       @keydown.enter="isRich(i) && $emit('word-click', word, richFlags[i])"
       @keydown.space.prevent="isRich(i) && $emit('word-click', word, richFlags[i])"
     >
-      {{ typeof word === 'string' ? word : (word as Record<string, unknown>).text || '' }}<template v-if="i < words.length - 1">{{ ' ' }}</template>
+      {{ typeof word === 'string' ? word : ((word as Record<string, unknown>).original_text || (word as Record<string, unknown>).transliteration || (word as Record<string, unknown>).english_gloss || (word as Record<string, unknown>).text || '') }}<template v-if="i < words.length - 1">{{ ' ' }}</template>
       <span v-if="activeTooltip === i" class="lens-tooltip">
         {{ richFlags[i].explanation || 'Rich meaning in original language' }}
       </span>

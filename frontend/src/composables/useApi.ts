@@ -345,10 +345,17 @@ export function useApi(): UseApiReturn {
     ))
   }
 
-  // Word Explanations
-
-  function getWordExplanation(strongsNumber: string): Promise<WordExplanation | null> {
-    return call(() => request<WordExplanation>(`/word-explanations/${encodeURIComponent(strongsNumber)}`))
+  // Word Explanations — resolves null on 404 without setting global error (empty table is normal)
+  async function getWordExplanation(strongsNumber: string): Promise<WordExplanation | null> {
+    try {
+      const response = await fetch(`${BASE_URL}/word-explanations/${encodeURIComponent(strongsNumber)}`, {
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (!response.ok) return null
+      return response.json() as Promise<WordExplanation>
+    } catch {
+      return null
+    }
   }
 
   // Genre Shifts

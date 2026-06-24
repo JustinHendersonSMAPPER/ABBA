@@ -208,18 +208,23 @@ class SQLiteManager:
     def get_words_for_verse(self, book: str, chapter: int, verse: int) -> List[sqlite3.Row]:
         """Get all words for a specific verse from original language texts.
 
+        Queries the populated stepbible_verses table using the 3-letter STEP book code
+        (e.g. "Gen", "Jhn", "1Co").
+
         Args:
-            book: Book name
+            book: 3-letter STEP book code (e.g. "Gen", "Jhn", "1Co")
             chapter: Chapter number
             verse: Verse number
 
         Returns:
-            List of word records
+            List of word records from stepbible_verses
         """
         query = """
-            SELECT * FROM words
+            SELECT word_number, original_word, transliteration, english,
+                   strongs_raw, strongs_primary, morphology, language
+            FROM stepbible_verses
             WHERE book = ? AND chapter = ? AND verse = ?
-            ORDER BY word_num
+            ORDER BY word_number
         """
         return self.execute_query(query, (book, chapter, verse))
 
@@ -243,15 +248,28 @@ class SQLiteManager:
     def get_lexicon_entry(self, strongs_number: str) -> Optional[sqlite3.Row]:
         """Get lexicon entry for a Strong's number.
 
+        Tries the given value first, then falls back to the normalized (unpadded)
+        form so that both H0430 and H430 resolve to the same entry.
+
         Args:
-            strongs_number: Strong's number
+            strongs_number: Strong's number (padded or unpadded, e.g. H0430 or H430)
 
         Returns:
             Lexicon entry or None if not found
         """
+        from ..strongs import normalize_strongs
+
         query = "SELECT * FROM lexicon WHERE strongs_number = ?"
         results = self.execute_query(query, (strongs_number,))
-        return results[0] if results else None
+        if results:
+            return results[0]
+        # Try normalized form (strip leading zeros)
+        normalized = normalize_strongs(strongs_number)
+        if normalized and normalized != strongs_number:
+            results = self.execute_query(query, (normalized,))
+            if results:
+                return results[0]
+        return None
 
     def get_morphology_info(self, morphology_code: str) -> Optional[sqlite3.Row]:
         """Get morphology information for a code.

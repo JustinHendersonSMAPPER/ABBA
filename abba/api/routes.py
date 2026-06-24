@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query
 from ..config import ABBAConfig, ConfigManager
 from ..database import SQLiteManager
 from ..provenance import ProvenanceStore
+from ..strongs import extract_lexical_strongs
 from .analysis import AnalysisAPI
 from .constants import DEFAULT_TRANSLATION_ID
 from .models import (
@@ -264,7 +265,7 @@ async def get_verse(
     if depth in (DepthLevel.STANDARD, DepthLevel.DEEP, DepthLevel.SCHOLARLY):
         cached = _try_annotation_cache(book_id, chapter, verse, depth, response, translation_id, book_name)
         if not cached:
-            response.words = _get_words_for_verse(book_name or str(book_id), chapter, verse)
+            response.words = _get_words_for_verse(book_id, chapter, verse)
             response.richness_flags = _get_richness_flags(book_name or str(book_id), chapter, verse)
 
             if depth in (DepthLevel.DEEP, DepthLevel.SCHOLARLY):
@@ -1152,7 +1153,7 @@ async def export_verse(
     book_name = _resolve_book_name(book_id, translation_id)
     ref = f"{book_name or book_id} {chapter}:{verse}"
 
-    words = _get_words_for_verse(book_name or str(book_id), chapter, verse)
+    words = _get_words_for_verse(book_id, chapter, verse)
     xrefs = _get_cross_refs(book_id, chapter, verse)
 
     data: Dict[str, Any] = {
@@ -1213,13 +1214,12 @@ def _deserialize_json_obj(json_str: Optional[str], model_cls: type) -> Optional[
         return None
 
 
-def _apply_cache_standard(row: sqlite3.Row, response: VerseResponse, book_name: Optional[str], verse: int) -> None:
+def _apply_cache_standard(row: sqlite3.Row, response: VerseResponse, book_id: int, verse: int) -> None:
     """Apply STANDARD-depth cached fields to response, falling back to live queries."""
-    book_key = book_name or str(response.chapter)
     chapter = response.chapter
 
     cached_words = _deserialize_json_list(row["words_json"], WordDetail)
-    response.words = cached_words if cached_words is not None else _get_words_for_verse(book_key, chapter, verse)
+    response.words = cached_words if cached_words is not None else _get_words_for_verse(book_id, chapter, verse)
 
     cached_flags = _deserialize_json_list(row["richness_flags_json"], RichnessFlag)
     if cached_flags is not None:
@@ -1278,7 +1278,7 @@ def _try_annotation_cache(
     if row is None:
         return False
 
-    _apply_cache_standard(row, response, book_name, verse)
+    _apply_cache_standard(row, response, book_id, verse)
 
     if depth in (DepthLevel.DEEP, DepthLevel.SCHOLARLY):
         _apply_cache_deep(row, response, book_id, chapter, verse, translation_id)
@@ -1331,21 +1331,39 @@ def _resolve_book_name(book_id: int, translation_id: str) -> Optional[str]:
     return full_name
 
 
-def _get_words_for_verse(book: str, chapter: int, verse: int) -> List[WordDetail]:
-    """Get original language words for a verse as WordDetail models."""
-    search = _get_search()
-    results = search.get_words_for_verse(book, chapter, verse)
+def _get_words_for_verse(book_id: int, chapter: int, verse: int) -> List[WordDetail]:
+    """Get original language words for a verse as WordDetail models.
+
+    Resolves the 3-letter STEP book code from the numeric book_id via
+    SemanticSearchAPI.BOOK_ID_TO_NAME, then queries stepbible_verses directly.
+
+    Args:
+        book_id: Numeric book ID (1=Gen, 43=Jhn, etc.)
+        chapter: Chapter number
+        verse: Verse number
+
+    Returns:
+        List of WordDetail models with Strong's numbers normalized.
+    """
+    db = _get_db()
+    step_code = SemanticSearchAPI.BOOK_ID_TO_NAME.get(book_id, "")
+    if not step_code:
+        return []
+
+    rows = db.get_words_for_verse(step_code, chapter, verse)
     return [
         WordDetail(
-            word_num=w.word_num,
-            original_text=w.hebrew_text or w.greek_text,
-            transliteration=w.transliteration,
-            english_gloss=w.translation,
-            strongs_number=w.strongs_primary,
-            morphology_code=w.morphology_code,
-            language=w.language,
+            word_num=row["word_number"],
+            original_text=row["original_word"],
+            transliteration=row["transliteration"],
+            english_gloss=row["english"],
+            strongs_number=extract_lexical_strongs(row["strongs_primary"], row["strongs_raw"]),
+            morphology_code=row["morphology"],
+            language=row["language"],
+            morphology_description=None,
+            part_of_speech=None,
         )
-        for w in results
+        for row in rows
     ]
 
 

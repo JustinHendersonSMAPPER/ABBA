@@ -19,33 +19,28 @@
 
     <div v-if="entry" class="word-entry">
       <div class="word-main">
-        <span class="word-original">{{ entry.word || entry.original || '' }}</span>
+        <span class="word-original">{{ entry.original_word || '' }}</span>
         <span v-if="entry.transliteration" class="word-translit">{{ entry.transliteration }}</span>
         <span class="word-strongs">{{ entry.strongs_number || strongsNumber }}</span>
       </div>
 
-      <div v-if="entry.pronunciation" class="word-pronunciation">
-        {{ entry.pronunciation }}
+      <div v-if="entry.part_of_speech" class="word-pronunciation">
+        {{ entry.part_of_speech }}
       </div>
 
-      <section class="entry-section" v-if="entry.short_definition || entry.gloss">
+      <section class="entry-section" v-if="entry.gloss">
         <h2 class="section-label">Short Definition</h2>
-        <p class="definition-text">{{ entry.short_definition || entry.gloss }}</p>
+        <p class="definition-text">{{ entry.gloss }}</p>
       </section>
 
-      <section class="entry-section" v-if="entry.full_definition || entry.definition">
+      <section class="entry-section" v-if="entry.definition">
         <h2 class="section-label">Full Definition</h2>
-        <p class="definition-text">{{ entry.full_definition || entry.definition }}</p>
+        <p class="definition-text">{{ entry.definition }}</p>
       </section>
 
       <section class="entry-section" v-if="explanation">
         <h2 class="section-label">Why This Matters</h2>
         <p class="explanation-text">{{ explanation.explanation || explanation }}</p>
-      </section>
-
-      <section class="entry-section" v-if="entry.etymology">
-        <h2 class="section-label">Etymology</h2>
-        <p class="definition-text">{{ entry.etymology }}</p>
       </section>
 
       <section class="entry-section" v-if="domains && domains.length">
@@ -55,13 +50,6 @@
             {{ d.domain_name }}
           </router-link>
         </div>
-      </section>
-
-      <section class="entry-section" v-if="entry.occurrences || entry.frequency">
-        <h2 class="section-label">Usage</h2>
-        <p class="definition-text">
-          Appears {{ entry.occurrences || entry.frequency }} times in the Bible.
-        </p>
       </section>
 
       <div class="word-actions">

@@ -61,3 +61,19 @@ already exists for later expansion.
 **Recommended default:** **Single-user / local** for now (roadmap non-goal: no auth). Keep data model
 compatible with a later `user_id` addition.
 **Status:** PROCEEDING (default single-user).
+
+## D8 — Original-language word-study follow-ups (Pillar 1)
+Pillar 1 now works end-to-end (verse → original-language word chips → lexicon). Remaining refinements,
+deferred because they need careful STEP-format work or are low-confidence one-shot:
+- **"Find all occurrences" of a Strong's number** (`/search/strongs/{n}` → `SQLiteManager.search_strongs`)
+  still queries the empty legacy `words` table; should query `stepbible_verses` matched on the
+  *normalized* Strong's (the stored `strongs_primary` is padded/prefixed, so SQL-side normalization or a
+  precomputed normalized column is needed).
+- **`normalize_strongs` uppercase suffix semantics:** an uppercase trailing letter is a STEP
+  language/disambiguation marker (strip it) while a lowercase suffix is a homonym marker (keep it).
+  A direct `strongs_primary` with an uppercase suffix is currently returned un-normalized — rare, and
+  the "right" behavior is ambiguous, so left as-is.
+- **Morphology descriptions / part-of-speech:** `morphology_code` is shown raw; expanding STEP morph
+  codes to human descriptions needs a parser/lookup (the `morphology` table has 2,756 code defs).
+- **Multi-brace compound roots** (only the first `{...}` is used) and **Aramaic** (coded as Hebrew).
+**Status:** OPEN (Pillar 1 functional; these are enhancements).
