@@ -13,9 +13,7 @@ def test_add_provenance_table_creates_table(tmp_path: Path) -> None:
     assert add_provenance_table(db_path) is True
 
     with sqlite3.connect(db_path) as conn:
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='provenance'"
-        ).fetchone()
+        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='provenance'").fetchone()
     assert row is not None
 
 
