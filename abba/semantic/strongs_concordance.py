@@ -81,7 +81,7 @@ class StrongsConcordance:
 
             if missing:
                 raise ValueError(
-                    f"Database schema incomplete. Missing columns: {missing}. " "Run fix_stepbible_schema.py first."
+                    f"Database schema incomplete. Missing columns: {missing}. Run fix_stepbible_schema.py first."
                 )
 
     def define_concept(
@@ -251,7 +251,7 @@ class StrongsConcordance:
                         sv.chapter,
                         sv.verse
                     FROM stepbible_verses sv
-                    WHERE {' AND '.join(strongs_conditions)}
+                    WHERE {" AND ".join(strongs_conditions)}
                 """
 
                 cursor.execute(query, params)

@@ -133,13 +133,13 @@ class BibleExtractor:
             "strongs_greek.xml": (
                 "https://raw.githubusercontent.com/morphgnt/strongs-dictionary-xml/master/strongsgreek.xml"
             ),
-            # Morphology code explanations
+            # Morphology code explanations (TEHMC/TEGMC live in the "Morphology codes/" subdirectory)
             "hebrew_morphology.txt": (
-                "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/"
+                "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Morphology codes/"
                 "TEHMC - Translators Expansion of Hebrew Morphology Codes - STEPBible.org CC BY.txt"
             ),
             "greek_morphology.txt": (
-                "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/"
+                "https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Morphology codes/"
                 "TEGMC - Translators Expansion of Greek Morphhology Codes - STEPBible.org CC BY.txt"
             ),
         }
@@ -408,8 +408,8 @@ This folder contains data from multiple open-source projects.
             # Parse morphology codes - format varies but generally:
             # Code|Description|Components
             entries_added = 0
-            for _line_num, line in enumerate(content.split("\n"), 1):
-                line = line.strip()
+            for _line_num, raw_line in enumerate(content.split("\n"), 1):
+                line = raw_line.strip()
                 if not line or line.startswith("#") or line.startswith("="):
                     continue
 
@@ -489,8 +489,8 @@ This folder contains data from multiple open-source projects.
             # Process with progress bar
             line_iterator = tqdm(lines, desc=f"    Parsing {filename}", disable=not show_progress, unit="lines")
 
-            for _line_num, line in enumerate(line_iterator, 1):
-                line = line.strip()
+            for _line_num, raw_line in enumerate(line_iterator, 1):
+                line = raw_line.strip()
                 if not line:
                     continue
 
@@ -787,19 +787,18 @@ This folder contains data from multiple open-source projects.
                     )
 
                 success, _word_count = self.parallel_stepbible.parse_file_parallel(
-                    text_file, file_type, show_progress=self.config and self.config.should_show_output()
+                    text_file, file_type, show_progress=bool(self.config and self.config.should_show_output())
                 )
 
                 if success:
                     text_success_count += 1
                     if tracker:
                         tracker.mark_stepbible_file_imported(file_type, text_file)
-            else:
-                # Use sequential parser
-                if self.parse_stepbible_text(text_file, db_manager):
-                    text_success_count += 1
-                    if tracker:
-                        tracker.mark_stepbible_file_imported(file_type, text_file)
+            # Use sequential parser
+            elif self.parse_stepbible_text(text_file, db_manager):
+                text_success_count += 1
+                if tracker:
+                    tracker.mark_stepbible_file_imported(file_type, text_file)
 
         # Consider success if we imported at least some files
         # Count already-imported files as successful

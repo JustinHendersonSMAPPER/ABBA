@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /home/user/ABBA && poetry install --quiet 2>/dev/null && echo 'ABBA environment ready' || echo 'WARNING: poetry install failed'"
+            "command": "cd /home/user/ABBA && uv sync --quiet 2>/dev/null && echo 'ABBA environment ready' || echo 'WARNING: uv sync failed'"
           }
         ]
       }

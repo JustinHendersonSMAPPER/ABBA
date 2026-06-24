@@ -2,39 +2,38 @@
 
 ## Project Overview
 
-ABBA (Annotated Bible and Background Analysis) is a Python framework for biblical text analysis using SQLite for structured data and ChromaDB for semantic search. Uses Poetry for dependency management.
+ABBA (Annotated Bible and Background Analysis) is a Python framework for biblical text analysis using SQLite for structured data and ChromaDB for semantic search. Uses uv for dependency management.
 
 ## Commands
 
 ```bash
 # Setup
-poetry install
+uv sync                                 # Create .venv and install all deps (incl. dev group)
 
 # Quality (MUST pass before any phase is complete)
-poetry run black --line-length 120 .    # Format
-poetry run isort --profile black .      # Sort imports
-nox -s lint                             # black, isort, flake8, pylint
-nox -s typing                           # mypy
+uv run ruff format .                    # Format (replaces black + isort)
+uv run ruff check --fix .               # Lint + autofix (replaces flake8 + pylint + bandit)
+nox -s lint                             # ruff format --check + ruff check
+nox -s typing                           # pyright
 nox -s tests                            # pytest + coverage
-nox -s security                         # bandit
+nox -s security                         # ruff flake8-bandit (S) rules
 
 # Run
-poetry run python abba/main.py          # Main app
-poetry run python abba/main.py --list   # List translations
+uv run python abba/main.py              # Main app
+uv run python abba/main.py --list       # List translations
 
 # Single test
-poetry run pytest tests/test_file.py::test_name -v
+uv run pytest tests/test_file.py::test_name -v
 ```
 
 ## Phase Completion Requirements
 
 **Every phase MUST meet ALL of these before being marked complete:**
 1. **80% minimum test coverage** for new/modified code (goal: 95% where practical)
-2. **black + isort**: Zero formatting issues (line length: 120)
-3. **flake8**: Zero violations
-4. **pylint**: Zero findings (ignore the score; 0 warnings/errors is the standard)
-5. **mypy**: Zero type errors on `abba/` source
-6. Tests must actually pass
+2. **ruff format**: Zero formatting issues (line length: 120; replaces black + isort)
+3. **ruff check**: Zero violations (replaces flake8 + pylint + bandit)
+4. **pyright**: Zero type errors on `abba/` source (replaces mypy)
+5. Tests must actually pass
 
 Update `claude/checklist.md` when completing phase items.
 
@@ -84,9 +83,9 @@ See `claude/checklist.md` for detailed status:
 
 ## Code Standards
 
-- **Black**: 120 char line length
-- **isort**: black-compatible profile
+- **Ruff**: 120 char line length; formatter + linter (config in `pyproject.toml` under `[tool.ruff]`)
+- **Pyright**: type checker (config in `pyproject.toml` under `[tool.pyright]`)
 - **Type hints**: Required on all function signatures in `abba/`
-- Use `poetry add` for new dependencies
+- Use `uv add <pkg>` (runtime) or `uv add --dev <pkg>` (tooling) for new dependencies
 - `@pytest.mark.integration` for tests needing external services
 - Place debug/temp files in `claude/` folder (gitignored)

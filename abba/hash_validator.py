@@ -257,7 +257,11 @@ class HashValidator:
 
                     for row in cursor:
                         verse_hash = self.hash_verse(
-                            translation_id, row[0], row[1], row[2], row[3] or ""  # book_id  # chapter  # verse  # text
+                            translation_id,
+                            row[0],
+                            row[1],
+                            row[2],
+                            row[3] or "",  # book_id  # chapter  # verse  # text
                         )
                         checksum ^= verse_hash  # XOR for aggregation
                         verse_count += 1
@@ -303,7 +307,11 @@ class HashValidator:
                 for row in cursor:
                     verse_id = f"{translation_id}:{row[0]:03d}:{row[1]:03d}:{row[2]:03d}"
                     verse_hash = self.hash_verse(
-                        translation_id, row[0], row[1], row[2], row[3] or ""  # book_id  # chapter  # verse  # text
+                        translation_id,
+                        row[0],
+                        row[1],
+                        row[2],
+                        row[3] or "",  # book_id  # chapter  # verse  # text
                     )
                     expected_hashes[verse_id] = verse_hash
 

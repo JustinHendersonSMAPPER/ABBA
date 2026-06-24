@@ -152,8 +152,7 @@ MANUSCRIPT_VARIANTS: List[Dict[str, Any]] = [
         "variant_type": "omission",
         "base_text": "The beginning of the gospel of Jesus Christ, the Son of God.",
         "variant_text": "The beginning of the gospel of Jesus Christ.",
-        "manuscripts": "Sinaiticus (first hand), Theta, some Old Latin omit 'Son of God'; "
-        "Vaticanus, A, D, W include",
+        "manuscripts": "Sinaiticus (first hand), Theta, some Old Latin omit 'Son of God'; Vaticanus, A, D, W include",
         "explanation": "The phrase 'Son of God' (huiou theou) is absent from Sinaiticus and a few other "
         "witnesses. While the omission could be accidental (homoeoteleuton), the shorter reading may be "
         "original. Most scholars favor inclusion based on broader attestation and Mark's theological emphasis.",

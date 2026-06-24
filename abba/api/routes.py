@@ -614,7 +614,7 @@ async def semantic_search(
                     translation_id=translation_id,
                 )
             )
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 - best-effort text-match fallback; failure is non-fatal
         pass
 
     # Apply filters
@@ -687,8 +687,7 @@ async def get_life_topic(slug: str) -> LifeTopicDetail:
     concepts: List[Dict[str, Any]] = []
     try:
         concept_rows = db.execute_query(
-            "SELECT concept_name, relevance_aspect FROM life_topic_concepts "
-            "WHERE topic_id = ? ORDER BY display_order",
+            "SELECT concept_name, relevance_aspect FROM life_topic_concepts WHERE topic_id = ? ORDER BY display_order",
             (topic_id,),
         )
         concepts = [{"concept_name": c[0], "relevance_aspect": c[1]} for c in concept_rows]
@@ -2144,9 +2143,7 @@ def _multilingual_resolve_verses(
 @router.get("/search/multilingual", response_model=List[SemanticSearchResult], tags=["phase9"])
 async def multilingual_search(
     q: str = Query(..., description="Search query in any language"),
-    source_lang: str = Query(
-        "en", description="Source language of the query"
-    ),  # noqa: ARG001  # pylint: disable=unused-argument
+    source_lang: str = Query("en", description="Source language of the query"),  # noqa: ARG001  # pylint: disable=unused-argument
     target_translations: Optional[str] = Query(None, description="Comma-separated translation IDs"),
     limit: int = Query(20, ge=1, le=100),
 ) -> List[SemanticSearchResult]:
@@ -2464,7 +2461,7 @@ async def get_concept_feedback_summary(concept_name: str) -> Dict[str, Any]:
     db = _get_db()
     try:
         rows = db.execute_query(
-            "SELECT feedback_type, COUNT(*) FROM concept_feedback " "WHERE concept_name = ? GROUP BY feedback_type",
+            "SELECT feedback_type, COUNT(*) FROM concept_feedback WHERE concept_name = ? GROUP BY feedback_type",
             (concept_name,),
         )
         summary: Dict[str, int] = {}

@@ -90,7 +90,9 @@ class OriginalLanguageEmbeddingPipeline:
                 limit = 1000
                 while True:
                     existing_results = verses_collection.get(
-                        limit=limit, offset=offset, include=[]  # Don't need embeddings or metadata
+                        limit=limit,
+                        offset=offset,
+                        include=[],  # Don't need embeddings or metadata
                     )
                     if not existing_results["ids"]:
                         break

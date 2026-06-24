@@ -110,7 +110,7 @@ STEPBible Files → SQLite Database → Embeddings → Vector Database
 When adding new features:
 1. Update relevant documentation
 2. Ensure >95% test coverage
-3. Run all quality checks (black, pylint, mypy)
+3. Run all quality checks (ruff, pyright)
 4. Update CLAUDE.md if adding development notes
 
 ## Support

@@ -5,23 +5,23 @@ A comprehensive Python framework for biblical text analysis that provides instan
 ## Quick Start
 
 ```bash
-# Install dependencies
-poetry install
+# Install dependencies (creates .venv via uv)
+uv sync
 
 # Initialize database and download biblical texts
-poetry run python abba/main.py
+uv run python abba/main.py
 
 # List available translations
-poetry run python abba/main.py --list
+uv run python abba/main.py --list
 
 # Validate concept definitions (requires Ollama)
-poetry run python abba/main.py --validate-concepts
+uv run python abba/main.py --validate-concepts
 
 # Map concepts to verses with LLM analysis
-poetry run python abba/main.py --map-concepts
+uv run python abba/main.py --map-concepts
 
 # View database examples
-poetry run python claude/scripts/simple_db_examples.py
+uv run python claude/scripts/simple_db_examples.py
 ```
 
 ## Features
@@ -75,22 +75,22 @@ poetry run python claude/scripts/simple_db_examples.py
 
 ### Prerequisites
 
-- Python 3.8+
-- Poetry (recommended) or pip
+- Python 3.9+
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
 - ~2GB disk space for full database
 
-### Install with Poetry (Recommended)
+### Install with uv (Recommended)
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/ABBA.git
 cd ABBA
 
-# Install dependencies
-poetry install
+# Install dependencies (creates and manages .venv automatically)
+uv sync
 
-# Activate shell
-poetry shell
+# Run commands inside the environment with `uv run ...`, e.g.:
+uv run python abba/main.py --list
 ```
 
 ### Install with pip
@@ -398,10 +398,10 @@ ABBA/
 nox -s tests
 
 # Run specific test
-poetry run pytest tests/test_specific.py
+uv run pytest tests/test_specific.py
 
 # Run with verbose output
-poetry run pytest -v
+uv run pytest -v
 ```
 
 ### Code Quality
@@ -411,9 +411,9 @@ poetry run pytest -v
 nox
 
 # Individual checks
-nox -s lint      # Linting
-nox -s typing    # Type checking
-nox -s security  # Security scan
+nox -s lint      # ruff format --check + ruff check (black/isort/flake8/pylint)
+nox -s typing    # pyright (type checking)
+nox -s security  # ruff flake8-bandit S rules (security scan)
 ```
 
 ### Adding New Features

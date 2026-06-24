@@ -102,10 +102,10 @@ class TestVerifyDeduplication:
 
     def test_passes_when_no_legacy_and_reasonable_count(self, pipeline, mock_chroma):
         """Should pass when legacy removed and original count is reasonable."""
-        mock_chroma.get_collection.side_effect = lambda name: {
+        mock_chroma.get_collection.side_effect = {
             "verses": None,
             "original_verses": self._make_collection(31000),
-        }.get(name)
+        }.get
 
         result = pipeline.verify_deduplication()
 
@@ -118,10 +118,10 @@ class TestVerifyDeduplication:
         legacy = MagicMock()
         legacy.count.return_value = 5000000
 
-        mock_chroma.get_collection.side_effect = lambda name: {
+        mock_chroma.get_collection.side_effect = {
             "verses": legacy,
             "original_verses": self._make_collection(31000),
-        }.get(name)
+        }.get
 
         result = pipeline.verify_deduplication()
 
@@ -131,10 +131,10 @@ class TestVerifyDeduplication:
 
     def test_fails_when_count_too_high(self, pipeline, mock_chroma):
         """Should fail when original_verses has too many embeddings (not deduplicated)."""
-        mock_chroma.get_collection.side_effect = lambda name: {
+        mock_chroma.get_collection.side_effect = {
             "verses": None,
             "original_verses": self._make_collection(500000),
-        }.get(name)
+        }.get
 
         result = pipeline.verify_deduplication()
 

@@ -171,15 +171,15 @@ echo ""
 # Check Python version
 python3 --version 2>/dev/null || { echo "Python 3 is required"; exit 1; }
 
-# Check Poetry
-if ! command -v poetry &> /dev/null; then
-    echo "Installing Poetry..."
-    curl -sSL https://install.python-poetry.org | python3 -
+# Check uv
+if ! command -v uv &> /dev/null; then
+    echo "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 
 # Install dependencies
 echo "Installing dependencies..."
-poetry install
+uv sync
 
 # Initialize data directory
 echo "Setting up data directory..."
@@ -189,8 +189,8 @@ echo ""
 echo "=== Installation Complete ==="
 echo ""
 echo "Quick start:"
-echo "  poetry run python abba/main.py --english-only   # Download English translations"
-echo "  poetry run python abba/main.py --serve           # Start the API server"
+echo "  uv run python abba/main.py --english-only   # Download English translations"
+echo "  uv run python abba/main.py --serve           # Start the API server"
 echo "  # Open http://localhost:8000/docs for API documentation"
 """
     script_path.write_text(script)

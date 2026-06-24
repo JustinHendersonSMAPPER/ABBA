@@ -416,7 +416,7 @@ class SemanticSearchAPI:
             if result.match_type == "both":
                 result.score = exact_weight * exact_score + semantic_weight * sem_score
                 result.explanation = (
-                    f"Matched both text (rank {result.exact_rank}) " f"and meaning (similarity {sem_score:.0%})"
+                    f"Matched both text (rank {result.exact_rank}) and meaning (similarity {sem_score:.0%})"
                 )
             elif result.match_type == "exact":
                 result.score = exact_weight * exact_score

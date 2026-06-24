@@ -129,7 +129,7 @@ class EmbeddingPipeline:
                                 existing = verses_collection.get(ids=[verse_id])
                                 if existing and existing["ids"]:
                                     continue
-                            except Exception:
+                            except Exception:  # noqa: S110 - resume check is best-effort
                                 pass  # Continue if error checking
 
                         # Build enhanced context

@@ -97,6 +97,27 @@ class TestBibleExtractor(unittest.TestCase):
 
         self.assertTrue(stepbible_dir.exists())
 
+    @patch("abba.bible_extractor.requests.get")
+    def test_stepbible_morphology_urls_include_subdirectory(self, mock_get):
+        """Regression: TEHMC/TEGMC morphology files live under the 'Morphology codes/'
+        subdirectory of the STEPBible-Data repo. Omitting it returns HTTP 404, which
+        leaves hebrew_morphology.txt/greek_morphology.txt undownloaded and the
+        morphology table empty (parse_stepbible_morphology then finds no file)."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"content-length": "0"}
+        mock_response.iter_content.return_value = [b"data"]
+        mock_get.return_value = mock_response
+
+        self.extractor.download_stepbible_data()
+
+        requested_urls = [call.args[0] for call in mock_get.call_args_list]
+        morphology_urls = [u for u in requested_urls if "TEHMC" in u or "TEGMC" in u]
+
+        self.assertEqual(len(morphology_urls), 2, "expected both Hebrew (TEHMC) and Greek (TEGMC) morphology downloads")
+        for url in morphology_urls:
+            self.assertIn("Morphology codes/", url, f"morphology URL missing 'Morphology codes/' subdirectory: {url}")
+
 
 if __name__ == "__main__":
     unittest.main()

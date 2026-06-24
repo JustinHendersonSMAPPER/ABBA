@@ -61,7 +61,7 @@ class EmbeddingModelManager:
             SentenceTransformer model instance
         """
         if model_type not in self.model_configs:
-            raise ValueError(f"Unknown model type: {model_type}. " f"Available: {list(self.model_configs.keys())}")
+            raise ValueError(f"Unknown model type: {model_type}. Available: {list(self.model_configs.keys())}")
 
         # Load model if not cached
         if model_type not in self._models:

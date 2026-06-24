@@ -203,7 +203,10 @@ class OllamaAnalyzer:
         return result
 
     def batch_analyze_verses(
-        self, verses: List[Tuple[str, str]], concept_name: str, concept_description: str  # (text, reference)
+        self,
+        verses: List[Tuple[str, str]],
+        concept_name: str,
+        concept_description: str,  # (text, reference)
     ) -> List[SemanticAnalysisResult]:
         """Analyze multiple verses for a concept in batches.
 
@@ -360,7 +363,7 @@ JSON Response:"""
                 concepts = parsed["concepts"]
                 if not isinstance(concepts, list):
                     concepts = [concepts]
-        except Exception:
+        except Exception:  # noqa: S110 - malformed LLM response is tolerated, returns no concepts
             pass
 
         return [str(c).strip() for c in concepts if c]

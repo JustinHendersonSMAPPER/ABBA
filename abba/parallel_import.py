@@ -450,7 +450,7 @@ class ParallelImporter:
                                     "current": job.translation_id,
                                     "verses": f"{result.verse_count:,}",
                                     "rate": (
-                                        f"{result.verse_count/result.duration:.0f} v/s"
+                                        f"{result.verse_count / result.duration:.0f} v/s"
                                         if result.duration > 0
                                         else "N/A"
                                     ),
@@ -513,7 +513,8 @@ class ParallelImporter:
                         break
                     except sqlite3.OperationalError as e:
                         if "locked" in str(e) and retry < max_retries - 1:
-                            wait_time = (retry + 1) * 0.1 + random.uniform(0, 0.1)
+                            # random jitter for retry backoff is not security-sensitive
+                            wait_time = (retry + 1) * 0.1 + random.uniform(0, 0.1)  # noqa: S311
                             logger.debug(f"Database locked for {job.translation_id}, retrying in {wait_time:.2f}s...")
                             time.sleep(wait_time)
                         else:

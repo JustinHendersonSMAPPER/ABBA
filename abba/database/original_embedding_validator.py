@@ -116,8 +116,7 @@ class OriginalEmbeddingValidator:
                         check_name="original_verse_count",
                         passed=False,
                         message=(
-                            f"No original verse embeddings found "
-                            f"(expected {canonical_verse_count:,} canonical verses)"
+                            f"No original verse embeddings found (expected {canonical_verse_count:,} canonical verses)"
                         ),
                         details={"expected": canonical_verse_count, "actual": 0},
                     )
@@ -340,7 +339,7 @@ class OriginalEmbeddingValidator:
                         details={"collection": "verses", "count": old_verses_collection.count()},
                     )
                 )
-        except Exception:
+        except Exception:  # noqa: S110 - absent collection is the expected/healthy case
             # Collection doesn't exist, which is good
             pass
 

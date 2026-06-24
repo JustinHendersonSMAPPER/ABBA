@@ -5,8 +5,9 @@ Covers: OpenScriptures Hebrew, Abbott-Smith Greek, BDB Hebrew, Dodson Greek, Str
 
 import tempfile
 import unittest
-import xml.etree.ElementTree as ET
 from pathlib import Path
+
+import defusedxml.ElementTree as ET
 
 from abba.lexicon_parser import (
     _clean_text,
@@ -328,7 +329,7 @@ class TestBDBParser(unittest.TestCase):
             f.write(content)
 
     def _make_bdb_xml(self, entries_xml: str) -> str:
-        return f'<?xml version="1.0" encoding="utf-8"?>' f'<lexicon xmlns="{self.NS}">{entries_xml}</lexicon>'
+        return f'<?xml version="1.0" encoding="utf-8"?><lexicon xmlns="{self.NS}">{entries_xml}</lexicon>'
 
     def _make_index_xml(self, entries_xml: str) -> str:
         return (
@@ -523,7 +524,7 @@ class TestDodsonParser(unittest.TestCase):
 
     def test_parse_multiple_entries(self):
         self._write_csv(
-            'G0026,ἀγάπη,"agape",N:F,love,"love, benevolence"\n' 'G4102,πίστις,"pistis",N:F,faith,"faith, trust"\n'
+            'G0026,ἀγάπη,"agape",N:F,love,"love, benevolence"\nG4102,πίστις,"pistis",N:F,faith,"faith, trust"\n'
         )
         entries = parse_dodson_csv(self.csv_path)
         self.assertEqual(len(entries), 2)
@@ -531,7 +532,7 @@ class TestDodsonParser(unittest.TestCase):
         self.assertEqual(entries[1]["strongs_number"], "G4102")
 
     def test_skips_non_g_entries(self):
-        self._write_csv("H0001,test,test,N,test,test\n" 'G0026,ἀγάπη,"agape",N:F,love,love\n')
+        self._write_csv('H0001,test,test,N,test,test\nG0026,ἀγάπη,"agape",N:F,love,love\n')
         entries = parse_dodson_csv(self.csv_path)
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0]["strongs_number"], "G0026")

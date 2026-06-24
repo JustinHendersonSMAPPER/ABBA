@@ -120,8 +120,8 @@ class ParallelStepBibleImporter:
 
         # Filter out header lines and empty lines
         data_lines = []
-        for i, line in enumerate(all_lines):
-            line = line.strip()
+        for i, raw_line in enumerate(all_lines):
+            line = raw_line.strip()
             if (
                 line
                 and not line.startswith(("#", "=", "TAHOT", "TAGNT", "FIELD"))

@@ -55,7 +55,7 @@ class QueryCache:
 
         # Create hash of the key parts
         key_str = "|".join(key_parts)
-        return hashlib.md5(key_str.encode()).hexdigest()
+        return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
     def get(self, key: str) -> Optional[Any]:
         """Get value from cache if not expired.

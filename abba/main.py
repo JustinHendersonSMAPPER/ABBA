@@ -24,7 +24,7 @@ from abba.operation_manager import OperationManager
 from abba.stepbible_updater import STEPBibleUpdater
 
 
-def main():  # noqa: C901
+def main():  # noqa: C901  # pyright: ignore[reportGeneralTypeIssues]  # large CLI dispatcher; pyright bails on flow-analysis depth
     """Main application entry point."""
     try:
         # Load configuration from all sources
@@ -201,7 +201,6 @@ def main():  # noqa: C901
 
         # Handle semantic search commands
         if cli_config.get_search_concept() or cli_config.get_export_concept_mappings():
-
             from abba.semantic.concept_mapper import ConceptMapper
 
             # Setup paths
@@ -256,7 +255,6 @@ def main():  # noqa: C901
             or cli_config.should_generate_concept_report()
             or cli_config.should_map_concepts()
         ):
-
             from abba.concept_validator import (  # type: ignore[import-untyped]  # noqa: E501, pylint: disable=no-name-in-module
                 ConceptValidationPipeline,
             )
@@ -351,12 +349,20 @@ def main():  # noqa: C901
         # Download STEPBible data if needed (always download on first run, --download, or missing files)
         stepbible_dir = config.data_dir / "stepbible"
         stepbible_expected_files = [
-            "tahot_gen_deu.txt", "tahot_jos_est.txt", "tahot_job_sng.txt", "tahot_isa_mal.txt",
-            "tagnt_mat_jhn.txt", "tagnt_act_rev.txt",
-            "hebrew_lexicon.txt", "greek_lexicon.txt",
-            "hebrew_morphology.txt", "greek_morphology.txt",
+            "tahot_gen_deu.txt",
+            "tahot_jos_est.txt",
+            "tahot_job_sng.txt",
+            "tahot_isa_mal.txt",
+            "tagnt_mat_jhn.txt",
+            "tagnt_act_rev.txt",
+            "hebrew_lexicon.txt",
+            "greek_lexicon.txt",
+            "hebrew_morphology.txt",
+            "greek_morphology.txt",
         ]
-        force_download_stepbible = getattr(cli_config.args, 'force_download_stepbible', False) if cli_config.args else False
+        force_download_stepbible = (
+            getattr(cli_config.args, "force_download_stepbible", False) if cli_config.args else False
+        )
         if force_download_stepbible:
             # Delete existing files so download_stepbible_data() re-downloads them
             for f in stepbible_expected_files:
@@ -369,7 +375,9 @@ def main():  # noqa: C901
         if config.should_download() or stepbible_missing:
             if config.should_show_output():
                 if stepbible_missing:
-                    logger.info(f"Downloading {len(stepbible_missing)} missing STEPBible file(s): {', '.join(stepbible_missing)}")
+                    logger.info(
+                        f"Downloading {len(stepbible_missing)} missing STEPBible file(s): {', '.join(stepbible_missing)}"
+                    )
                 else:
                     logger.info("Downloading STEPBible lexicon and morphology data...")
 
@@ -488,7 +496,7 @@ def main():  # noqa: C901
                 logger.info(f"Total verses: {total_verses:,}")
                 logger.info(f"Total time: {total_time:.1f}s")
                 if total_time > 0:
-                    logger.info(f"Average rate: {total_verses/total_time:.0f} verses/second")
+                    logger.info(f"Average rate: {total_verses / total_time:.0f} verses/second")
                 if failed_translations:
                     logger.error(f"Failed translations: {', '.join(failed_translations)}")
 
@@ -569,12 +577,10 @@ def main():  # noqa: C901
                         logger.warning("STEPBible data import failed (continuing without it)")
                 except Exception as e:
                     logger.error(f"Error importing STEPBible data: {e}")
-            else:
-                if config.verbose:
-                    logger.debug("STEPBible data already imported - skipping")
-        else:
-            if config.verbose:
-                logger.debug("STEPBible data not available - skipping import")
+            elif config.verbose:
+                logger.debug("STEPBible data already imported - skipping")
+        elif config.verbose:
+            logger.debug("STEPBible data not available - skipping import")
 
         # Print import summary
         if config.should_show_output():

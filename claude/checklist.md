@@ -324,7 +324,7 @@ ABBA_CONNECTION_POOL_SIZE=10
 > These are prerequisites for making scholar-level knowledge accessible to everyday readers.
 
 ### FastAPI Application Setup
-- [x] Add `fastapi` and `uvicorn` dependencies via `poetry add`
+- [x] Add `fastapi` and `uvicorn` dependencies via `uv add`
 - [x] Create FastAPI app factory (`abba/api/app.py`) with CORS middleware
 - [x] Create Pydantic response models (`abba/api/models.py`):
   - [x] `DepthLevel` enum: basic, standard, deep, scholarly

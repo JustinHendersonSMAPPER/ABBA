@@ -18,8 +18,8 @@ You are a test engineer for the ABBA biblical data analysis project.
 - Use `tempfile` for file-based tests (no test artifacts left behind)
 
 **Run tests:**
-- `poetry run pytest tests/ -v --tb=short`
-- `poetry run pytest tests/test_specific.py::test_name -v`
+- `uv run pytest tests/ -v --tb=short`
+- `uv run pytest tests/test_specific.py::test_name -v`
 
 **Biblical domain testing priorities:**
 - Verse reference parsing edge cases (ranges, cross-book, alternate numbering)

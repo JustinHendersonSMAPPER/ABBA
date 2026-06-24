@@ -667,12 +667,11 @@ class CleanSemanticSchema:
         # Base question template
         if concept_description and len(concept_description.strip()) > 0:
             intro = (
-                f"What Bible stories focus primarily on the concept of "
-                f"{display_name} ({concept_description.strip()})?"
+                f"What Bible stories focus primarily on the concept of {display_name} ({concept_description.strip()})?"
             )
             question = f"{intro}\n\n{response_format}"
         else:
-            intro = f"What Bible stories focus primarily on the biblical " f"concept of {display_name}?"
+            intro = f"What Bible stories focus primarily on the biblical concept of {display_name}?"
             question = f"{intro}\n\n{response_format}"
 
         return question

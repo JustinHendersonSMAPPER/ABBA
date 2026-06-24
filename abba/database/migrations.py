@@ -1257,8 +1257,7 @@ def add_community_contribution_tables(db_path: Path) -> bool:
             """
             )
             cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_contributions_book "
-                "ON community_contributions(book_id, chapter, verse)"
+                "CREATE INDEX IF NOT EXISTS idx_contributions_book ON community_contributions(book_id, chapter, verse)"
             )
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_contributions_status ON community_contributions(status)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_reviews_contrib ON contribution_reviews(contribution_id)")

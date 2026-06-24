@@ -17,9 +17,20 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import defusedxml.ElementTree as DefusedET
+
 from abba.logging_setup import get_logger
 
 logger = get_logger(__name__)
+
+
+def _parse_xml_root(source: Path) -> ET.Element:
+    """Parse an XML file with defusedxml (safe against XXE / billion-laughs) and return its root."""
+    root = DefusedET.parse(source).getroot()
+    if root is None:  # pragma: no cover - a successful parse always yields a root element
+        raise ET.ParseError("XML document has no root element")
+    return root
+
 
 # Namespaces
 HEBREW_NS = {"lex": "http://openscriptures.github.com/morphhb/namespace"}
@@ -138,8 +149,7 @@ def parse_hebrew_strongs_xml(file_path: Path) -> List[Dict[str, Any]]:
     entries: List[Dict[str, Any]] = []
 
     try:
-        tree = ET.parse(file_path)
-        root = tree.getroot()
+        root = _parse_xml_root(file_path)
     except (ET.ParseError, OSError) as e:
         logger.error(f"Failed to parse Hebrew lexicon XML: {e}")
         return entries
@@ -214,8 +224,7 @@ def parse_abbott_smith_xml(file_path: Path) -> List[Dict[str, Any]]:
     entries: List[Dict[str, Any]] = []
 
     try:
-        tree = ET.parse(file_path)
-        root = tree.getroot()
+        root = _parse_xml_root(file_path)
     except (ET.ParseError, OSError) as e:
         logger.error(f"Failed to parse Abbott-Smith XML: {e}")
         return entries
@@ -246,8 +255,7 @@ def _build_strongs_to_bdb_map(index_path: Path) -> Dict[str, str]:
     mapping: Dict[str, str] = {}
 
     try:
-        tree = ET.parse(index_path)
-        root = tree.getroot()
+        root = _parse_xml_root(index_path)
     except (ET.ParseError, OSError) as e:
         logger.error(f"Failed to parse LexicalIndex.xml: {e}")
         return mapping
@@ -357,8 +365,7 @@ def parse_bdb_xml(bdb_path: Path, index_path: Path) -> List[Dict[str, Any]]:
     bdb_to_strongs = _invert_strongs_mapping(strongs_to_bdb)
 
     try:
-        tree = ET.parse(bdb_path)
-        root = tree.getroot()
+        root = _parse_xml_root(bdb_path)
     except (ET.ParseError, OSError) as e:
         logger.error(f"Failed to parse BDB XML: {e}")
         return entries
@@ -559,8 +566,7 @@ def parse_strongs_greek_xml(file_path: Path) -> List[Dict[str, Any]]:
     entries: List[Dict[str, Any]] = []
 
     try:
-        tree = ET.parse(file_path)
-        root = tree.getroot()
+        root = _parse_xml_root(file_path)
     except (ET.ParseError, OSError) as e:
         logger.error(f"Failed to parse Strong's Greek XML: {e}")
         return entries

@@ -1,4 +1,8 @@
-"""Nox configuration file for automation of testing, linting, typing and security checks."""
+"""Nox configuration for automation of testing, linting, typing and security checks.
+
+Sessions run inside the uv-managed project environment (``uv sync`` + ``uv run``)
+rather than building their own virtualenvs, so the toolchain matches local runs.
+"""
 
 import nox
 
@@ -8,25 +12,25 @@ REPORTS_DIR = "reports"
 BADGES_DIR = ".badges"
 
 
-@nox.session(python=["3.11"])
+@nox.session(python=False)
 def tests(session):
-    """Run the test suite."""
-    session.install("poetry")
-    session.run("poetry", "install", "--no-interaction")
+    """Run the test suite with coverage and refresh the badges."""
+    session.run("uv", "sync", external=True)
     session.run(
-        "poetry",
+        "uv",
         "run",
         "coverage",
         "run",
         "-m",
         "pytest",
         f"--junit-xml={REPORTS_DIR}/junit/junit.xml",
+        external=True,
     )
-    session.run("poetry", "run", "coverage", "report")
-    session.run("poetry", "run", "coverage", "xml", "-o", f"{REPORTS_DIR}/coverage.xml")
-    session.run("poetry", "run", "coverage", "html", "-d", f"{REPORTS_DIR}/coverage")
+    session.run("uv", "run", "coverage", "report", external=True)
+    session.run("uv", "run", "coverage", "xml", "-o", f"{REPORTS_DIR}/coverage.xml", external=True)
+    session.run("uv", "run", "coverage", "html", "-d", f"{REPORTS_DIR}/coverage", external=True)
     session.run(
-        "poetry",
+        "uv",
         "run",
         "genbadge",
         "coverage",
@@ -34,49 +38,42 @@ def tests(session):
         f"{REPORTS_DIR}/coverage.xml",
         "-o",
         f"{BADGES_DIR}/coverage-badge.svg",
+        external=True,
     )
-    session.run("poetry", "run", "genbadge", "tests", "-o", f"{BADGES_DIR}/tests-badge.svg")
+    session.run("uv", "run", "genbadge", "tests", "-o", f"{BADGES_DIR}/tests-badge.svg", external=True)
 
 
-@nox.session(python=["3.11"])
+@nox.session(python=False)
 def lint(session):
-    """Lint the codebase with black, isort, flake8, and pylint."""
-    session.install("poetry")
-    session.run("poetry", "install", "--no-interaction")
-
-    # Check formatting with black (line length 120)
-    session.run("poetry", "run", "black", "--check", "--line-length", "120", *SOURCE_FILES)
-
-    # Check import sorting with isort (black-compatible profile)
-    session.run("poetry", "run", "isort", "--check-only", "--profile", "black", "--line-length", "120", *SOURCE_FILES)
-
-    # Run flake8 for style enforcement
-    session.run("poetry", "run", "flake8", *SOURCE_FILES, "--config", ".flake8")
-
-    # Run pylint for code analysis
-    session.run("poetry", "run", "pylint", *SOURCE_FILES)
+    """Lint the codebase with ruff (format check + lint, replaces black/isort/flake8/pylint)."""
+    session.run("uv", "sync", external=True)
+    # Verify formatting (ruff format replaces black + isort).
+    session.run("uv", "run", "ruff", "format", "--check", *SOURCE_FILES, external=True)
+    # Lint (replaces flake8 + pylint + bandit; rules configured in pyproject.toml).
+    session.run("uv", "run", "ruff", "check", *SOURCE_FILES, external=True)
 
 
-@nox.session(python=["3.11"])
+@nox.session(python=False)
 def typing(session):
-    """Run the type checker with mypy."""
-    session.install("poetry")
-    session.run("poetry", "install", "--no-interaction")
-    session.run("poetry", "run", "mypy", "abba/")
+    """Run the type checker with pyright (replaces mypy)."""
+    session.run("uv", "sync", external=True)
+    session.run("uv", "run", "pyright", "abba/", external=True)
 
 
-@nox.session(python=["3.11"])
+@nox.session(python=False)
 def security(session):
-    """Run the security checks with bandit."""
-    session.install("poetry")
-    session.run("poetry", "install", "--no-interaction")
-    session.run("poetry", "run", "bandit", "-c", "bandit.yml", "-r", "abba/")
+    """Run the security checks with ruff's flake8-bandit (S) rules (replaces bandit).
+
+    S101 (assert) and S608 (parameterized SQL built via f-strings) are accepted
+    project-wide; case-by-case exceptions use inline ``# noqa: S...`` comments.
+    """
+    session.run("uv", "sync", external=True)
+    session.run("uv", "run", "ruff", "check", "--select", "S", "--ignore", "S101,S608", "abba/", external=True)
 
 
-@nox.session(python=["3.11"])
+@nox.session(python=False)
 def format(session):
-    """Auto-format code with black and isort."""
-    session.install("poetry")
-    session.run("poetry", "install", "--no-interaction")
-    session.run("poetry", "run", "black", "--line-length", "120", *SOURCE_FILES)
-    session.run("poetry", "run", "isort", "--profile", "black", "--line-length", "120", *SOURCE_FILES)
+    """Auto-format code and apply safe lint fixes with ruff."""
+    session.run("uv", "sync", external=True)
+    session.run("uv", "run", "ruff", "format", *SOURCE_FILES, external=True)
+    session.run("uv", "run", "ruff", "check", "--fix", *SOURCE_FILES, external=True)

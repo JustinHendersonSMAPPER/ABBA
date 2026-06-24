@@ -7,13 +7,15 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends curl build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN pip install --no-cache-dir poetry==1.8.4 && \
-    poetry config virtualenvs.create false
+# Install uv (copy the static binary from the official image)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Copy dependency files first for layer caching
-COPY pyproject.toml poetry.lock* ./
-RUN poetry install --no-interaction --no-root --only main
+# Copy dependency files first for layer caching, then install runtime deps into a venv
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-dev
+
+# Put the project venv on PATH so the ENTRYPOINT's `python -m uvicorn ...` resolves
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy application code
 COPY abba/ abba/
@@ -31,7 +33,7 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
 ENTRYPOINT ["python", "-m", "uvicorn", "abba.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
 
 # ---------- Frontend build stage ----------
-FROM node:20-alpine AS frontend-build
+FROM node:22-alpine AS frontend-build
 
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json* ./
