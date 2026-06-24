@@ -43,6 +43,38 @@
         <p v-else class="verse-text">{{ verseData.text }}</p>
       </section>
 
+      <!-- Original Language panel: shown whenever the API returned words -->
+      <section
+        v-if="verseData.words && verseData.words.length"
+        class="study-section orig-lang-section"
+        aria-label="Original Language"
+      >
+        <h2 class="section-heading orig-lang-heading">
+          Original Language{{ origLangLabel ? ' (' + origLangLabel + ')' : '' }}
+        </h2>
+        <div class="orig-lang-chips" role="list">
+          <div
+            v-for="(w, i) in verseData.words"
+            :key="i"
+            class="orig-chip"
+            role="listitem"
+          >
+            <span
+              class="orig-chip__text"
+              :dir="(w.language === 'hebrew' || w.language === 'aramaic') ? 'rtl' : 'ltr'"
+            >{{ w.original_text || '' }}</span>
+            <span v-if="w.transliteration" class="orig-chip__translit">{{ w.transliteration }}</span>
+            <span v-if="w.english_gloss" class="orig-chip__gloss">{{ w.english_gloss }}</span>
+            <router-link
+              v-if="w.strongs_number"
+              :to="`/lexicon/${w.strongs_number}`"
+              class="orig-chip__strongs"
+              :title="`Open lexicon entry for ${w.strongs_number}`"
+            >{{ w.strongs_number }}</router-link>
+          </div>
+        </div>
+      </section>
+
       <WordJourneyCard
         v-if="selectedWord"
         :detail="selectedWord"
@@ -197,6 +229,13 @@ const book = computed<string>(() => (route.params.book as string) || '')
 const chapter = computed<string>(() => (route.params.chapter as string) || '')
 const verse = computed<string>(() => (route.params.verse as string) || '')
 
+/** Derive a human-readable language label from the first word that has one */
+const origLangLabel = computed<string>(() => {
+  const lang = verseData.value?.words?.find(w => w.language)?.language
+  if (!lang) return ''
+  return lang.charAt(0).toUpperCase() + lang.slice(1)
+})
+
 async function loadVerse(): Promise<void> {
   if (!book.value || !chapter.value) return
 
@@ -214,7 +253,10 @@ async function loadVerse(): Promise<void> {
   contextStore.clear()
 
   const bookIdNum = Number(book.value)
-  const result = await api.getVerse(api.DEFAULT_TRANSLATION, bookIdNum, chapter.value, verse.value, depth.value)
+  // Always fetch at least 'standard' depth so original-language words are always included.
+  // If the user has chosen a richer depth (deep/scholarly), honour that instead.
+  const fetchDepth = depth.value === 'basic' ? 'standard' : depth.value
+  const result = await api.getVerse(api.DEFAULT_TRANSLATION, bookIdNum, chapter.value, verse.value, fetchDepth)
   if (result) verseData.value = result
 
   if (verse.value && depth.value !== 'basic') {
@@ -564,5 +606,76 @@ watch(
   font-size: 0.85rem;
   opacity: 0.5;
   font-style: italic;
+}
+
+/* ── Original Language panel ─────────────────────────────── */
+.orig-lang-section {
+  /* inherits .study-section padding/border */
+}
+
+.orig-lang-heading {
+  /* inherits .section-heading colour */
+}
+
+.orig-lang-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.orig-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  min-width: 3.5rem;
+  text-align: center;
+  transition: border-color 0.15s ease;
+}
+
+.orig-chip:hover {
+  border-color: var(--color-accent);
+}
+
+/* Primary original-language word — slightly larger, serif */
+.orig-chip__text {
+  font-family: var(--font-reading, Georgia, serif);
+  font-size: 1.15rem;
+  line-height: 1.3;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+/* Transliteration — muted, small */
+.orig-chip__translit {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  opacity: 0.55;
+  letter-spacing: 0.02em;
+}
+
+/* English gloss — small */
+.orig-chip__gloss {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  opacity: 0.75;
+  font-style: italic;
+}
+
+/* Strong's number — accent link */
+.orig-chip__strongs {
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  color: var(--color-accent);
+  text-decoration: none;
+  margin-top: 0.1rem;
+}
+
+.orig-chip__strongs:hover {
+  text-decoration: underline;
 }
 </style>
