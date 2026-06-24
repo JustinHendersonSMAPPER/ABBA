@@ -69,6 +69,7 @@ from .models import (
 )
 from .query_parser import parse_query
 from .search import SearchAPI
+from .semantic_search import SemanticSearchAPI
 
 router = APIRouter(prefix="/api/v1", tags=["bible"])
 
@@ -83,6 +84,8 @@ class _AppState:
     search_api: Optional[SearchAPI] = None
     analysis_api: Optional[AnalysisAPI] = None
     provenance_store: Optional[ProvenanceStore] = None
+    semantic_api: Optional[SemanticSearchAPI] = None
+    semantic_unavailable: bool = False
 
 
 _state = _AppState()
@@ -119,6 +122,53 @@ def _get_provenance() -> ProvenanceStore:
     if _state.provenance_store is None:
         _state.provenance_store = ProvenanceStore(_get_db())
     return _state.provenance_store
+
+
+def _get_semantic() -> Optional[SemanticSearchAPI]:
+    """Build the semantic search API lazily.
+
+    Returns None (and remembers the failure) if ChromaDB vectors or the
+    embedding models are unavailable, so callers degrade gracefully to FTS.
+    """
+    if _state.semantic_api is None and not _state.semantic_unavailable:
+        try:
+            from ..embeddings.chroma_manager import ChromaManager
+            from ..embeddings.model_manager import EmbeddingModelManager
+
+            config = ConfigManager().get_config()
+            chroma = ChromaManager(persist_path=str(config.vectors_path))
+            models = EmbeddingModelManager(cache_dir=str(config.data_dir / "models"))
+            _state.semantic_api = SemanticSearchAPI(_get_db(), chroma, models)
+        except Exception:  # noqa: BLE001 - any failure means "degrade to FTS"
+            _state.semantic_unavailable = True
+            return None
+    return _state.semantic_api
+
+
+def _fts_only_semantic_results(search_text: str, translation_id: str, limit: int) -> List[SemanticSearchResult]:
+    """Full-text fallback when semantic search is unavailable."""
+    db = _get_db()
+    results: List[SemanticSearchResult] = []
+    try:
+        fts_rows = db.search_verses(translation_id, search_text, limit * 2)
+        for rank, row in enumerate(fts_rows):
+            row_keys = row.keys() if hasattr(row, "keys") else []
+            results.append(
+                SemanticSearchResult(
+                    book_id=row["book_id"],
+                    chapter=row["chapter"],
+                    verse=row["verse"],
+                    text=row["text"],
+                    book_name=row["book_name"] if "book_name" in row_keys else "",
+                    score=round(1.0 - (rank / max(len(fts_rows), 1)), 3),
+                    match_type="exact",
+                    explanation=f"Text match (rank {rank + 1})",
+                    translation_id=translation_id,
+                )
+            )
+    except Exception:  # noqa: BLE001, S110 - best-effort fallback; failure is non-fatal
+        pass
+    return results
 
 
 def configure_db(db_manager: SQLiteManager) -> None:
@@ -635,35 +685,30 @@ async def semantic_search(
     book_override = book_id or parsed.book_filter
     search_text = parsed.text or q
 
-    db = _get_db()
-    results: List[SemanticSearchResult] = []
-
-    # FTS search
-    try:
-        fts_rows = db.search_verses(translation_id, search_text, limit * 2)
-        for rank, row in enumerate(fts_rows):
-            results.append(
-                SemanticSearchResult(
-                    book_id=row["book_id"],
-                    chapter=row["chapter"],
-                    verse=row["verse"],
-                    text=row["text"],
-                    book_name=row["book_name"] if "book_name" in (row.keys() if hasattr(row, "keys") else []) else "",
-                    score=round(1.0 - (rank / max(len(fts_rows), 1)), 3),
-                    match_type="exact",
-                    explanation=f"Text match (rank {rank + 1})",
-                    translation_id=translation_id,
-                )
+    semantic = _get_semantic()
+    if semantic is not None:
+        hybrid = semantic.hybrid_search(search_text, translation_id=translation_id, n_results=limit * 2)
+        results = [
+            SemanticSearchResult(
+                book_id=h.book_id,
+                chapter=h.chapter,
+                verse=h.verse,
+                text=h.text,
+                book_name=h.book_name,
+                score=round(h.score, 3),
+                match_type=h.match_type,
+                explanation=h.explanation,
+                translation_id=h.translation_id,
             )
-    except Exception:  # noqa: BLE001, S110 - best-effort text-match fallback; failure is non-fatal
-        pass
+            for h in hybrid
+        ]
+    else:
+        results = _fts_only_semantic_results(search_text, translation_id, limit)
 
     # Apply filters
     if testament_override:
         t = "old" if testament_override in ("old", "ot") else "new"
-        old_books = set(range(1, 40))
-        new_books = set(range(40, 67))
-        allowed = old_books if t == "old" else new_books
+        allowed = set(range(1, 40)) if t == "old" else set(range(40, 67))
         results = [r for r in results if r.book_id in allowed]
 
     if book_override:
