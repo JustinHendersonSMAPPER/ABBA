@@ -18,7 +18,14 @@ hygiene).
 wrong file would violate the PD-only rule.
 **Recommended default / how I'm proceeding:** Build the importer + parser to a documented TSK
 schema, fixture-tested, and a staging table — but DO NOT bulk-load until you confirm a source URL.
-**Status:** PROCEEDING (default) — importer built & tested against a fixture; bulk load awaits a confirmed PD source.
+**Status:** ✅ **RESOLVED** (merged `d45d0cf`). Found + verified the **CrossWire SWORD "TSK" module**
+— the original ~1880 Treasury of Scripture Knowledge, `DistributionLicense=Public Domain` (NOT the
+CC-BY OpenBible compilation, NOT the copyrighted "enhanced" TSKe). Downloaded to
+`bible_data/sources/TSK.zip` (gitignored; re-fetch from
+`https://www.crosswire.org/ftpmirror/pub/sword/packages/rawzip/TSK.zip`). The importer
+(`abba/database/tsk_importer.py` + `abba/sources/tsk.py`, via pysword/MIT) loaded **578,350**
+grounded cross-references (source verse → target verse + **anchor phrase**) into
+`cross_reference_candidates`. Validated: Gen 1:1→John 1:1/Heb 1:10; John 3:16→Gen 22:12 (anchor "gave").
 
 ## D2 — Minimum confidence threshold for the "no dead data" gate
 **Question:** Below what confidence (0.00–1.00) is an explained cross-reference discarded rather than shown?
