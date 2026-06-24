@@ -3,36 +3,36 @@
     <button class="card-close" @click="$emit('close')" aria-label="Close">&times;</button>
 
     <div class="card-header">
-      <span class="original-text">{{ detail.original }}</span>
-      <span v-if="detail.transliteration" class="transliteration">{{ detail.transliteration }}</span>
+      <span class="original-text">{{ detail.original_text || detail.transliteration || '' }}</span>
+      <span v-if="detail.transliteration && detail.original_text" class="transliteration">{{ detail.transliteration }}</span>
     </div>
 
     <div class="card-gloss">
-      {{ detail.gloss }}
+      {{ detail.english_gloss }}
     </div>
 
     <dl class="card-details">
-      <template v-if="detail.strongs">
+      <template v-if="detail.strongs_number">
         <dt>Strong's</dt>
-        <dd>{{ detail.strongs }}</dd>
+        <dd>{{ detail.strongs_number }}</dd>
       </template>
-      <template v-if="detail.morphology">
+      <template v-if="detail.morphology_code">
         <dt>Morphology</dt>
-        <dd>{{ detail.morphology }}</dd>
+        <dd>{{ detail.morphology_description || detail.morphology_code }}</dd>
       </template>
-      <template v-if="detail.semantic_domain">
-        <dt>Domain</dt>
-        <dd>{{ detail.semantic_domain }}</dd>
+      <template v-if="detail.part_of_speech">
+        <dt>Part of Speech</dt>
+        <dd>{{ detail.part_of_speech }}</dd>
       </template>
-      <template v-if="detail.occurrences != null">
-        <dt>Occurrences</dt>
-        <dd>{{ detail.occurrences }} times in the Bible</dd>
+      <template v-if="detail.language">
+        <dt>Language</dt>
+        <dd>{{ detail.language }}</dd>
       </template>
     </dl>
 
     <router-link
-      v-if="detail.strongs"
-      :to="{ name: 'lexicon', params: { strongs: detail.strongs } }"
+      v-if="detail.strongs_number"
+      :to="{ name: 'lexicon', params: { strongs: detail.strongs_number } }"
       class="learn-more"
     >
       Learn more &rarr;
@@ -42,13 +42,14 @@
 
 <script setup lang="ts">
 interface WordDetail {
-  original?: string
+  original_text?: string
   transliteration?: string
-  gloss?: string
-  strongs?: string
-  morphology?: string
-  semantic_domain?: string
-  occurrences?: number
+  english_gloss?: string
+  strongs_number?: string
+  morphology_code?: string
+  morphology_description?: string
+  part_of_speech?: string
+  language?: string
 }
 
 withDefaults(defineProps<{

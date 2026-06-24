@@ -49,8 +49,8 @@
         <h3 class="section-label">Original Language</h3>
         <div class="word-row">
           <span v-for="(w, i) in comparison.original_words" :key="i" class="orig-word">
-            <span class="orig-text">{{ w.text || w.original }}</span>
-            <span class="orig-gloss">{{ w.gloss }}</span>
+            <span class="orig-text">{{ w.original_text || w.transliteration || '' }}</span>
+            <span class="orig-gloss">{{ w.english_gloss || '' }}</span>
           </span>
         </div>
       </div>
@@ -92,9 +92,9 @@ interface TranslationOption {
 }
 
 interface ComparisonWord {
-  text?: string
-  original?: string
-  gloss: string
+  original_text?: string
+  transliteration?: string
+  english_gloss?: string
 }
 
 interface ComparisonTranslation {

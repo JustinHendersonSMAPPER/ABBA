@@ -165,13 +165,14 @@ import LoadingState from '../components/LoadingState.vue'
 import ProvenanceChip from '../components/ProvenanceChip.vue'
 
 interface WordDetail {
-  original?: string
+  original_text?: string
   transliteration?: string
-  gloss?: string
-  strongs?: string
-  morphology?: string
-  semantic_domain?: string
-  occurrences?: number
+  english_gloss?: string
+  strongs_number?: string
+  morphology_code?: string
+  morphology_description?: string
+  part_of_speech?: string
+  language?: string
 }
 
 const props = defineProps<{
@@ -252,18 +253,19 @@ async function loadVerse(): Promise<void> {
   }
 }
 
-function onWordClick(word: string | Record<string, unknown>, flags: Record<string, unknown>): void {
-  const wordStr = typeof word === 'string' ? word : (word as Record<string, unknown>).text as string || ''
-  const strongs = flags.strongs as string | undefined
-  if (flags && strongs) {
+function onWordClick(word: string | Record<string, unknown>, _flags: Record<string, unknown>): void {
+  const w = typeof word === 'string' ? {} : word as Record<string, unknown>
+  const strongs = (w.strongs_number as string | undefined)
+  if (strongs || w.original_text) {
     selectedWord.value = {
-      original: (flags.original as string | undefined) || wordStr,
-      transliteration: (flags.transliteration as string | undefined) || '',
-      gloss: (flags.gloss as string | undefined) || wordStr,
-      strongs: strongs,
-      morphology: (flags.morphology as string | undefined) || '',
-      semantic_domain: (flags.semantic_domain as string | undefined) || '',
-      occurrences: flags.occurrences as number | undefined,
+      original_text: (w.original_text as string | undefined),
+      transliteration: (w.transliteration as string | undefined),
+      english_gloss: (w.english_gloss as string | undefined),
+      strongs_number: strongs,
+      morphology_code: (w.morphology_code as string | undefined),
+      morphology_description: (w.morphology_description as string | undefined),
+      part_of_speech: (w.part_of_speech as string | undefined),
+      language: (w.language as string | undefined),
     }
   }
 }
