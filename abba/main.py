@@ -337,6 +337,18 @@ def main():  # noqa: C901  # pyright: ignore[reportGeneralTypeIssues]  # large C
 
             return None
 
+        # Handle standalone --populate-books flag (backfill without full reimport)
+        if cli_config.should_populate_books():
+            from abba.database.books_populator import populate_books
+
+            if not config.abba_db_path.exists():
+                logger.error(f"Database not found at {config.abba_db_path}. Run the import pipeline first.")
+                sys.exit(1)
+            books_inserted = populate_books(config.abba_db_path)
+            if config.should_show_output():
+                logger.info(f"Books table populated: {books_inserted} rows inserted")
+            return None
+
         # Download bible.db if needed
         if config.should_download():
             if config.should_show_output():
@@ -532,6 +544,16 @@ def main():  # noqa: C901  # pyright: ignore[reportGeneralTypeIssues]  # large C
                 logger.error(f"   {validation_summary.failed_translations} translation(s) have issues.")
                 logger.error("   Please review the failures above and fix any data issues.")
                 sys.exit(1)
+
+        # Populate books table from verse data (idempotent)
+        try:
+            from abba.database.books_populator import populate_books
+
+            books_inserted = populate_books(config.abba_db_path)
+            if config.should_show_output():
+                logger.info(f"Books table populated: {books_inserted} rows inserted")
+        except Exception as e:
+            logger.warning(f"Failed to populate books table: {e}")
 
         # Print current database stats
         if config.should_show_output():
