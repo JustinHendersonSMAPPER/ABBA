@@ -265,7 +265,7 @@ async def get_verse(
     if depth in (DepthLevel.STANDARD, DepthLevel.DEEP, DepthLevel.SCHOLARLY):
         cached = _try_annotation_cache(book_id, chapter, verse, depth, response, translation_id, book_name)
         if not cached:
-            response.words = _get_words_for_verse(book_name or str(book_id), chapter, verse)
+            response.words = _get_words_for_verse(book_id, chapter, verse)
             response.richness_flags = _get_richness_flags(book_name or str(book_id), chapter, verse)
 
             if depth in (DepthLevel.DEEP, DepthLevel.SCHOLARLY):
@@ -1153,7 +1153,7 @@ async def export_verse(
     book_name = _resolve_book_name(book_id, translation_id)
     ref = f"{book_name or book_id} {chapter}:{verse}"
 
-    words = _get_words_for_verse(book_name or str(book_id), chapter, verse)
+    words = _get_words_for_verse(book_id, chapter, verse)
     xrefs = _get_cross_refs(book_id, chapter, verse)
 
     data: Dict[str, Any] = {
@@ -1214,13 +1214,12 @@ def _deserialize_json_obj(json_str: Optional[str], model_cls: type) -> Optional[
         return None
 
 
-def _apply_cache_standard(row: sqlite3.Row, response: VerseResponse, book_name: Optional[str], verse: int) -> None:
+def _apply_cache_standard(row: sqlite3.Row, response: VerseResponse, book_id: int, verse: int) -> None:
     """Apply STANDARD-depth cached fields to response, falling back to live queries."""
-    book_key = book_name or str(response.chapter)
     chapter = response.chapter
 
     cached_words = _deserialize_json_list(row["words_json"], WordDetail)
-    response.words = cached_words if cached_words is not None else _get_words_for_verse(book_key, chapter, verse)
+    response.words = cached_words if cached_words is not None else _get_words_for_verse(book_id, chapter, verse)
 
     cached_flags = _deserialize_json_list(row["richness_flags_json"], RichnessFlag)
     if cached_flags is not None:
@@ -1279,7 +1278,7 @@ def _try_annotation_cache(
     if row is None:
         return False
 
-    _apply_cache_standard(row, response, book_name, verse)
+    _apply_cache_standard(row, response, book_id, verse)
 
     if depth in (DepthLevel.DEEP, DepthLevel.SCHOLARLY):
         _apply_cache_deep(row, response, book_id, chapter, verse, translation_id)
@@ -1332,17 +1331,14 @@ def _resolve_book_name(book_id: int, translation_id: str) -> Optional[str]:
     return full_name
 
 
-def _get_words_for_verse(book_name: str, chapter: int, verse: int) -> List[WordDetail]:
+def _get_words_for_verse(book_id: int, chapter: int, verse: int) -> List[WordDetail]:
     """Get original language words for a verse as WordDetail models.
 
     Resolves the 3-letter STEP book code from the numeric book_id via
     SemanticSearchAPI.BOOK_ID_TO_NAME, then queries stepbible_verses directly.
 
     Args:
-        book_name: Book name string (may be a full name like "Genesis" or numeric string).
-                   The function uses SemanticSearchAPI.BOOK_ID_TO_NAME to look up the
-                   STEP 3-letter code when a numeric book_id is provided; otherwise it
-                   passes the value through directly (already a STEP code such as "Gen").
+        book_id: Numeric book ID (1=Gen, 43=Jhn, etc.)
         chapter: Chapter number
         verse: Verse number
 
@@ -1350,23 +1346,9 @@ def _get_words_for_verse(book_name: str, chapter: int, verse: int) -> List[WordD
         List of WordDetail models with Strong's numbers normalized.
     """
     db = _get_db()
-    # The book_name arriving here is typically the full English name from the books table
-    # (e.g. "Genesis") or the STEP abbreviation (e.g. "Gen").  We need the STEP 3-letter
-    # code to match stepbible_verses.  Build a reverse lookup from the SemanticSearchAPI map.
-    step_code = book_name
-    # If the value looks like a full book name (longer than 3 chars or title-case), try to
-    # map it via the SemanticSearchAPI.BOOK_ID_TO_NAME reverse index.
-    _name_to_step: Dict[str, str] = {}
-    for _bid, _code in SemanticSearchAPI.BOOK_ID_TO_NAME.items():
-        _name_to_step[_code.lower()] = _code
-    if book_name.lower() not in _name_to_step:
-        # Try prefix match: "Genesis" -> "Gen", "John" -> "Jhn", etc.
-        for _code in SemanticSearchAPI.BOOK_ID_TO_NAME.values():
-            if book_name.lower().startswith(_code.lower()):
-                step_code = _code
-                break
-    else:
-        step_code = _name_to_step[book_name.lower()]
+    step_code = SemanticSearchAPI.BOOK_ID_TO_NAME.get(book_id, "")
+    if not step_code:
+        return []
 
     rows = db.get_words_for_verse(step_code, chapter, verse)
     return [
