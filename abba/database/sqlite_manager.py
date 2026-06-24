@@ -228,22 +228,59 @@ class SQLiteManager:
         """
         return self.execute_query(query, (book, chapter, verse))
 
-    def search_strongs(self, strongs_number: str) -> List[sqlite3.Row]:
-        """Search for verses containing a specific Strong's number.
+    def search_strongs(self, strongs_number: str, limit: int = 500) -> List[sqlite3.Row]:
+        """Find distinct verses containing a specific Strong's number.
+
+        Queries ``stepbible_verses.lexical_strongs`` (pre-computed normalized key).
+        The input *strongs_number* is normalized before querying so that e.g.
+        ``"G03056"``, ``"g3056"``, and ``"G3056"`` all match the same rows.
 
         Args:
-            strongs_number: Strong's number (e.g., "H0430")
+            strongs_number: Strong's number in any padding/case variant (e.g.
+                ``"H0430"``, ``"G746"``, ``"g3056"``).
+            limit: Maximum number of distinct (book, chapter, verse) tuples to
+                return.  Defaults to 500.
 
         Returns:
-            List of word records
+            List of rows with columns ``book``, ``chapter``, ``verse``.
         """
+        from ..strongs import normalize_strongs
+
+        key = normalize_strongs(strongs_number)
         query = """
-            SELECT * FROM words
-            WHERE strongs_primary = ? OR strongs_raw LIKE ?
-            ORDER BY book, chapter, verse, word_num
+            SELECT DISTINCT book, chapter, verse
+            FROM stepbible_verses
+            WHERE lexical_strongs = ?
+            ORDER BY book, chapter, verse
+            LIMIT ?
         """
-        like_pattern = f"%{strongs_number}%"
-        return self.execute_query(query, (strongs_number, like_pattern))
+        return self.execute_query(query, (key, limit))
+
+    def count_strongs_occurrences(self, strongs_number: str) -> int:
+        """Return the total number of distinct verses containing a Strong's number.
+
+        Unlike :meth:`search_strongs` this applies no LIMIT so it reflects the
+        true corpus-wide count, useful for UI badge counts.
+
+        Args:
+            strongs_number: Strong's number in any padding/case variant.
+
+        Returns:
+            Count of distinct (book, chapter, verse) combinations.
+        """
+        from ..strongs import normalize_strongs
+
+        key = normalize_strongs(strongs_number)
+        query = """
+            SELECT COUNT(*) AS cnt
+            FROM (
+                SELECT DISTINCT book, chapter, verse
+                FROM stepbible_verses
+                WHERE lexical_strongs = ?
+            )
+        """
+        rows = self.execute_query(query, (key,))
+        return int(rows[0]["cnt"]) if rows else 0
 
     def get_lexicon_entry(self, strongs_number: str) -> Optional[sqlite3.Row]:
         """Get lexicon entry for a Strong's number.

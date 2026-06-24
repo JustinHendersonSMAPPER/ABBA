@@ -296,18 +296,19 @@ class BookInfo(BaseModel):
 
 
 class StrongsResult(BaseModel):
-    """Result from a Strong's number search."""
+    """Result from a Strong's number concordance search.
 
-    book: str
+    Each result represents one distinct verse (identified by canonical ``book_id``,
+    ``chapter``, ``verse``) where the requested Strong's number occurs, together
+    with the English verse text from the default translation.
+    """
+
+    strongs_number: str
+    book_id: int
+    book_name: str
     chapter: int
     verse: int
-    word_num: int
-    original_text: Optional[str] = None
-    transliteration: Optional[str] = None
-    english_gloss: Optional[str] = None
-    strongs_number: Optional[str] = None
-    morphology_code: Optional[str] = None
-    language: str
+    text: Optional[str] = None
 
 
 class TextSearchResult(BaseModel):

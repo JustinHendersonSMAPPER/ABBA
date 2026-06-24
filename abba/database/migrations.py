@@ -542,6 +542,50 @@ def add_cross_references_table(db_path: Path) -> bool:
         raise
 
 
+def add_stepbible_lexical_strongs_column(db_path: Path) -> bool:
+    """Add lexical_strongs column to stepbible_verses table if it doesn't exist.
+
+    Stores the normalized (unpadded) canonical Strong's key computed from
+    ``extract_lexical_strongs`` + ``normalize_strongs``, enabling fast concordance
+    lookups without per-query derivation.
+
+    Args:
+        db_path: Path to the database
+
+    Returns:
+        True if migration was needed and succeeded, False if already exists or
+        if stepbible_verses table does not exist yet.
+    """
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+
+            # If the table doesn't exist yet, nothing to do
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='stepbible_verses'")
+            if cursor.fetchone()[0] == 0:
+                logger.debug("stepbible_verses table not present; skipping lexical_strongs migration")
+                return False
+
+            # Idempotent: check whether column already exists
+            cursor.execute("PRAGMA table_info(stepbible_verses)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "lexical_strongs" in columns:
+                logger.debug("lexical_strongs column already exists in stepbible_verses")
+                return False
+
+            cursor.execute("ALTER TABLE stepbible_verses ADD COLUMN lexical_strongs TEXT")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_stepbible_lexical_strongs ON stepbible_verses(lexical_strongs)"
+            )
+            conn.commit()
+            logger.info("Added lexical_strongs column and index to stepbible_verses")
+            return True
+
+    except Exception as e:
+        logger.error("Failed to add lexical_strongs column: %s", e)
+        raise
+
+
 def add_provenance_table(db_path: Path) -> bool:
     """Add the central provenance table for auditable data attribution.
 
@@ -1442,6 +1486,8 @@ _MIGRATIONS = [
     (add_user_annotation_tables, "user annotation tables"),
     # Phase 0a provenance foundation
     (add_provenance_table, "provenance table"),
+    # Strong's concordance: pre-computed lexical key for fast concordance queries
+    (add_stepbible_lexical_strongs_column, "stepbible lexical_strongs column"),
 ]
 
 
