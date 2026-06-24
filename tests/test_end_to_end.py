@@ -216,8 +216,8 @@ class TestWordAnalysis:
         assert "hebrew" in morph["description"].lower()
 
     def test_greek_word_analysis(self, client):
-        """Full analysis of John 1:1 word 5 (Logos)."""
-        resp = client.get("/api/v1/words/John/1/1/5")
+        """Full analysis of John 1:1 word 5 (Logos). STEP uses the 3-letter book code 'Jhn'."""
+        resp = client.get("/api/v1/words/Jhn/1/1/5")
         assert resp.status_code == 200
         body = resp.json()
 
@@ -363,8 +363,8 @@ class TestDataIntegrity:
     def test_database_stats_reflect_seeded_data(self, seeded_db_manager):
         """Database statistics match the number of seeded records."""
         stats = seeded_db_manager.get_database_stats()
-        assert stats["translations"] == 2
-        assert stats["verses"] == 10  # 5 BSB Gen + 3 BSB John + 2 KJV Gen
-        assert stats["words"] >= 12  # 7 Gen Hebrew + 5 John Greek
+        assert stats["translations"] == 3  # engbsb + engkjv + BSB
+        assert stats["verses"] == 18  # engbsb (5 Gen + 3 John) + engkjv (2 Gen) + BSB (5 Gen + 3 John)
+        assert stats["words"] >= 12  # 7 Gen Hebrew + 5 John Greek (words table)
         assert stats["lexicon"] >= 11
         assert stats["morphology"] >= 12

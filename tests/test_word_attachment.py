@@ -99,9 +99,9 @@ class TestGetWordsForVerse:
         assert len(rows) == 1
 
     def test_extract_strongs_greek(self) -> None:
-        """Test Strong's extraction for Greek word."""
+        """Test Strong's extraction for Greek word (source/padded form; lookups normalize)."""
         result = extract_lexical_strongs("G0746", "G0746")
-        assert result == "G746"
+        assert result == "G0746"
 
     def test_extract_strongs_hebrew_step_prefix(self) -> None:
         """Test Strong's extraction for Hebrew word with STEP prefix."""

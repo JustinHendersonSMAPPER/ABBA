@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ..database import SQLiteManager
+from ..strongs import extract_lexical_strongs
 
 
 @dataclass
@@ -163,33 +164,38 @@ class SearchAPI:
         Returns:
             Complete word analysis with lexicon and morphology info
         """
-        # Get word data
+        # Get word data (original-language words from stepbible_verses via get_words_for_verse)
         words = self.db_manager.get_words_for_verse(book, chapter, verse)
-        word = next((w for w in words if w["word_num"] == word_num), None)
+        word = next((w for w in words if w["word_number"] == word_num), None)
 
         if not word:
             return None
 
+        language = word["language"]
+        original = word["original_word"]
+        is_hebrew = language in ("hebrew", "aramaic")
+        lexical_strongs = extract_lexical_strongs(word["strongs_primary"], word["strongs_raw"])
         analysis = {
             "word": {
-                "book": word["book"],
-                "chapter": word["chapter"],
-                "verse": word["verse"],
-                "word_num": word["word_num"],
-                "word_ref": word["word_ref"],
-                "hebrew_text": word["hebrew_text"],
-                "greek_text": word["greek_text"],
+                "book": book,
+                "chapter": chapter,
+                "verse": verse,
+                "word_num": word["word_number"],
+                "word_ref": f"{book}.{chapter}.{verse}#{word['word_number']:02d}",
+                "hebrew_text": original if is_hebrew else None,
+                "greek_text": original if language == "greek" else None,
                 "transliteration": word["transliteration"],
-                "translation": word["translation"],
-                "language": word["language"],
+                "translation": word["english"],
+                "language": language,
+                "strongs_number": lexical_strongs,
             },
             "lexicon": None,
             "morphology": None,
         }
 
-        # Get lexicon entry
-        if word["strongs_primary"]:
-            lexicon = self.db_manager.get_lexicon_entry(word["strongs_primary"])
+        # Get lexicon entry (normalized lookup resolves padded/prefixed Strong's codes)
+        if lexical_strongs:
+            lexicon = self.db_manager.get_lexicon_entry(lexical_strongs)
             if lexicon:
                 analysis["lexicon"] = {
                     "strongs_number": lexicon["strongs_number"],
@@ -201,8 +207,8 @@ class SearchAPI:
                 }
 
         # Get morphology info
-        if word["morphology_code"]:
-            morphology = self.db_manager.get_morphology_info(word["morphology_code"])
+        if word["morphology"]:
+            morphology = self.db_manager.get_morphology_info(word["morphology"])
             if morphology:
                 analysis["morphology"] = {
                     "code": morphology["code"],
