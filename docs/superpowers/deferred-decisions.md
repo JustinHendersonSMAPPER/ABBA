@@ -59,7 +59,9 @@ subscription, upgrade for access"** — this Ollama instance isn't authenticated
 (needs `ollama signin` on the box). So I downloaded + defaulted to **local `qwen2.5:14b`** (clean
 instruct, fits the 5090, ~1.3s/explanation warm) and validated quality. **To use the 397B cloud model
 for the full run, sign Ollama into the subscription account, then set `ABBA_OLLAMA_MODEL=qwen3.5:397b-cloud`.**
-Full run command: `uv run python -c "from abba.semantic.cross_ref_explainer import generate_explanations; print(generate_explanations('bible_data/abba.db'))"` (idempotent/resumable; ~578K candidates).
+Full run command (sequential): `uv run python -c "from abba.semantic.cross_ref_explainer import generate_explanations; print(generate_explanations('bible_data/abba.db'))"` (idempotent/resumable; ~578K candidates).
+
+**FULL RUN LAUNCHED 2026-06-24 (~18:01) via a concurrent driver** `claude/run_full_xref.py` (10 workers, thread-local DB handles, reuses the engine; pre-filters the 20.7% anchor-less candidates so they skip the LLM unless 3+ shared Strong's). Detached (`Start-Process`, PID in `claude/xref_full.pid`, logs `claude/xref_full.out.log`/`.err.log`). **Bottleneck: `OLLAMA_NUM_PARALLEL=4`** (a persistent User env var the box owner set) caps the 5090 at 4 concurrent generations → ~2.3 LLM/s → **ETA ~2.3 days** for the 458,823 anchored candidates. Left the user's deliberate Ollama config untouched (they said time doesn't matter). **Optional ~2x speedup:** set `OLLAMA_NUM_PARALLEL=8`–12, restart Ollama; the run auto-accelerates on resume (idempotent skip-existing). Monitor: `Get-Content claude/xref_full.out.log -Tail 3` (logs every 500). Resume after any interruption: re-run the same `Start-Process` command.
 
 ## D5 — Historical/cultural context PD source & entity-linking scope
 **Question:** Which PD reference works to ingest first (ISBE 1915 / Easton's / Smith's) and how granular
