@@ -34,7 +34,7 @@
           :class="{ active: selectedTranslations.includes(t.id) }"
         >
           <input type="checkbox" :value="t.id" v-model="selectedTranslations" class="chip-check" />
-          {{ t.abbreviation || t.id }}
+          {{ t.name || t.id }}
         </label>
       </div>
     </div>
@@ -84,12 +84,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useApi } from '../composables/useApi'
-import type { BookInfo } from '../types/api'
-
-interface TranslationOption {
-  id: string
-  abbreviation: string
-}
+import type { BookInfo, TranslationInfo } from '../types/api'
 
 interface ComparisonWord {
   original_text?: string
@@ -126,26 +121,37 @@ const selectedVerse = ref('1')
 const chapterCount = ref(0)
 const selectedTranslations = ref<string[]>(['BSB'])
 const comparison = ref<ComparisonResult | null>(null)
-
-// Only BSB is a known-valid translation id; a /translations endpoint does not yet
-// exist in the backend, so we seed one entry here. Add more entries once the
-// backend exposes GET /api/v1/translations.
-const availableTranslations = ref<TranslationOption[]>([
-  { id: 'BSB', abbreviation: 'BSB' },
-])
+const availableTranslations = ref<TranslationInfo[]>([])
 
 const canCompare = computed(() =>
   selectedBook.value && selectedChapter.value && selectedVerse.value && selectedTranslations.value.length >= 2
 )
 
 onMounted(async () => {
-  const result = await api.getBooks()
-  if (result) {
-    if (Array.isArray(result)) {
-      books.value = result as BookInfo[]
+  const [booksResult, translationsResult] = await Promise.all([
+    api.getBooks(),
+    api.getTranslations(),
+  ])
+
+  if (booksResult) {
+    if (Array.isArray(booksResult)) {
+      books.value = booksResult as BookInfo[]
     } else {
-      books.value = ((result as Record<string, unknown>).books as BookInfo[]) || []
+      books.value = ((booksResult as Record<string, unknown>).books as BookInfo[]) || []
     }
+  }
+
+  if (translationsResult && translationsResult.length > 0) {
+    availableTranslations.value = translationsResult
+    // Default: BSB plus eng_kjv if present
+    const ids = translationsResult.map(t => t.id)
+    selectedTranslations.value = ['BSB', ...(ids.includes('eng_kjv') ? ['eng_kjv'] : [])].filter(id => ids.includes(id))
+    if (selectedTranslations.value.length === 0) {
+      selectedTranslations.value = [ids[0]]
+    }
+  } else {
+    // Fallback to a single BSB stub when the endpoint is unavailable
+    availableTranslations.value = [{ id: 'BSB', name: 'BSB', language: 'eng' }]
   }
 })
 

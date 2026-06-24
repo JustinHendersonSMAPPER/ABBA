@@ -22,6 +22,7 @@ import type {
   ShareData,
   TopicDetail,
   TopicSummary,
+  TranslationInfo,
   VerseResponse,
   WordDomainResult,
   WordExplanation,
@@ -47,6 +48,7 @@ export interface UseApiReturn {
   loading: Ref<boolean>
   error: Ref<string | null>
   DEFAULT_TRANSLATION: string
+  getTranslations: () => Promise<TranslationInfo[] | null>
   getProvenance: (entityType: string, entityId: string) => Promise<ProvenanceData | null>
   getVerse: (translationId: string, bookId: number, chapter: string | number, verse: string | number, depth?: string) => Promise<VerseResponse | null>
   getChapter: (translationId: string, bookId: number, chapter: string | number, depth?: string) => Promise<VerseResponse[] | null>
@@ -118,6 +120,10 @@ export function useApi(): UseApiReturn {
       _pendingCount--
       if (_pendingCount === 0) loading.value = false
     }
+  }
+
+  function getTranslations(): Promise<TranslationInfo[] | null> {
+    return call(() => request<TranslationInfo[]>('/translations'))
   }
 
   function getVerse(translationId: string, bookId: number, chapter: string | number, verse: string | number, depth = 'basic'): Promise<VerseResponse | null> {
@@ -404,6 +410,7 @@ export function useApi(): UseApiReturn {
     loading,
     error,
     DEFAULT_TRANSLATION,
+    getTranslations,
     getProvenance,
     getVerse,
     getChapter,

@@ -62,6 +62,7 @@ from .models import (
     TopicalResult,
     TopicSummary,
     TranslationComparison,
+    TranslationInfo,
     VerseContext,
     VerseResponse,
     VerseSyntaxTree,
@@ -195,6 +196,40 @@ def configure_db(db_manager: SQLiteManager) -> None:
 async def api_root() -> APIInfo:
     """Return API metadata."""
     return APIInfo()
+
+
+# --- Translations Endpoint ---
+
+
+@router.get("/translations", response_model=List[TranslationInfo], tags=["translations"])
+async def list_translations() -> List[TranslationInfo]:
+    """Return all translations that have at least one verse.
+
+    Ordering: default translation (BSB) first, then English translations,
+    then others — all alphabetically by name within each group.
+    """
+    db = _get_db()
+    rows = db.execute_query(
+        """
+        SELECT t.id, t.name, t.language, t.english_name
+        FROM translations t
+        WHERE EXISTS (SELECT 1 FROM verses v WHERE v.translation_id = t.id)
+        ORDER BY
+            CASE WHEN t.id = ? THEN 0 ELSE 1 END,
+            CASE WHEN t.language = 'eng' THEN 0 ELSE 1 END,
+            t.name ASC
+        """,
+        (DEFAULT_TRANSLATION_ID,),
+    )
+    return [
+        TranslationInfo(
+            id=row["id"],
+            name=row["name"],
+            language=row["language"],
+            english_name=row["english_name"] if row["english_name"] else None,
+        )
+        for row in rows
+    ]
 
 
 # --- Provenance Endpoints ---

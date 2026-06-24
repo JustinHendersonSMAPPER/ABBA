@@ -737,3 +737,15 @@ class APIInfo(BaseModel):
     version: str = "0.1.0"
     description: str = "Annotated Bible and Background Analysis"
     docs_url: str = "/docs"
+
+
+# --- Translation List Model ---
+
+
+class TranslationInfo(BaseModel):
+    """Basic metadata for a Bible translation."""
+
+    id: str
+    name: str
+    language: str
+    english_name: Optional[str] = None
