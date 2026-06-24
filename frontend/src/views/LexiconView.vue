@@ -52,6 +52,25 @@
         </div>
       </section>
 
+      <section class="entry-section occurrences-section">
+        <h2 class="section-label">
+          Appears in
+          {{ occurrences.length }}{{ occurrences.length >= 50 ? '+' : '' }}
+          verse{{ occurrences.length !== 1 ? 's' : '' }}
+        </h2>
+        <LoadingState v-if="occurrencesLoading" label="Loading occurrences…" />
+        <p v-else-if="occurrences.length === 0" class="status-msg occurrence-empty">No occurrences found.</p>
+        <ul v-else class="occurrence-list">
+          <li v-for="(o, i) in occurrences" :key="i" class="occurrence-row">
+            <router-link
+              :to="`/study/${o.book_id}/${o.chapter}/${o.verse}`"
+              class="occurrence-ref"
+            >{{ o.book_name }} {{ o.chapter }}:{{ o.verse }}</router-link>
+            <span class="occurrence-text">{{ o.text }}</span>
+          </li>
+        </ul>
+      </section>
+
       <div class="word-actions">
         <router-link
           :to="{ name: 'search', query: { q: strongsNumber, mode: 'strongs' } }"
@@ -70,7 +89,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi'
-import type { LexiconEntry, WordExplanation, SemanticDomain } from '../types/api'
+import type { LexiconEntry, WordExplanation, SemanticDomain, SearchResult } from '../types/api'
 import LoadingState from '../components/LoadingState.vue'
 
 const route = useRoute()
@@ -81,6 +100,8 @@ const strongsNumber = ref('')
 const entry = ref<LexiconEntry | null>(null)
 const explanation = ref<WordExplanation | null>(null)
 const domains = ref<SemanticDomain[]>([])
+const occurrences = ref<SearchResult[]>([])
+const occurrencesLoading = ref(false)
 
 onMounted(() => {
   if (route.params.strongs) {
@@ -104,12 +125,16 @@ async function loadWord() {
   entry.value = null
   explanation.value = null
   domains.value = []
+  occurrences.value = []
 
-  const [lexData, explainData, domainData] = await Promise.all([
+  occurrencesLoading.value = true
+  const [lexData, explainData, domainData, concordanceData] = await Promise.all([
     api.getWordDetail(strongsNumber.value),
     api.getWordExplanation(strongsNumber.value),
     api.getWordDomains(strongsNumber.value),
+    api.searchStrongs(strongsNumber.value, 50),
   ])
+  occurrencesLoading.value = false
 
   if (lexData) entry.value = lexData
   if (explainData) explanation.value = explainData
@@ -117,6 +142,7 @@ async function loadWord() {
     const domainResult = domainData as unknown as Record<string, unknown>
     domains.value = (domainResult.domains as SemanticDomain[]) || []
   }
+  if (concordanceData) occurrences.value = concordanceData
 }
 </script>
 
@@ -182,4 +208,44 @@ async function loadWord() {
 .error { color: #c0392b; opacity: 1; }
 .domain-link { text-decoration: none; color: inherit; }
 .domain-link:hover { background: rgba(74, 111, 165, 0.2); }
+
+.occurrences-section { margin-bottom: 1.25rem; }
+
+.occurrence-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.occurrence-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.occurrence-ref {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.occurrence-ref:hover { text-decoration: underline; }
+
+.occurrence-text {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  opacity: 0.75;
+  word-break: break-word;
+}
+
+.occurrence-empty { margin: 0.25rem 0 0; padding: 0; }
 </style>
