@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from ..config import ABBAConfig, ConfigManager
 from ..database import SQLiteManager
+from ..provenance import ProvenanceStore
 from .analysis import AnalysisAPI
 from .models import (
     APIInfo,
@@ -39,6 +40,7 @@ from .models import (
     NoteCreate,
     NoteResponse,
     PassageInfo,
+    ProvenanceRecord,
     ReadingPlanDetail,
     ReadingPlanEntry,
     ReadingPlanSummary,
@@ -80,6 +82,7 @@ class _AppState:
     db_manager: Optional[SQLiteManager] = None
     search_api: Optional[SearchAPI] = None
     analysis_api: Optional[AnalysisAPI] = None
+    provenance_store: Optional[ProvenanceStore] = None
 
 
 _state = _AppState()
@@ -111,6 +114,13 @@ def _get_analysis() -> AnalysisAPI:
     return _state.analysis_api
 
 
+def _get_provenance() -> ProvenanceStore:
+    """Get or create the ProvenanceStore singleton."""
+    if _state.provenance_store is None:
+        _state.provenance_store = ProvenanceStore(_get_db())
+    return _state.provenance_store
+
+
 def configure_db(db_manager: SQLiteManager) -> None:
     """Configure the routes with an existing database manager.
 
@@ -120,6 +130,7 @@ def configure_db(db_manager: SQLiteManager) -> None:
     _state.db_manager = db_manager
     _state.search_api = SearchAPI(db_manager)
     _state.analysis_api = AnalysisAPI(db_manager)
+    _state.provenance_store = ProvenanceStore(db_manager)
 
 
 # --- Root ---
@@ -129,6 +140,36 @@ def configure_db(db_manager: SQLiteManager) -> None:
 async def api_root() -> APIInfo:
     """Return API metadata."""
     return APIInfo()
+
+
+# --- Provenance Endpoints ---
+
+
+@router.get("/provenance/export", response_model=List[ProvenanceRecord], tags=["provenance"])
+async def export_provenance() -> List[ProvenanceRecord]:
+    """Export every provenance record for public scrutiny."""
+    store = _get_provenance()
+    return [ProvenanceRecord(**rec) for rec in store.export_all()]
+
+
+@router.get("/provenance/{entity_type}/{entity_id}", response_model=ProvenanceRecord, tags=["provenance"])
+async def get_provenance(entity_type: str, entity_id: str) -> ProvenanceRecord:
+    """Return the audit record for one enrichment element."""
+    prov = _get_provenance().get(entity_type, entity_id)
+    if prov is None:
+        raise HTTPException(status_code=404, detail="No provenance record found")
+    return ProvenanceRecord(
+        entity_type=prov.entity_type,
+        entity_id=prov.entity_id,
+        source=prov.source,
+        source_detail=prov.source_detail,
+        trust_tier=prov.trust_tier.value,
+        trust_rationale=prov.trust_rationale,
+        generated_by=prov.generated_by,
+        grounding=prov.grounding,
+        confidence=prov.confidence,
+        pipeline_version=prov.pipeline_version,
+    )
 
 
 # --- Verse Endpoints ---

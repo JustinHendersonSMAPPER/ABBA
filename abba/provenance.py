@@ -73,6 +73,9 @@ class ProvenanceStore:
 
     def __init__(self, db: "SQLiteManager") -> None:
         self.db = db
+        from .database.migrations import add_provenance_table  # pylint: disable=import-outside-toplevel
+
+        add_provenance_table(db.db_path)
 
     def record(self, prov: Provenance) -> None:
         """Upsert a provenance record, keyed by (entity_type, entity_id)."""
