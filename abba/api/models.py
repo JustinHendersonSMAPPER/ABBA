@@ -141,6 +141,21 @@ class PassageInfo(BaseModel):
     end_verse: int
 
 
+class ProvenanceRecord(BaseModel):
+    """Auditable attribution record exposed for public scrutiny."""
+
+    entity_type: str
+    entity_id: str
+    source: str
+    source_detail: Optional[str] = None
+    trust_tier: str
+    trust_rationale: str
+    generated_by: Optional[str] = None
+    grounding: Dict[str, Any] = Field(default_factory=dict)
+    confidence: Optional[float] = None
+    pipeline_version: str
+
+
 # --- Speaker Attribution Models ---
 
 

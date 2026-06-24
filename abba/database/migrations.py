@@ -542,6 +542,57 @@ def add_cross_references_table(db_path: Path) -> bool:
         raise
 
 
+def add_provenance_table(db_path: Path) -> bool:
+    """Add the central provenance table for auditable data attribution.
+
+    One uniform audit record per enrichment element, keyed by
+    (entity_type, entity_id): where it came from, whether it is trusted, why,
+    and — for AI output — a 0.00-1.00 confidence.
+
+    Args:
+        db_path: Path to the database
+
+    Returns:
+        True if migration was needed and succeeded, False if already exists
+    """
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='provenance'")
+            if cursor.fetchone()[0] > 0:
+                logger.debug("provenance table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS provenance (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    source_detail TEXT,
+                    trust_tier TEXT NOT NULL CHECK(trust_tier IN ('A', 'B', 'C')),
+                    trust_rationale TEXT NOT NULL,
+                    generated_by TEXT,
+                    grounding_json TEXT,
+                    confidence REAL CHECK(confidence IS NULL OR (confidence >= 0.0 AND confidence <= 1.0)),
+                    pipeline_version TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(entity_type, entity_id)
+                )
+            """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_provenance_entity ON provenance(entity_type, entity_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_provenance_tier ON provenance(trust_tier)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_provenance_source ON provenance(source)")
+            conn.commit()
+            logger.info("Added provenance table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add provenance table: %s", e)
+        raise
+
+
 def add_word_richness_table(db_path: Path) -> bool:
     """Add word_richness table for precomputed meaning-loss scores.
 
@@ -1389,6 +1440,8 @@ _MIGRATIONS = [
     (add_ml_and_graph_tables, "ML and graph tables"),
     # Phase 8 user features
     (add_user_annotation_tables, "user annotation tables"),
+    # Phase 0a provenance foundation
+    (add_provenance_table, "provenance table"),
 ]
 
 
