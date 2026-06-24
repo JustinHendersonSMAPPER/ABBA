@@ -63,18 +63,26 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(t, i) in comparison.translations || []" :key="i">
-            <td class="trans-id">{{ t.name || t.translation_id }}</td>
-            <td class="trans-text">{{ t.text }}</td>
+          <tr v-for="(text, tid) in comparison.translations || {}" :key="tid">
+            <td class="trans-id">{{ translationName(tid) }}</td>
+            <td class="trans-text">{{ text }}</td>
           </tr>
         </tbody>
       </table>
 
       <div v-if="comparison.divergences && comparison.divergences.length" class="divergences">
-        <h3 class="section-label">Translation Divergences</h3>
+        <h3 class="section-label">Wording Differences</h3>
         <div v-for="(d, i) in comparison.divergences" :key="i" class="divergence-item">
-          <span class="div-word">{{ d.word || d.original_word }}</span>
-          <span class="div-note">{{ d.note || d.explanation }}</span>
+          <div class="div-pair">
+            {{ (d.translations || []).map(translationName).join(' vs ') }}
+            <span v-if="d.similarity != null" class="div-sim">· {{ Math.round(d.similarity * 100) }}% word overlap</span>
+          </div>
+          <div v-if="d.unique_to_first && d.unique_to_first.length" class="div-unique">
+            <strong>{{ translationName((d.translations || [])[0]) }} only:</strong> {{ d.unique_to_first.join(', ') }}
+          </div>
+          <div v-if="d.unique_to_second && d.unique_to_second.length" class="div-unique">
+            <strong>{{ translationName((d.translations || [])[1]) }} only:</strong> {{ d.unique_to_second.join(', ') }}
+          </div>
         </div>
       </div>
     </div>
@@ -92,23 +100,17 @@ interface ComparisonWord {
   english_gloss?: string
 }
 
-interface ComparisonTranslation {
-  name?: string
-  translation_id?: string
-  text: string
-}
-
 interface Divergence {
-  word?: string
-  original_word?: string
-  note?: string
-  explanation?: string
+  translations?: string[]
+  similarity?: number
+  unique_to_first?: string[]
+  unique_to_second?: string[]
 }
 
 interface ComparisonResult {
   reference?: string
   original_words?: ComparisonWord[]
-  translations?: ComparisonTranslation[]
+  translations?: Record<string, string>
   divergences?: Divergence[]
 }
 
@@ -159,6 +161,11 @@ function onBookChange(): void {
   selectedChapter.value = ''
   const book = books.value.find((b: BookInfo) => b.name === selectedBook.value)
   chapterCount.value = book ? book.chapter_count : 0
+}
+
+function translationName(id: string | number): string {
+  const t = availableTranslations.value.find((x) => x.id === String(id))
+  return t?.name || String(id)
 }
 
 async function loadComparison(): Promise<void> {
@@ -242,9 +249,12 @@ async function loadComparison(): Promise<void> {
 .trans-text { font-family: var(--font-reading); line-height: 1.6; }
 
 .divergences { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--color-border); }
-.divergence-item { padding: 0.35rem 0; font-size: 0.9rem; }
-.div-word { font-weight: 600; margin-right: 0.5rem; }
-.div-note { opacity: 0.7; }
+.divergence-item { padding: 0.5rem 0; font-size: 0.9rem; border-bottom: 1px solid var(--color-border); }
+.divergence-item:last-child { border-bottom: none; }
+.div-pair { font-family: var(--font-ui); font-weight: 600; font-size: 0.85rem; }
+.div-sim { font-weight: 400; opacity: 0.6; margin-left: 0.25rem; }
+.div-unique { font-size: 0.85rem; opacity: 0.85; margin-top: 0.2rem; line-height: 1.5; }
+.div-unique strong { font-weight: 600; }
 
 .status-msg { font-family: var(--font-ui); font-size: 0.9rem; opacity: 0.6; padding: 1rem 0; }
 .error { color: #c0392b; opacity: 1; }
