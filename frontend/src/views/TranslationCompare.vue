@@ -8,7 +8,7 @@
     <div class="compare-controls">
       <select v-model="selectedBook" class="control-select" @change="onBookChange">
         <option value="" disabled>Book</option>
-        <option v-for="book in books" :key="book.id" :value="book.id">{{ book.name }}</option>
+        <option v-for="book in books" :key="book.book_id" :value="String(book.book_id)">{{ book.name }}</option>
       </select>
       <select v-model="selectedChapter" class="control-select" @change="selectedVerse = '1'">
         <option value="" disabled>Ch.</option>
@@ -124,11 +124,11 @@ const selectedBook = ref('')
 const selectedChapter = ref('')
 const selectedVerse = ref('1')
 const chapterCount = ref(0)
-const selectedTranslations = ref<string[]>(['engbsb', 'engkjv'])
+const selectedTranslations = ref<string[]>(['BSB'])
 const comparison = ref<ComparisonResult | null>(null)
 
 const availableTranslations = ref<TranslationOption[]>([
-  { id: 'engbsb', abbreviation: 'BSB' },
+  { id: 'BSB', abbreviation: 'BSB' },
   { id: 'engkjv', abbreviation: 'KJV' },
   { id: 'engesv', abbreviation: 'ESV' },
   { id: 'engniv', abbreviation: 'NIV' },
@@ -141,14 +141,20 @@ const canCompare = computed(() =>
 )
 
 onMounted(async () => {
-  const result = await api.getBooks() as Record<string, unknown> | null
-  if (result) books.value = ((result as Record<string, unknown>).books || result) as BookInfo[]
+  const result = await api.getBooks()
+  if (result) {
+    if (Array.isArray(result)) {
+      books.value = result as BookInfo[]
+    } else {
+      books.value = ((result as Record<string, unknown>).books as BookInfo[]) || []
+    }
+  }
 })
 
 function onBookChange(): void {
   selectedChapter.value = ''
-  const book = books.value.find((b: BookInfo) => b.id === selectedBook.value)
-  chapterCount.value = book ? book.chapters : 0
+  const book = books.value.find((b: BookInfo) => String(b.book_id) === selectedBook.value)
+  chapterCount.value = book ? book.chapter_count : 0
 }
 
 async function loadComparison(): Promise<void> {

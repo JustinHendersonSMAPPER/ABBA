@@ -6,7 +6,7 @@
     <template v-else-if="verseData">
       <header class="study-header">
         <h1 class="study-ref">
-          {{ verseData.book || book }} {{ verseData.chapter || chapter }}<template v-if="verse">:{{ verseData.verse || verse }}</template>
+          {{ verseData.reference || (verseData.book_name + ' ' + verseData.chapter + ':' + verseData.verse) }}
         </h1>
         <LiteraryModeIndicator
           v-if="verseData.genre || verseData.literary_structures"
@@ -37,7 +37,7 @@
         <TranslationLens
           v-if="depth !== 'basic' && verseData.words"
           :words="verseData.words"
-          :rich-flags="(verseData.richness_flags || []).map(f => typeof f === 'string' ? { richness: 0, explanation: f } : f)"
+          :rich-flags="(verseData.richness_flags || []).map(f => ({ richness: 0, explanation: typeof f === 'string' ? f : f.explanation }))"
           @word-click="onWordClick"
         />
         <p v-else class="verse-text">{{ verseData.text }}</p>
@@ -50,11 +50,11 @@
         @close="selectedWord = null"
       />
 
-      <section v-if="depth !== 'basic' && verseData.parallel_translations" class="study-section">
-        <h2 class="section-heading">Translations</h2>
-        <div v-for="(trans, i) in verseData.parallel_translations" :key="i" class="translation-row">
-          <span class="trans-name">{{ trans.name }}</span>
-          <span class="trans-text">{{ trans.text }}</span>
+      <section v-if="depth !== 'basic' && verseData.parallel_passages && verseData.parallel_passages.length" class="study-section">
+        <h2 class="section-heading">Parallel Passages</h2>
+        <div v-for="(p, i) in verseData.parallel_passages" :key="i" class="translation-row">
+          <span class="trans-name">{{ (p as Record<string, unknown>).reference || '' }}</span>
+          <span class="trans-text">{{ (p as Record<string, unknown>).text || '' }}</span>
         </div>
       </section>
 
@@ -75,32 +75,28 @@
         :variants="verseData.manuscript_variants"
       />
 
-      <section v-if="contextData" class="study-section">
+      <section v-if="verseData.cultural_context && verseData.cultural_context.length" class="study-section">
         <h2 class="section-heading">Context</h2>
-        <div v-if="contextData.cultural && contextData.cultural.length">
+        <div>
           <h3 class="sub-heading">Cultural Background</h3>
-          <p v-for="(item, i) in contextData.cultural" :key="'c-' + i" class="context-text">
-            {{ typeof item === 'object' && item !== null ? (item as { text?: string }).text || '' : String(item) }}
+          <p v-for="(item, i) in verseData.cultural_context" :key="'c-' + i" class="context-text">
+            {{ item.text }}
           </p>
-        </div>
-        <div v-if="contextData.historical">
-          <h3 class="sub-heading">Historical Setting</h3>
-          <p class="context-text">{{ contextData.historical }}</p>
         </div>
       </section>
 
-      <section v-if="crossRefs && crossRefs.length" class="study-section">
+      <section v-if="verseData.cross_references && verseData.cross_references.length" class="study-section">
         <h2 class="section-heading">Cross-References</h2>
         <ul class="cross-ref-list">
-          <li v-for="(ref, i) in crossRefs" :key="i">
+          <li v-for="(ref, i) in verseData.cross_references" :key="i">
             <router-link
-              v-if="ref.book && ref.chapter && ref.verse"
-              :to="`/study/${ref.book}/${ref.chapter}/${ref.verse}`"
+              v-if="ref.book_id && ref.chapter && ref.verse"
+              :to="`/study/${ref.book_id}/${ref.chapter}/${ref.verse}`"
               class="ref-link"
             >
-              {{ ref.label || `${ref.book} ${ref.chapter}:${ref.verse}` }}
+              {{ ref.label || `${ref.book_name || ref.book_id} ${ref.chapter}:${ref.verse}` }}
             </router-link>
-            <span v-else>{{ ref.label || ref }}</span>
+            <span v-else>{{ ref.label }}</span>
             <span v-if="ref.note" class="ref-note"> -- {{ ref.note }}</span>
             <ProvenanceChip
               v-if="ref.id != null"
@@ -155,7 +151,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi'
 import { useContextStore } from '../stores/context'
-import type { VerseData, ContextData, CrossReference, AudioResource, CollectionInfo } from '../types/api'
+import type { VerseResponse, AudioResource, CollectionInfo, CulturalNote } from '../types/api'
 import TranslationLens from '../components/TranslationLens.vue'
 import WordJourneyCard from '../components/WordJourneyCard.vue'
 import LiteraryModeIndicator from '../components/LiteraryModeIndicator.vue'
@@ -187,9 +183,7 @@ const router = useRouter()
 const api = useApi()
 const contextStore = useContextStore()
 
-const verseData = ref<VerseData | null>(null)
-const contextData = ref<ContextData | null>(null)
-const crossRefs = ref<CrossReference[]>([])
+const verseData = ref<VerseResponse | null>(null)
 const selectedWord = ref<WordDetail | null>(null)
 const shareUrl = ref<string | null>(null)
 const showCollectionPicker = ref<boolean>(false)
@@ -212,58 +206,46 @@ async function loadVerse(): Promise<void> {
   }
 
   verseData.value = null
-  contextData.value = null
-  crossRefs.value = []
   selectedWord.value = null
   shareUrl.value = null
   audioData.value = null
   feedbackGiven.value = null
   contextStore.clear()
 
-  const result = await api.getVerse(book.value, chapter.value, verse.value, depth.value)
+  const bookIdNum = Number(book.value)
+  const result = await api.getVerse(api.DEFAULT_TRANSLATION, bookIdNum, chapter.value, verse.value, depth.value)
   if (result) verseData.value = result
 
   if (verse.value && depth.value !== 'basic') {
-    const fetches: Promise<unknown>[] = [
-      api.getContext(book.value, chapter.value, verse.value),
-      api.getCrossReferences(book.value, chapter.value, verse.value),
-    ]
-
-    // At deep/scholarly depth, fetch scholarly data independently
+    const bookIdStr = book.value
     const isScholarly = depth.value === 'deep' || depth.value === 'scholarly'
+
     if (isScholarly) {
-      fetches.push(
-        api.getSyntaxTree(book.value, chapter.value, verse.value),
-        api.getDiscourseUnits(book.value, chapter.value, verse.value),
-        api.getManuscriptVariants(book.value, chapter.value, verse.value),
-      )
-    }
+      const [syntaxResult, discourseResult, variantsResult] = await Promise.all([
+        api.getSyntaxTree(bookIdStr, chapter.value, verse.value),
+        api.getDiscourseUnits(bookIdStr, chapter.value, verse.value),
+        api.getManuscriptVariants(bookIdStr, chapter.value, verse.value),
+      ])
 
-    const results = await Promise.all(fetches)
-    const [ctx, refs] = results as [ContextData | null, { references?: CrossReference[] } | null]
-    if (ctx) contextData.value = ctx
-    if (refs) crossRefs.value = (refs as Record<string, unknown>).references as CrossReference[] || refs as unknown as CrossReference[] || []
-
-    // Merge scholarly data into verseData so existing v-if guards render them
-    if (isScholarly && verseData.value) {
-      const [, , syntaxResult, discourseResult, variantsResult] = results as [unknown, unknown, Record<string, unknown> | null, Record<string, unknown> | null, Record<string, unknown> | null]
-      if (syntaxResult && !verseData.value.syntax_tree) {
-        verseData.value.syntax_tree = syntaxResult as unknown as VerseData['syntax_tree']
-      }
-      if (discourseResult && !verseData.value.discourse_units) {
-        verseData.value.discourse_units = ((discourseResult as Record<string, unknown>).units || discourseResult || []) as VerseData['discourse_units']
-      }
-      if (variantsResult && !verseData.value.manuscript_variants) {
-        verseData.value.manuscript_variants = ((variantsResult as Record<string, unknown>).variants || variantsResult || []) as VerseData['manuscript_variants']
+      if (verseData.value) {
+        if (syntaxResult && !verseData.value.syntax_tree) {
+          verseData.value.syntax_tree = syntaxResult as VerseResponse['syntax_tree']
+        }
+        if (discourseResult && !verseData.value.discourse_units) {
+          verseData.value.discourse_units = ((discourseResult as Record<string, unknown>).units || discourseResult || []) as VerseResponse['discourse_units']
+        }
+        if (variantsResult && !verseData.value.manuscript_variants) {
+          verseData.value.manuscript_variants = ((variantsResult as Record<string, unknown>).variants || variantsResult || []) as VerseResponse['manuscript_variants']
+        }
       }
     }
 
-    // Push context data to the shared store for the sidebar
+    // Push embedded context data to the shared store for the sidebar
     contextStore.setContext({
-      cultural: (contextData.value?.cultural as Array<{title?: string; text?: string}> || []).map(c =>
-        typeof c === 'object' && c !== null ? c : { text: String(c) }
+      cultural: (verseData.value?.cultural_context || []).map((c: CulturalNote) =>
+        (c as unknown as Record<string, unknown>)
       ),
-      crossRefs: crossRefs.value,
+      crossRefs: (verseData.value?.cross_references || []).map(r => r as Record<string, unknown>),
       literary: verseData.value?.literary_structures || [],
       reference: `${book.value} ${chapter.value}:${verse.value}`,
     })
@@ -288,7 +270,7 @@ function onWordClick(word: string | Record<string, unknown>, flags: Record<strin
 
 async function doExport(format: string): Promise<void> {
   if (!verse.value) return
-  const data = await api.exportVerse('engbsb', book.value, chapter.value, verse.value, format)
+  const data = await api.exportVerse(api.DEFAULT_TRANSLATION, book.value, chapter.value, verse.value, format)
   if (data) {
     const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
     const blob = new Blob([text], { type: 'text/plain' })
@@ -322,7 +304,8 @@ async function loadAudio(): Promise<void> {
 async function sendFeedback(feedbackType: string): Promise<void> {
   if (!verse.value || feedbackGiven.value) return
   const verseId = `${book.value}.${chapter.value}.${verse.value}`
-  const conceptName = verseData.value?.primary_concept || 'general'
+  const firstConcept = verseData.value?.concepts?.[0]
+  const conceptName = (firstConcept && typeof firstConcept === 'object' ? (firstConcept as Record<string, unknown>).name as string : null) || 'general'
   await api.submitConceptFeedback(conceptName, verseId, feedbackType)
   feedbackGiven.value = feedbackType
 }

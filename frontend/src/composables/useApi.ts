@@ -3,15 +3,12 @@ import type { Ref } from 'vue'
 import type {
   AudioResource,
   BookInfo,
-  ChapterData,
   CollectionInfo,
   CollectionItem,
   ConceptDiscoveryResult,
   ConceptGraph,
   ConceptProposal,
-  ContextData,
   Contribution,
-  CrossReference,
   FrequencyResult,
   GenreShift,
   LexiconEntry,
@@ -25,10 +22,12 @@ import type {
   ShareData,
   TopicDetail,
   TopicSummary,
-  VerseData,
+  VerseResponse,
   WordDomainResult,
   WordExplanation,
 } from '../types/api'
+
+export const DEFAULT_TRANSLATION = 'BSB'
 
 const BASE_URL = '/api/v1'
 
@@ -47,9 +46,10 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 export interface UseApiReturn {
   loading: Ref<boolean>
   error: Ref<string | null>
+  DEFAULT_TRANSLATION: string
   getProvenance: (entityType: string, entityId: string) => Promise<ProvenanceData | null>
-  getVerse: (book: string, chapter: string | number, verse: string | number, depth?: string) => Promise<VerseData | null>
-  getChapter: (book: string, chapter: string | number, depth?: string) => Promise<ChapterData | null>
+  getVerse: (translationId: string, bookId: number, chapter: string | number, verse: string | number, depth?: string) => Promise<VerseResponse | null>
+  getChapter: (translationId: string, bookId: number, chapter: string | number, depth?: string) => Promise<VerseResponse[] | null>
   searchText: (query: string, options?: Record<string, string>) => Promise<SearchResult[] | null>
   getTopics: () => Promise<TopicSummary[] | null>
   getTopic: (topicId: string) => Promise<TopicDetail | null>
@@ -58,13 +58,11 @@ export interface UseApiReturn {
   getPlan: (planId: string) => Promise<ReadingPlanDetail | null>
   getBooks: () => Promise<BookInfo[] | null>
   getWordDetail: (strongsNumber: string) => Promise<LexiconEntry | null>
-  getCrossReferences: (book: string, chapter: string | number, verse: string | number) => Promise<{ references?: CrossReference[] } | null>
-  getContext: (book: string, chapter: string | number, verse: string | number) => Promise<ContextData | null>
   discoverConcepts: (query: string) => Promise<ConceptDiscoveryResult | null>
   getSemanticDomains: (parent?: string | null) => Promise<SemanticDomain[] | null>
   getDomainWords: (domainCode: string) => Promise<WordDomainResult[] | null>
   getWordDomains: (strongsNumber: string) => Promise<WordDomainResult | null>
-  getSyntaxTree: (bookId: string, chapter: string | number, verse: string | number) => Promise<VerseData['syntax_tree']>
+  getSyntaxTree: (bookId: string, chapter: string | number, verse: string | number) => Promise<VerseResponse['syntax_tree']>
   getDiscourseUnits: (bookId: string, chapter: string | number, verse: string | number) => Promise<{ units?: unknown[] } | null>
   getBookDiscourse: (bookId: string) => Promise<unknown[] | null>
   getManuscriptVariants: (bookId: string, chapter: string | number, verse: string | number) => Promise<{ variants?: unknown[] } | null>
@@ -122,15 +120,15 @@ export function useApi(): UseApiReturn {
     }
   }
 
-  function getVerse(book: string, chapter: string | number, verse: string | number, depth = 'basic'): Promise<VerseData | null> {
+  function getVerse(translationId: string, bookId: number, chapter: string | number, verse: string | number, depth = 'basic'): Promise<VerseResponse | null> {
     return call(() =>
-      request<VerseData>(`/verses/${encodeURIComponent(book)}/${chapter}/${verse}?depth=${depth}`)
+      request<VerseResponse>(`/verses/${encodeURIComponent(translationId)}/${bookId}/${chapter}/${verse}?depth=${depth}`)
     )
   }
 
-  function getChapter(book: string, chapter: string | number, depth = 'basic'): Promise<ChapterData | null> {
+  function getChapter(translationId: string, bookId: number, chapter: string | number, depth = 'basic'): Promise<VerseResponse[] | null> {
     return call(() =>
-      request<ChapterData>(`/verses/${encodeURIComponent(book)}/${chapter}?depth=${depth}`)
+      request<VerseResponse[]>(`/verses/${encodeURIComponent(translationId)}/${bookId}/${chapter}?depth=${depth}`)
     )
   }
 
@@ -167,18 +165,6 @@ export function useApi(): UseApiReturn {
     return call(() => request<LexiconEntry>(`/lexicon/${encodeURIComponent(strongsNumber)}`))
   }
 
-  function getCrossReferences(book: string, chapter: string | number, verse: string | number): Promise<{ references?: CrossReference[] } | null> {
-    return call(() =>
-      request<{ references?: CrossReference[] }>(`/verses/${encodeURIComponent(book)}/${chapter}/${verse}/cross-references`)
-    )
-  }
-
-  function getContext(book: string, chapter: string | number, verse: string | number): Promise<ContextData | null> {
-    return call(() =>
-      request<ContextData>(`/verses/${encodeURIComponent(book)}/${chapter}/${verse}/context`)
-    )
-  }
-
   // Phase 9 API methods
 
   function discoverConcepts(query: string): Promise<ConceptDiscoveryResult | null> {
@@ -198,8 +184,8 @@ export function useApi(): UseApiReturn {
     return call(() => request<WordDomainResult>(`/words/${encodeURIComponent(strongsNumber)}/domains`))
   }
 
-  function getSyntaxTree(bookId: string, chapter: string | number, verse: string | number): Promise<VerseData['syntax_tree']> {
-    return call(() => request<NonNullable<VerseData['syntax_tree']>>(`/syntax/${bookId}/${chapter}/${verse}`))
+  function getSyntaxTree(bookId: string, chapter: string | number, verse: string | number): Promise<VerseResponse['syntax_tree']> {
+    return call(() => request<NonNullable<VerseResponse['syntax_tree']>>(`/syntax/${bookId}/${chapter}/${verse}`))
   }
 
   function getDiscourseUnits(bookId: string, chapter: string | number, verse: string | number): Promise<{ units?: unknown[] } | null> {
@@ -269,7 +255,7 @@ export function useApi(): UseApiReturn {
     return call(() => request<Record<string, unknown>>(`/concepts/${encodeURIComponent(conceptName)}/feedback/summary`))
   }
 
-  function getAudioResource(bookId: string, chapter: string | number, translationId = 'engbsb'): Promise<AudioResource | null> {
+  function getAudioResource(bookId: string, chapter: string | number, translationId = DEFAULT_TRANSLATION): Promise<AudioResource | null> {
     return call(() => request<AudioResource>(`/audio/${bookId}/${chapter}?translation_id=${translationId}`))
   }
 
@@ -410,6 +396,7 @@ export function useApi(): UseApiReturn {
   return {
     loading,
     error,
+    DEFAULT_TRANSLATION,
     getProvenance,
     getVerse,
     getChapter,
@@ -421,8 +408,6 @@ export function useApi(): UseApiReturn {
     getPlan,
     getBooks,
     getWordDetail,
-    getCrossReferences,
-    getContext,
     discoverConcepts,
     getSemanticDomains,
     getDomainWords,

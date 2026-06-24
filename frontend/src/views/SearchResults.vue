@@ -120,10 +120,10 @@ async function doSearch() {
 }
 
 function resultLink(r: SearchResult) {
-  const book = (r as Record<string, unknown>).book_id || (r as Record<string, unknown>).book || ''
-  const ch = (r as Record<string, unknown>).chapter || 1
-  const v = (r as Record<string, unknown>).verse || ''
-  return v ? `/study/${book}/${ch}/${v}` : `/study/${book}/${ch}`
+  const bookId = r.book_id ?? ''
+  const ch = r.chapter || 1
+  const v = r.verse || ''
+  return v ? `/study/${bookId}/${ch}/${v}` : `/study/${bookId}/${ch}`
 }
 
 function matchTypeLabel(raw: string): string {
