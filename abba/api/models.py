@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from .constants import DEFAULT_TRANSLATION_ID
+
 
 class DepthLevel(str, Enum):
     """Controls how much data is returned in verse responses."""
@@ -666,7 +668,7 @@ class AudioResource(BaseModel):
     audio_url: Optional[str] = None
     duration_seconds: Optional[int] = None
     narrator: Optional[str] = None
-    translation_id: str = "engbsb"
+    translation_id: str = DEFAULT_TRANSLATION_ID
 
 
 # --- Phase 9: Mobile API Models ---
