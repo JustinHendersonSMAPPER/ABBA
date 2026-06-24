@@ -248,9 +248,11 @@ def enriched_db(tmp_path_factory):  # noqa: C901 - linear seed inserts + populat
             "INSERT OR REPLACE INTO verses (translation_id, book_id, chapter, verse, text) VALUES (?, ?, ?, ?, ?)",
             ("BSB", 43, ch, vs, text),
         )
+    from abba.database.lexical_strongs_populator import populate_lexical_strongs  # noqa: PLC0415
     from abba.database.search_index import rebuild_search_index  # noqa: PLC0415
 
     rebuild_search_index(db_path)
+    populate_lexical_strongs(db_path)  # index the normalized Strong's key so search_strongs works
 
     return db_path
 

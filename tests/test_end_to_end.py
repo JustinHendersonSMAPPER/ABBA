@@ -131,23 +131,24 @@ class TestStrongsSearch:
     """Test searching by Strong's concordance numbers."""
 
     def test_search_hebrew_strongs(self, client):
-        """Search for H0430 (elohim) finds the word in Genesis."""
+        """Search for H0430 (elohim) finds its verse occurrences (concordance; key normalized to H430)."""
         resp = client.get("/api/v1/search/strongs/H0430")
         assert resp.status_code == 200
         results = resp.json()
         assert len(results) >= 1
-        assert results[0]["strongs_number"] == "H0430"
-        assert results[0]["language"] == "hebrew"
-        assert results[0]["original_text"] is not None
+        # /search/strongs returns verse occurrences; the Strong's key is normalized (H0430 -> H430).
+        assert results[0]["strongs_number"] == "H430"
+        assert results[0]["book_name"]
+        assert results[0]["text"]
 
     def test_search_greek_strongs(self, client):
-        """Search for G3056 (logos) finds the word in John."""
+        """Search for G3056 (logos) finds its verse occurrences."""
         resp = client.get("/api/v1/search/strongs/G3056")
         assert resp.status_code == 200
         results = resp.json()
         assert len(results) >= 1
         assert results[0]["strongs_number"] == "G3056"
-        assert results[0]["language"] == "greek"
+        assert results[0]["text"]
 
 
 # ---------------------------------------------------------------------------

@@ -236,9 +236,11 @@ def seeded_db(tmp_path):  # noqa: C901 - linear seed inserts; complexity is inhe
 
     # verses_fts is an external-content FTS5 table; direct row inserts don't build a searchable
     # index. Rebuild it from the verses content so MATCH works for every seeded translation.
+    from abba.database.lexical_strongs_populator import populate_lexical_strongs  # noqa: PLC0415
     from abba.database.search_index import rebuild_search_index  # noqa: PLC0415
 
     rebuild_search_index(db_path)
+    populate_lexical_strongs(db_path)  # index the normalized Strong's key so search_strongs works
 
     yield db_path
 
