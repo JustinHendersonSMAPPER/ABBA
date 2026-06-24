@@ -75,3 +75,5 @@ def test_export_all_returns_dicts(tmp_path: Path) -> None:
     exported = store.export_all()
     assert exported[0]["source"] == "ISBE-1915"
     assert exported[0]["confidence"] == 0.7
+    assert exported[0]["trust_tier"] == "B"
+    assert exported[0]["grounding"] == {}
