@@ -340,6 +340,7 @@ def main():  # noqa: C901  # pyright: ignore[reportGeneralTypeIssues]  # large C
         # Handle standalone --populate-books flag (backfill without full reimport)
         if cli_config.should_populate_books():
             from abba.database.books_populator import populate_books
+            from abba.database.search_index import rebuild_search_index
 
             if not config.abba_db_path.exists():
                 logger.error(f"Database not found at {config.abba_db_path}. Run the import pipeline first.")
@@ -347,6 +348,9 @@ def main():  # noqa: C901  # pyright: ignore[reportGeneralTypeIssues]  # large C
             books_inserted = populate_books(config.abba_db_path)
             if config.should_show_output():
                 logger.info(f"Books table populated: {books_inserted} rows inserted")
+            fts_count = rebuild_search_index(config.abba_db_path)
+            if config.should_show_output():
+                logger.info(f"FTS search index rebuilt: {fts_count} documents indexed")
             return None
 
         # Download bible.db if needed
@@ -554,6 +558,16 @@ def main():  # noqa: C901  # pyright: ignore[reportGeneralTypeIssues]  # large C
                 logger.info(f"Books table populated: {books_inserted} rows inserted")
         except Exception as e:
             logger.warning(f"Failed to populate books table: {e}")
+
+        # Rebuild FTS search index so text search works after bulk verse import
+        try:
+            from abba.database.search_index import rebuild_search_index
+
+            fts_count = rebuild_search_index(config.abba_db_path)
+            if config.should_show_output():
+                logger.info(f"FTS search index rebuilt: {fts_count} documents indexed")
+        except Exception as e:
+            logger.warning(f"Failed to rebuild FTS search index: {e}")
 
         # Print current database stats
         if config.should_show_output():
