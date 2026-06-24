@@ -31,7 +31,9 @@ grounded cross-references (source verse → target verse + **anchor phrase**) in
 **Question:** Below what confidence (0.00–1.00) is an explained cross-reference discarded rather than shown?
 **Why deferred:** Needs empirical calibration against real LLM output, which needs Ollama running.
 **Recommended default:** Start at **0.60**, make it a config value, tune after a sample generation run.
-**Status:** PROCEEDING (default 0.60, config-driven).
+**Status:** ✅ **IN USE** (engine merged). Threshold **0.60**, env `ABBA_XREF_CONFIDENCE`. Confidence =
+0.7 (TSK anchor present) + min(0.3, 0.1·shared-Strong's), capped — so anchored links pass and
+unanchored ones (can't be grounded) are dropped. On the John 3:16 sample, 19/19 passed. Tune the env if you want a stricter gate.
 
 ## D3 — Theological / denominational stance of AI explanations
 **Question:** Should generated "why" explanations be denominationally **neutral/descriptive**, follow a
@@ -40,14 +42,24 @@ specific tradition, or present multiple views?
 **Recommended default:** **Denominationally neutral & descriptive** — explanations restricted to
 linguistic/textual grounding (shared Strong's, shared lemma, thematic/semantic overlap, historical
 fact from PD sources); avoid doctrinal claims; where traditions differ, describe rather than adjudicate.
-**Status:** OPEN (building the prompt to the neutral default, easily swapped).
+**Status:** ✅ **IN USE** (engine merged) at the neutral/descriptive default — the prompt explicitly
+asks for "plain, denominationally-neutral" explanations grounded ONLY in the shared idea + verse texts,
+"no doctrinal claims beyond the texts". Sample output is on-spec (e.g. John 3:16→Gen 22:12 describes the
+shared 'giving an only son' theme without adjudicating doctrine). Still OPEN for your review if you want a
+different stance — it's a one-line prompt change in `abba/semantic/cross_ref_explainer.py::build_prompt`.
 
 ## D4 — LLM model & Ollama topology for the build-time generation run
 **Question:** Exact model tag (e.g. a specific Qwen) and cloud vs local-on-5090 for the bulk explanation run.
 **Why deferred:** An ops/environment choice; depends on your Ollama setup.
 **Recommended default:** Build the generation client **model-agnostic** (model name from config/env,
 Ollama base URL from config), default to a Qwen tag, batched + resumable.
-**Status:** PROCEEDING (default, model-agnostic + config-driven).
+**Status:** ✅ **IN USE** with a caveat. The engine is model-agnostic (env `ABBA_OLLAMA_MODEL` /
+`ABBA_OLLAMA_URL`, resumable). **The cloud `qwen3.5:397b-cloud` returned "this model requires a
+subscription, upgrade for access"** — this Ollama instance isn't authenticated to the subscription
+(needs `ollama signin` on the box). So I downloaded + defaulted to **local `qwen2.5:14b`** (clean
+instruct, fits the 5090, ~1.3s/explanation warm) and validated quality. **To use the 397B cloud model
+for the full run, sign Ollama into the subscription account, then set `ABBA_OLLAMA_MODEL=qwen3.5:397b-cloud`.**
+Full run command: `uv run python -c "from abba.semantic.cross_ref_explainer import generate_explanations; print(generate_explanations('bible_data/abba.db'))"` (idempotent/resumable; ~578K candidates).
 
 ## D5 — Historical/cultural context PD source & entity-linking scope
 **Question:** Which PD reference works to ingest first (ISBE 1915 / Easton's / Smith's) and how granular
