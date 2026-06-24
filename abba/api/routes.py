@@ -1,6 +1,7 @@
 """FastAPI route definitions for the ABBA Bible Study API."""
 
 import json
+import logging
 import sqlite3
 from typing import Any, Dict, List, Optional
 
@@ -72,6 +73,7 @@ from .search import SearchAPI
 from .semantic_search import SemanticSearchAPI
 
 router = APIRouter(prefix="/api/v1", tags=["bible"])
+logger = logging.getLogger(__name__)
 
 
 # --- Singleton state container (avoids pylint global-statement) ---
@@ -139,7 +141,8 @@ def _get_semantic() -> Optional[SemanticSearchAPI]:
             chroma = ChromaManager(persist_path=str(config.vectors_path))
             models = EmbeddingModelManager(cache_dir=str(config.data_dir / "models"))
             _state.semantic_api = SemanticSearchAPI(_get_db(), chroma, models)
-        except Exception:  # noqa: BLE001 - any failure means "degrade to FTS"
+        except Exception as exc:  # noqa: BLE001 - any failure means "degrade to FTS"
+            logger.warning("Semantic search unavailable; falling back to FTS: %s", exc)
             _state.semantic_unavailable = True
             return None
     return _state.semantic_api
@@ -166,8 +169,8 @@ def _fts_only_semantic_results(search_text: str, translation_id: str, limit: int
                     translation_id=translation_id,
                 )
             )
-    except Exception:  # noqa: BLE001, S110 - best-effort fallback; failure is non-fatal
-        pass
+    except Exception as exc:  # noqa: BLE001 - best-effort fallback; failure is non-fatal
+        logger.debug("FTS fallback search failed: %s", exc)
     return results
 
 
@@ -687,21 +690,25 @@ async def semantic_search(
 
     semantic = _get_semantic()
     if semantic is not None:
-        hybrid = semantic.hybrid_search(search_text, translation_id=translation_id, n_results=limit * 2)
-        results = [
-            SemanticSearchResult(
-                book_id=h.book_id,
-                chapter=h.chapter,
-                verse=h.verse,
-                text=h.text,
-                book_name=h.book_name,
-                score=round(h.score, 3),
-                match_type=h.match_type,
-                explanation=h.explanation,
-                translation_id=h.translation_id,
-            )
-            for h in hybrid
-        ]
+        try:
+            hybrid = semantic.hybrid_search(search_text, translation_id=translation_id, n_results=limit * 2)
+            results = [
+                SemanticSearchResult(
+                    book_id=h.book_id,
+                    chapter=h.chapter,
+                    verse=h.verse,
+                    text=h.text,
+                    book_name=h.book_name,
+                    score=round(h.score, 3),
+                    match_type=h.match_type,
+                    explanation=h.explanation,
+                    translation_id=h.translation_id,
+                )
+                for h in hybrid
+            ]
+        except Exception as exc:  # noqa: BLE001 - degrade to FTS on query failure
+            logger.warning("Semantic query failed; falling back to FTS: %s", exc)
+            results = _fts_only_semantic_results(search_text, translation_id, limit)
     else:
         results = _fts_only_semantic_results(search_text, translation_id, limit)
 

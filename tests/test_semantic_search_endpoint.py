@@ -48,3 +48,14 @@ def test_semantic_endpoint_falls_back_to_fts(tmp_path: Path, monkeypatch) -> Non
     # Fallback must still return a (possibly empty) list, never a 500.
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
+
+
+def test_semantic_endpoint_falls_back_when_hybrid_raises(tmp_path: Path, monkeypatch) -> None:
+    class BrokenSemantic:
+        def hybrid_search(self, query_text, translation_id="engbsb", n_results=20):
+            raise RuntimeError("chroma down")
+
+    monkeypatch.setattr(routes, "_get_semantic", lambda: BrokenSemantic())  # noqa: PLW0108
+    resp = _client(tmp_path).get("/api/v1/search/semantic", params={"q": "love"})
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
