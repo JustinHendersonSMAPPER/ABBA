@@ -18,6 +18,7 @@ dependencies = [
     "fastapi>=0.115.0,<1.0",
     "uvicorn[standard]>=0.29.0,<0.40.0",
     "defusedxml>=0.7.1,<0.8.0",
+    "pysword>=0.2.8",
 ]
 
 [project.scripts]
