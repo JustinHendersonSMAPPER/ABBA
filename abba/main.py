@@ -340,6 +340,7 @@ def main():  # noqa: C901  # pyright: ignore[reportGeneralTypeIssues]  # large C
         # Handle standalone --populate-books flag (backfill without full reimport)
         if cli_config.should_populate_books():
             from abba.database.books_populator import populate_books
+            from abba.database.lexical_strongs_populator import populate_lexical_strongs
             from abba.database.search_index import rebuild_search_index
 
             if not config.abba_db_path.exists():
@@ -351,6 +352,9 @@ def main():  # noqa: C901  # pyright: ignore[reportGeneralTypeIssues]  # large C
             fts_count = rebuild_search_index(config.abba_db_path)
             if config.should_show_output():
                 logger.info(f"FTS search index rebuilt: {fts_count} documents indexed")
+            strongs_count = populate_lexical_strongs(config.abba_db_path)
+            if config.should_show_output():
+                logger.info(f"Lexical Strong's index populated: {strongs_count} rows keyed")
             return None
 
         # Download bible.db if needed
@@ -568,6 +572,16 @@ def main():  # noqa: C901  # pyright: ignore[reportGeneralTypeIssues]  # large C
                 logger.info(f"FTS search index rebuilt: {fts_count} documents indexed")
         except Exception as e:
             logger.warning(f"Failed to rebuild FTS search index: {e}")
+
+        # Populate lexical_strongs concordance index (idempotent; runs after STEPBible import)
+        try:
+            from abba.database.lexical_strongs_populator import populate_lexical_strongs
+
+            strongs_count = populate_lexical_strongs(config.abba_db_path)
+            if config.should_show_output():
+                logger.info(f"Lexical Strong's index populated: {strongs_count} rows keyed")
+        except Exception as e:
+            logger.warning(f"Failed to populate lexical_strongs index: {e}")
 
         # Print current database stats
         if config.should_show_output():
