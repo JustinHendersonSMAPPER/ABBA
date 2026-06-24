@@ -20,6 +20,7 @@ dependencies = [
     { name = "fastapi", version = "0.138.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "loguru" },
     { name = "numpy" },
+    { name = "pysword" },
     { name = "python-dotenv", version = "1.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "python-dotenv", version = "1.2.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "pyyaml" },
@@ -63,6 +64,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0,<1.0" },
     { name = "loguru", specifier = ">=0.7.0,<0.8.0" },
     { name = "numpy", specifier = ">=1.24.0,<2.0.0" },
+    { name = "pysword", specifier = ">=0.2.8" },
     { name = "python-dotenv", specifier = ">=1.0.0,<2.0.0" },
     { name = "pyyaml", specifier = ">=6.0.2,<7.0.0" },
     { name = "requests", specifier = ">=2.31.0,<3.0.0" },
@@ -4932,6 +4934,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/10/53/e4d8ea1391bd43552
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d7/33/288b5868fa00846dacf249633719d747893e54aebd196b9968ac1878a5d3/pyright-1.1.410-py3-none-any.whl", hash = "sha256:5e961bed37cacf96b3f7cd7b1da39b350a9239aa2e69138d0e88f728cfaf296c", size = 6082448, upload-time = "2026-06-01T17:35:46.387Z" },
 ]
+
+[[package]]
+name = "pysword"
+version = "0.2.8"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3c/d9/4fdf24472c91c63703281e3bb3868f59caf49ca11d606c95742652db7e7e/pysword-0.2.8.tar.gz", hash = "sha256:6302f350c22f39090e2556729551fac57a4c25ceb268f90cd7fd0584b9cca4f0", size = 28071, upload-time = "2022-05-28T20:39:36.295Z" }
 
 [[package]]
 name = "pytest"
