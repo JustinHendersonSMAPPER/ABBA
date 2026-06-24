@@ -193,6 +193,12 @@ Examples:
             help="Run pipeline only, do not start the API server afterwards",
         )
 
+        parser.add_argument(
+            "--populate-books",
+            action="store_true",
+            help="Populate the books table from verse data (idempotent; runs automatically after import)",
+        )
+
         parser.add_argument("--host", default="127.0.0.1", help="API server bind address (default: 127.0.0.1)")
 
         parser.add_argument("--port", type=int, default=8000, help="API server port (default: 8000)")
@@ -404,6 +410,10 @@ Examples:
     def get_pool_size(self) -> Optional[int]:
         """Get connection pool size override from CLI args."""
         return self.args.pool_size if self.args and hasattr(self.args, "pool_size") else None
+
+    def should_populate_books(self) -> bool:
+        """Check if books table should be (re)populated from verse data."""
+        return self.args.populate_books if self.args and hasattr(self.args, "populate_books") else False
 
     def should_serve(self) -> bool:
         """Check if should start the API server (--serve skips pipeline)."""

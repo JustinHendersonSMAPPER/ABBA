@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from ..database import SQLiteManager
 from ..embeddings.chroma_manager import ChromaManager
+from .constants import DEFAULT_TRANSLATION_ID
 
 logger = logging.getLogger(__name__)
 
@@ -345,7 +346,7 @@ class SemanticSearchAPI:
     def hybrid_search(
         self,
         query_text: str,
-        translation_id: str = "engbsb",
+        translation_id: str = DEFAULT_TRANSLATION_ID,
         n_results: int = 20,
         similarity_threshold: float = 0.3,
         exact_weight: float = 0.4,

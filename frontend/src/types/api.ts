@@ -1,3 +1,49 @@
+/** Backend VerseResponse shape (from /api/v1/verses/{translation_id}/{book_id}/...) */
+export interface VerseResponse {
+  reference: string
+  book_name: string
+  chapter: number
+  verse: number
+  text: string
+  translation_id: string
+  words?: WordData[] | null
+  richness_flags?: RichnessFlag[] | null
+  cultural_context?: CulturalNote[] | null
+  cross_references?: CrossRef[] | null
+  passage_info?: PassageInfo | null
+  literary_structures?: LiteraryStructure[] | null
+  concepts?: Record<string, unknown>[] | null
+  surrounding_context?: { previous_verse?: string | null; next_verse?: string | null } | null
+  speaker?: Record<string, unknown> | null
+  genre?: string | null
+  is_descriptive?: boolean | null
+  parallel_passages?: Record<string, unknown>[] | null
+  manuscript_variants?: ManuscriptVariant[] | null
+  syntax_tree?: SyntaxTree | null
+  discourse_units?: DiscourseUnit[] | null
+  semantic_domains?: SemanticDomain[] | null
+}
+
+export interface RichnessFlag {
+  richness?: number
+  explanation: string
+}
+
+export interface CulturalNote {
+  text: string
+  category?: string
+}
+
+export interface CrossRef {
+  book_id?: number
+  book_name?: string
+  chapter?: number
+  verse?: number
+  label?: string
+  note?: string
+  id?: number
+}
+
 /** Core verse data returned by the verse endpoint */
 export interface VerseData {
   book?: string
@@ -82,10 +128,19 @@ export interface ManuscriptVariant {
 }
 
 export interface BookInfo {
-  id: string
+  book_id: number
   name: string
-  chapters: number
-  testament?: string
+  common_name?: string
+  testament: string
+  chapter_count: number
+  primary_genre?: string
+  secondary_genres?: string[]
+  author_traditional?: string
+  date_range?: string
+  original_audience?: string
+  literary_features?: string[]
+  reading_context?: string
+  canonical_section?: string
 }
 
 export interface CrossReference {
@@ -119,7 +174,7 @@ export interface ShareData {
 
 export interface SearchResult {
   reference?: string
-  book_id?: string
+  book_id?: number
   book_name?: string
   chapter?: number
   verse?: number

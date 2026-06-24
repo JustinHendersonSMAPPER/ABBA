@@ -2,8 +2,8 @@
   <div class="reading-pane">
     <div class="reading-controls">
       <select v-model="selectedBook" class="control-select" @change="onBookChange">
-        <option value="" disabled>Book</option>
-        <option v-for="book in books" :key="book.id" :value="book.id">
+        <option :value="0" disabled>Book</option>
+        <option v-for="book in books" :key="book.book_id" :value="book.book_id">
           {{ book.name }}
         </option>
       </select>
@@ -18,9 +18,9 @@
       <button v-if="selectedChapter" class="control-btn" @click="toggleAudio">Audio</button>
 
       <LiteraryModeIndicator
-        v-if="depth !== 'basic' && chapterData"
-        :genre="chapterData.genre || ''"
-        :literary-structures="chapterData.literary_structures || []"
+        v-if="depth !== 'basic' && chapterVerses.length > 0"
+        :genre="chapterVerses[0]?.genre || ''"
+        :literary-structures="chapterVerses[0]?.literary_structures || []"
       />
     </div>
 
@@ -33,18 +33,18 @@
     <LoadingState v-if="api.loading.value" label="Loading…" />
     <div v-else-if="api.error.value" class="error">{{ api.error.value }}</div>
 
-    <div v-else-if="chapterData" class="reading-text">
-      <template v-for="verse in chapterData.verses" :key="verse.number">
-        <h3 v-if="getPassageTitle(verse.number)" class="passage-heading">{{ getPassageTitle(verse.number) }}</h3>
+    <div v-else-if="chapterVerses.length > 0" class="reading-text">
+      <template v-for="v in chapterVerses" :key="v.verse">
+        <h3 v-if="getPassageTitle(v.verse)" class="passage-heading">{{ getPassageTitle(v.verse) }}</h3>
         <div class="verse-block">
-          <button class="verse-num verse-link" @click="router.push('/study/' + selectedBook + '/' + selectedChapter + '/' + verse.number)">{{ verse.number }}</button>
+          <button class="verse-num verse-link" @click="router.push('/study/' + selectedBook + '/' + selectedChapter + '/' + v.verse)">{{ v.verse }}</button>
           <TranslationLens
-            v-if="depth !== 'basic' && verse.words"
-            :words="verse.words"
-            :rich-flags="(verse.richness_flags || []).map(f => typeof f === 'string' ? { richness: 0, explanation: f } : f)"
+            v-if="depth !== 'basic' && v.words"
+            :words="v.words"
+            :rich-flags="(v.richness_flags || []).map(f => ({ richness: 0, explanation: typeof f === 'string' ? f : f.explanation }))"
             @word-click="onWordClick"
           />
-          <span v-else class="verse-text">{{ verse.text }}</span>
+          <span v-else class="verse-text">{{ v.text }}</span>
         </div>
       </template>
     </div>
@@ -66,7 +66,7 @@
 import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi'
-import type { BookInfo, ChapterData, AudioResource, PassageInfo, GenreShift } from '../types/api'
+import type { BookInfo, VerseResponse, AudioResource, PassageInfo, GenreShift } from '../types/api'
 import TranslationLens from '../components/TranslationLens.vue'
 import WordJourneyCard from '../components/WordJourneyCard.vue'
 import LiteraryModeIndicator from '../components/LiteraryModeIndicator.vue'
@@ -81,10 +81,11 @@ const api = useApi()
 const router = useRouter()
 
 const books = ref<BookInfo[]>([])
-const selectedBook = ref<string>('')
-const selectedChapter = ref<string>('')
+const selectedBook = ref<number>(0)
+const selectedChapter = ref<number>(0)
 const chapterCount = ref<number>(0)
-const chapterData = ref<ChapterData | null>(null)
+const chapterVerses = ref<VerseResponse[]>([])
+
 interface WordDetail {
   text?: string
   original?: string
@@ -110,36 +111,37 @@ onMounted(async () => {
       books.value = (result as Record<string, unknown>).books as BookInfo[] || []
     }
   }
-  // Default to John 1 on first load
-  if (!selectedBook.value) {
-    const defaultBook = books.value.find((b) => b.id === 'JHN') || books.value[0]
+  // Default to John (book_id = 43) on first load
+  if (selectedBook.value === 0) {
+    const defaultBook = books.value.find((b) => b.book_id === 43) || books.value[0]
     if (defaultBook) {
-      selectedBook.value = defaultBook.id
-      onBookChange()
-      selectedChapter.value = '1'
+      selectedBook.value = defaultBook.book_id
+      chapterCount.value = defaultBook.chapter_count
+      selectedChapter.value = 1
       await loadChapter()
     }
   }
 })
 
 function onBookChange() {
-  selectedChapter.value = ''
-  chapterData.value = null
-  const book = books.value.find((b) => b.id === selectedBook.value)
-  chapterCount.value = book ? book.chapters : 0
+  selectedChapter.value = 0
+  chapterVerses.value = []
+  const book = books.value.find((b) => b.book_id === selectedBook.value)
+  chapterCount.value = book ? book.chapter_count : 0
 }
 
 async function loadChapter() {
   if (!selectedBook.value || !selectedChapter.value) return
-  const result = await api.getChapter(selectedBook.value, selectedChapter.value, props.depth)
+  const result = await api.getChapter(api.DEFAULT_TRANSLATION, selectedBook.value, selectedChapter.value, props.depth)
   if (result) {
-    chapterData.value = result
+    chapterVerses.value = result
   }
   if (props.depth !== 'basic') {
+    const bookIdStr = String(selectedBook.value)
     const [passageData, genreData, audio] = await Promise.all([
-      api.getPassages(selectedBook.value, selectedChapter.value),
-      api.getGenreShifts(selectedBook.value),
-      api.getAudioResource(selectedBook.value, selectedChapter.value),
+      api.getPassages(bookIdStr, selectedChapter.value),
+      api.getGenreShifts(bookIdStr),
+      api.getAudioResource(bookIdStr, selectedChapter.value),
     ])
     passages.value = (passageData as PassageInfo[]) || []
     genreShifts.value = (genreData as GenreShift[]) || []
@@ -176,9 +178,11 @@ function getPassageTitle(verseNum: number): string | null {
 
 async function toggleAudio(): Promise<void> {
   if (audioData.value) { audioData.value = null; return }
-  const data = await api.getAudioResource(selectedBook.value, selectedChapter.value)
+  const data = await api.getAudioResource(String(selectedBook.value), selectedChapter.value)
   if (data) audioData.value = data
 }
+
+
 </script>
 
 <style scoped>

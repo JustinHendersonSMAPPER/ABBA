@@ -202,3 +202,5 @@ frontend/.browser-data/
 frontend/test-results/
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+# Superpowers SDD scratch (ledgers, briefs, reports, review packages)
+.superpowers/

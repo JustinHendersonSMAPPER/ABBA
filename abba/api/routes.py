@@ -11,6 +11,7 @@ from ..config import ABBAConfig, ConfigManager
 from ..database import SQLiteManager
 from ..provenance import ProvenanceStore
 from .analysis import AnalysisAPI
+from .constants import DEFAULT_TRANSLATION_ID
 from .models import (
     APIInfo,
     AudioResource,
@@ -362,7 +363,7 @@ async def compare_translations(
 @router.get("/search/text", response_model=List[TextSearchResult])
 async def text_search(
     q: str = Query(..., description="Text search query"),
-    translation_id: str = Query("engbsb", description="Translation ID"),
+    translation_id: str = Query(DEFAULT_TRANSLATION_ID, description="Translation ID"),
     limit: int = Query(50, ge=1, le=200),
     page: int = Query(1, ge=1, description="Page number for pagination"),
 ) -> List[TextSearchResult]:
@@ -572,9 +573,24 @@ async def get_concept(
 async def list_books() -> List[BookInfo]:
     """List all biblical books with metadata."""
     db = _get_db()
+    # Filter to default translation, deduplicate by book_id, order by book_id
     rows = db.execute_query(
-        "SELECT book_id, name, common_name, number_of_chapters, testament FROM books ORDER BY book_order",
+        "SELECT book_id, name, common_name, number_of_chapters, testament "
+        "FROM books "
+        "WHERE translation_id = ? "
+        "GROUP BY book_id "
+        "ORDER BY book_id",
+        (DEFAULT_TRANSLATION_ID,),
     )
+    if not rows:
+        # Fallback: if no books exist for the default translation, return one row
+        # per distinct book_id across whatever translations are present.
+        rows = db.execute_query(
+            "SELECT book_id, name, common_name, number_of_chapters, testament "
+            "FROM books "
+            "GROUP BY book_id "
+            "ORDER BY book_id",
+        )
     results = []
     for row in rows:
         book = BookInfo(
@@ -671,7 +687,7 @@ async def semantic_domain(domain: str) -> List[Dict[str, Any]]:
 @router.get("/search/semantic", response_model=List[SemanticSearchResult])
 async def semantic_search(
     q: str = Query(..., description="Natural language search query"),
-    translation_id: str = Query("engbsb", description="Translation for text display"),
+    translation_id: str = Query(DEFAULT_TRANSLATION_ID, description="Translation for text display"),
     limit: int = Query(20, ge=1, le=100),
     testament: Optional[str] = Query(None, description="Filter: 'old' or 'new'"),
     book_id: Optional[int] = Query(None, description="Filter by book ID"),
@@ -2251,7 +2267,7 @@ async def multilingual_search(
     if not word_rows:
         word_rows = _multilingual_lexicon_fallback(db, query_lower, limit)
 
-    target_list = target_translations.split(",") if target_translations else ["engbsb"]
+    target_list = target_translations.split(",") if target_translations else [DEFAULT_TRANSLATION_ID]
     return _multilingual_resolve_verses(db, word_rows, target_list, limit)[:limit]
 
 
@@ -2447,7 +2463,7 @@ async def list_concept_proposals(
 async def get_audio_resource(
     book_id: int,
     chapter: int,
-    translation_id: str = Query("engbsb"),
+    translation_id: str = Query(DEFAULT_TRANSLATION_ID),
 ) -> AudioResource:
     """Get audio resource URL for a chapter.
 
@@ -2588,15 +2604,15 @@ async def mobile_sync(body: MobileSyncRequest) -> MobileSyncResponse:
                 "SELECT b.name, v.chapter, v.verse, v.text "
                 "FROM verses v "
                 "JOIN books b ON v.book_id = b.book_id AND v.translation_id = b.translation_id "
-                "WHERE v.translation_id = 'engbsb' AND v.book_id = ? "
+                "WHERE v.translation_id = ? AND v.book_id = ? "
                 "ORDER BY v.chapter, v.verse",
-                (bid,),
+                (DEFAULT_TRANSLATION_ID, bid),
             )
             for r in rows:
                 mv = MobileVerseResponse(
                     ref=f"{r[0]} {r[1]}:{r[2]}",
                     text=str(r[3]),
-                    tid="engbsb",
+                    tid=DEFAULT_TRANSLATION_ID,
                 )
                 if body.include_words:
                     try:
