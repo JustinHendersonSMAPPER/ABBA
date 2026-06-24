@@ -42,9 +42,9 @@
         <p class="result-text">{{ r.text || r.snippet || '' }}</p>
         <div v-if="r.score != null" class="relevance-row">
           <div class="relevance-bar-track">
-            <div class="relevance-bar-fill" :style="{ width: Math.round(r.score * 100) + '%' }"></div>
+            <div class="relevance-bar-fill" :style="{ width: Math.round(Math.min(1, r.score) * 100) + '%' }"></div>
           </div>
-          <span class="relevance-label">{{ Math.round(r.score * 100) }}% match</span>
+          <span class="relevance-label">{{ Math.round(Math.min(1, r.score) * 100) }}% match</span>
         </div>
         <span v-if="r.match_type" class="match-badge">{{ matchTypeLabel(r.match_type) }}</span>
         <span v-if="r.explanation" class="match-explain">{{ r.explanation }}</span>

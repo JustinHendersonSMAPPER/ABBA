@@ -27,20 +27,10 @@
 
 <script setup lang="ts">
 import ProvenanceChip from './ProvenanceChip.vue'
-
-interface Variant {
-  id?: number
-  variant_id: string
-  variant_type: string
-  significance: string
-  base_text?: string
-  variant_text?: string
-  explanation?: string
-  manuscripts?: string
-}
+import type { ManuscriptVariant } from '../types/api'
 
 withDefaults(defineProps<{
-  variants: Variant[]
+  variants: ManuscriptVariant[]
 }>(), { variants: () => [] })
 </script>
 

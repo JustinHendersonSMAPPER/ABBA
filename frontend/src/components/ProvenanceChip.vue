@@ -1,22 +1,22 @@
 <template>
-  <span v-if="record" class="provenance-chip">
+  <span v-if="record" ref="rootEl" class="provenance-chip">
     <button
       class="chip-badge"
       :aria-expanded="open"
       :aria-label="`Provenance: ${tierLabel} — click for details`"
-      @click="open = !open"
+      @click="toggleOpen"
     >{{ tierLabel }}</button>
     <span v-if="open" class="chip-popover" role="tooltip">
       <span class="popover-source">{{ record.source }}<template v-if="record.source_detail"> — {{ record.source_detail }}</template></span>
       <span class="popover-rationale">{{ record.trust_rationale }}</span>
       <span v-if="record.confidence != null" class="popover-confidence">Confidence: {{ Math.round(record.confidence * 100) }}%</span>
-      <button class="popover-close" aria-label="Close" @click.stop="open = false">&#x2715;</button>
+      <button class="popover-close" aria-label="Close" @click.stop="() => { open = false; detachListeners() }">&#x2715;</button>
     </span>
   </span>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useApi } from '../composables/useApi'
 import type { ProvenanceData } from '../types/api'
 
@@ -28,6 +28,7 @@ const props = defineProps<{
 const api = useApi()
 const record = ref<ProvenanceData | null>(null)
 const open = ref(false)
+const rootEl = ref<HTMLElement | null>(null)
 
 const tierLabel = computed(() => {
   if (!record.value) return ''
@@ -39,8 +40,43 @@ const tierLabel = computed(() => {
   }
 })
 
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && open.value) {
+    open.value = false
+  }
+}
+
+function onOutsideClick(e: MouseEvent) {
+  if (rootEl.value && !rootEl.value.contains(e.target as Node)) {
+    open.value = false
+  }
+}
+
+function attachListeners() {
+  window.addEventListener('keydown', onKeydown)
+  window.addEventListener('mousedown', onOutsideClick)
+}
+
+function detachListeners() {
+  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('mousedown', onOutsideClick)
+}
+
+function toggleOpen() {
+  open.value = !open.value
+  if (open.value) {
+    attachListeners()
+  } else {
+    detachListeners()
+  }
+}
+
 onMounted(async () => {
   record.value = await api.getProvenance(props.entityType, String(props.entityId))
+})
+
+onBeforeUnmount(() => {
+  detachListeners()
 })
 </script>
 
