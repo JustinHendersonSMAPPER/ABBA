@@ -17,6 +17,7 @@ import type {
   LexiconEntry,
   MorphologyResult,
   PassageInfo,
+  ProvenanceData,
   ReadingPlan,
   ReadingPlanDetail,
   SearchResult,
@@ -46,6 +47,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 export interface UseApiReturn {
   loading: Ref<boolean>
   error: Ref<string | null>
+  getProvenance: (entityType: string, entityId: string) => Promise<ProvenanceData | null>
   getVerse: (book: string, chapter: string | number, verse: string | number, depth?: string) => Promise<VerseData | null>
   getChapter: (book: string, chapter: string | number, depth?: string) => Promise<ChapterData | null>
   searchText: (query: string, options?: Record<string, string>) => Promise<SearchResult[] | null>
@@ -391,9 +393,24 @@ export function useApi(): UseApiReturn {
     return call(() => request<unknown[]>(`/analysis/semantic-domain/${encodeURIComponent(domain)}`))
   }
 
+  // Provenance — resolves null on 404 without setting global error (missing provenance is normal)
+  async function getProvenance(entityType: string, entityId: string): Promise<ProvenanceData | null> {
+    try {
+      const response = await fetch(`${BASE_URL}/provenance/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`, {
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (response.status === 404) return null
+      if (!response.ok) return null
+      return response.json() as Promise<ProvenanceData>
+    } catch {
+      return null
+    }
+  }
+
   return {
     loading,
     error,
+    getProvenance,
     getVerse,
     getChapter,
     searchText,

@@ -71,6 +71,7 @@ export interface DiscourseUnit {
 }
 
 export interface ManuscriptVariant {
+  id?: number
   variant_id: string
   variant_type: string
   significance: string
@@ -88,6 +89,7 @@ export interface BookInfo {
 }
 
 export interface CrossReference {
+  id?: number
   book: string
   chapter: number
   verse: number
@@ -125,6 +127,21 @@ export interface SearchResult {
   snippet?: string
   match_type?: string
   explanation?: string
+  score?: number
+  translation_id?: string
+}
+
+export interface ProvenanceData {
+  entity_type: string
+  entity_id: string
+  source: string
+  source_detail?: string
+  trust_tier: 'A' | 'B' | 'C'
+  trust_rationale: string
+  generated_by?: string
+  grounding: Record<string, unknown>
+  confidence?: number
+  pipeline_version: string
 }
 
 export interface TopicSummary {

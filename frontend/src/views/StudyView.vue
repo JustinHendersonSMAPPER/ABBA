@@ -102,6 +102,11 @@
             </router-link>
             <span v-else>{{ ref.label || ref }}</span>
             <span v-if="ref.note" class="ref-note"> -- {{ ref.note }}</span>
+            <ProvenanceChip
+              v-if="ref.id != null"
+              entity-type="cross_reference"
+              :entity-id="ref.id"
+            />
           </li>
         </ul>
       </section>
@@ -161,6 +166,7 @@ import SemanticDomainBadge from '../components/SemanticDomainBadge.vue'
 import NotesPanel from '../components/NotesPanel.vue'
 import AudioPlayer from '../components/AudioPlayer.vue'
 import LoadingState from '../components/LoadingState.vue'
+import ProvenanceChip from '../components/ProvenanceChip.vue'
 
 interface WordDetail {
   original?: string
