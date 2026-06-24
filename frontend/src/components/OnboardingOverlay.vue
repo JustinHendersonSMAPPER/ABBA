@@ -1,5 +1,5 @@
 <template>
-  <div v-if="visible" class="onboarding-overlay" @click.self="dismiss">
+  <div v-if="visible" class="onboarding-overlay">
     <div class="onboarding-modal">
       <div class="step-indicators">
         <span v-for="s in totalSteps" :key="s" class="step-dot" :class="{ active: s === step }" />
