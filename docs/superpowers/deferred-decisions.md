@@ -67,7 +67,18 @@ the entity linking (key context to people/places/terms vs. to verse ranges)?
 **Why deferred:** Scope + source-quality judgment; several valid approaches.
 **Recommended default:** Defer until after cross-references ship; when started, prefer ISBE (1915) for
 breadth, key entries to verse ranges first (simpler), entity-level linking later.
-**Status:** OPEN (not started; later phase).
+**Status:** OPEN — researched (2026-06-24), **NOT a clean high-confidence one-shot like TSK was.**
+Source landscape: Easton's (1897), ISBE (1915), Smith's are public domain and available as CrossWire
+SWORD dictionary modules — but those are **entry-keyed** (headword → article: "Bethlehem", "Pharisee"),
+NOT verse-keyed. Mapping them to per-verse `cultural_context` requires **entity-linking** (identify the
+people/places/terms in each verse, disambiguate, attach the right article) — an accuracy-sensitive NER
+problem; wrong context is worse than none (trust-gate). The verse-keyed PD sources that DO exist
+(Barnes, JFB, Matthew Henry commentaries) are **interpretive/doctrinal**, which conflicts with the
+neutral-factual ethos (D3). **Recommended approach when tackled:** ingest a PD dictionary (Easton's is
+small/clean) as entry articles; do conservative entity-linking (match the verse's proper nouns +
+key terms to headwords, only high-confidence exact matches), and have the LLM *summarize* the matched
+article (never invent), each with provenance + the matched entity as grounding. This is its own
+brainstorm→build cycle, not a quick win — left for explicit go-ahead.
 
 ## D6 — Canon scope for v1
 **Question:** Protestant 66 only, or broader canon, for the first complete experience?
