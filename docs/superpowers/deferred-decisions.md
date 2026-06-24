@@ -65,10 +65,10 @@ compatible with a later `user_id` addition.
 ## D8 — Original-language word-study follow-ups (Pillar 1)
 Pillar 1 now works end-to-end (verse → original-language word chips → lexicon). Remaining refinements,
 deferred because they need careful STEP-format work or are low-confidence one-shot:
-- **"Find all occurrences" of a Strong's number** (`/search/strongs/{n}` → `SQLiteManager.search_strongs`)
-  still queries the empty legacy `words` table; should query `stepbible_verses` matched on the
-  *normalized* Strong's (the stored `strongs_primary` is padded/prefixed, so SQL-side normalization or a
-  precomputed normalized column is needed).
+- ~~**"Find all occurrences" of a Strong's number**~~ — **DONE** (merged `faad8bd`): added an indexed
+  `stepbible_verses.lexical_strongs` column (precomputed normalized key) + populator; `search_strongs`
+  queries it; `/search/strongs` returns canonically-ordered occurrences with full book names + BSB text;
+  the Word Study page shows "Appears in N verses" + a linked occurrence list.
 - **`normalize_strongs` uppercase suffix semantics:** an uppercase trailing letter is a STEP
   language/disambiguation marker (strip it) while a lowercase suffix is a homonym marker (keep it).
   A direct `strongs_primary` with an uppercase suffix is currently returned un-normalized — rare, and
