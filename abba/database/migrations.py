@@ -597,6 +597,62 @@ def add_cross_reference_candidates_table(db_path: Path) -> bool:
         raise
 
 
+def add_dictionary_entries_table(db_path: Path) -> bool:
+    """Add the dictionary_entries table for public-domain reference works.
+
+    Stores entry-keyed articles (headword -> article) from public-domain Bible
+    dictionaries such as Easton's 1897 (decision D5), the raw material for later
+    entity-linking of a verse's proper nouns / key terms to dictionary headwords.
+
+    Idempotent: ``INSERT OR IGNORE`` against the ``UNIQUE(source, headword)``
+    constraint makes re-imports add zero rows.
+
+    NOTE: This migration is intentionally **not** registered in ``_MIGRATIONS``;
+    it is applied explicitly by ``easton_importer.import_easton_entries`` (and by
+    tests against temp databases) so the live database is only touched when a
+    dictionary is actually ingested.
+
+    Args:
+        db_path: Path to the database
+
+    Returns:
+        True if migration was needed and succeeded, False if already exists
+    """
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='dictionary_entries'")
+            if cursor.fetchone()[0] > 0:
+                logger.debug("dictionary_entries table already exists")
+                return False
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS dictionary_entries (
+                    entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    headword TEXT NOT NULL,
+                    headword_normalized TEXT NOT NULL,
+                    article TEXT NOT NULL,
+                    ref_targets TEXT,
+                    source TEXT NOT NULL,
+                    license TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(source, headword)
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_dict_entries_headword ON dictionary_entries(headword_normalized)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_dict_entries_source ON dictionary_entries(source)")
+            conn.commit()
+            logger.info("Added dictionary_entries table")
+            return True
+    except Exception as e:
+        logger.error("Failed to add dictionary_entries table: %s", e)
+        raise
+
+
 def add_stepbible_lexical_strongs_column(db_path: Path) -> bool:
     """Add lexical_strongs column to stepbible_verses table if it doesn't exist.
 
