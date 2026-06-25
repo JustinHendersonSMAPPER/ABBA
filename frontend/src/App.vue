@@ -22,6 +22,7 @@
             <router-link to="/collections" @click="showMore = false">Collections</router-link>
             <router-link to="/community" @click="showMore = false">Community</router-link>
             <router-link to="/analysis" @click="showMore = false">Analysis</router-link>
+            <router-link to="/data" @click="showMore = false">Data &amp; Trust</router-link>
           </div>
         </div>
       </div>

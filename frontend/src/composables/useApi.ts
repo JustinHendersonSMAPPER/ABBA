@@ -9,6 +9,7 @@ import type {
   ConceptGraph,
   ConceptProposal,
   Contribution,
+  DataStats,
   FrequencyResult,
   GenreShift,
   LexiconEntry,
@@ -49,6 +50,7 @@ export interface UseApiReturn {
   error: Ref<string | null>
   DEFAULT_TRANSLATION: string
   getTranslations: () => Promise<TranslationInfo[] | null>
+  getStats: () => Promise<DataStats | null>
   getProvenance: (entityType: string, entityId: string) => Promise<ProvenanceData | null>
   getVerse: (translationId: string, bookId: number, chapter: string | number, verse: string | number, depth?: string) => Promise<VerseResponse | null>
   getChapter: (translationId: string, bookId: number, chapter: string | number, depth?: string) => Promise<VerseResponse[] | null>
@@ -407,6 +409,10 @@ export function useApi(): UseApiReturn {
     return call(() => request<unknown[]>(`/analysis/semantic-domain/${encodeURIComponent(domain)}`))
   }
 
+  function getStats(): Promise<DataStats | null> {
+    return call(() => request<DataStats>('/stats'))
+  }
+
   // Provenance — resolves null on 404 without setting global error (missing provenance is normal)
   async function getProvenance(entityType: string, entityId: string): Promise<ProvenanceData | null> {
     try {
@@ -426,6 +432,7 @@ export function useApi(): UseApiReturn {
     error,
     DEFAULT_TRANSLATION,
     getTranslations,
+    getStats,
     getProvenance,
     getVerse,
     getChapter,

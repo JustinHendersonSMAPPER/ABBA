@@ -29,6 +29,7 @@ from .models import (
     ContributionReviewCreate,
     CrossRef,
     CulturalNote,
+    DataStats,
     DepthLevel,
     DiscourseUnit,
     GenreShift,
@@ -230,6 +231,62 @@ async def list_translations() -> List[TranslationInfo]:
         )
         for row in rows
     ]
+
+
+# --- Data Transparency Endpoint ---
+
+
+@router.get("/stats", response_model=DataStats, tags=["transparency"])
+async def get_data_stats() -> DataStats:
+    """Public data-coverage + provenance snapshot (read-only aggregates).
+
+    Lets anyone audit what is in the corpus, where it came from, and how trustworthy it
+    is — the project's open-to-public-scrutiny principle, in numbers.
+    """
+    db = _get_db()
+
+    def _scalar(sql: str, params: tuple[Any, ...] = ()) -> int:
+        rows = db.execute_query(sql, params)
+        if not rows or rows[0][0] is None:
+            return 0
+        return int(rows[0][0])
+
+    candidates = _scalar("SELECT COUNT(*) FROM cross_reference_candidates")
+    explained = _scalar("SELECT COUNT(*) FROM cross_references WHERE notes IS NOT NULL AND TRIM(notes) != ''")
+    unexplained = _scalar("SELECT COUNT(*) FROM cross_references WHERE notes IS NULL OR TRIM(notes) = ''")
+
+    tier_rows = db.execute_query(
+        "SELECT trust_tier, COUNT(*) FROM provenance WHERE entity_type = 'cross_reference' GROUP BY trust_tier"
+    )
+    by_tier = {str(r[0]): int(r[1]) for r in tier_rows} if tier_rows else {}
+
+    src_rows = db.execute_query(
+        "SELECT COALESCE(source_dataset, 'unknown'), COUNT(*) FROM cross_references GROUP BY source_dataset"
+    )
+    by_source = {str(r[0]): int(r[1]) for r in src_rows} if src_rows else {}
+
+    conf_rows = db.execute_query("SELECT AVG(confidence) FROM cross_references WHERE confidence IS NOT NULL")
+    avg_conf = round(float(conf_rows[0][0]), 3) if conf_rows and conf_rows[0][0] is not None else None
+
+    dict_entries = 0
+    try:
+        dict_entries = _scalar("SELECT COUNT(*) FROM dictionary_entries")
+    except sqlite3.OperationalError:
+        dict_entries = 0  # table not created until a PD dictionary is ingested (D5)
+
+    return DataStats(
+        translations=_scalar("SELECT COUNT(*) FROM translations"),
+        verses=_scalar("SELECT COUNT(*) FROM verses WHERE translation_id = ?", (DEFAULT_TRANSLATION_ID,)),
+        cross_reference_candidates=candidates,
+        cross_references=_scalar("SELECT COUNT(*) FROM cross_references"),
+        cross_references_explained=explained,
+        explained_coverage_pct=round(explained / candidates * 100, 2) if candidates else 0.0,
+        cross_references_by_tier=by_tier,
+        cross_references_by_source=by_source,
+        avg_confidence=avg_conf,
+        provenance_records=_scalar("SELECT COUNT(*) FROM provenance"),
+        dictionary_entries=dict_entries,
+    )
 
 
 # --- Provenance Endpoints ---

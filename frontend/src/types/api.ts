@@ -46,6 +46,22 @@ export interface CrossRef {
   confidence?: number
 }
 
+/** Public data-coverage + provenance snapshot (GET /stats) */
+export interface DataStats {
+  translations: number
+  verses: number
+  cross_reference_candidates: number
+  cross_references: number
+  cross_references_explained: number
+  cross_references_unexplained: number
+  explained_coverage_pct: number
+  cross_references_by_tier: Record<string, number>
+  cross_references_by_source: Record<string, number>
+  avg_confidence: number | null
+  provenance_records: number
+  dictionary_entries: number
+}
+
 /** Core verse data returned by the verse endpoint */
 export interface VerseData {
   book?: string

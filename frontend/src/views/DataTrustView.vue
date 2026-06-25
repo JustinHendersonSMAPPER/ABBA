@@ -1,0 +1,348 @@
+<template>
+  <div class="data-trust">
+    <header class="dt-header">
+      <h1 class="dt-title">Data &amp; Trust</h1>
+      <p class="dt-sub">
+        ABBA is built to be open to scrutiny. Every connection between passages comes with an
+        explanation, every explanation is grounded in named sources, and every piece of
+        AI-generated text carries a provenance record you can inspect.
+      </p>
+    </header>
+
+    <LoadingState v-if="api.loading.value && !stats" label="Loading data snapshot…" />
+    <p v-else-if="api.error.value && !stats" class="dt-error">Couldn’t load the data snapshot: {{ api.error.value }}</p>
+
+    <!-- Live snapshot -->
+    <section v-if="stats" class="dt-section" aria-label="Live data snapshot">
+      <h2 class="dt-h2">Live snapshot</h2>
+      <div class="dt-grid">
+        <div class="dt-stat">
+          <span class="dt-num">{{ fmt(stats.verses) }}</span>
+          <span class="dt-label">verses ({{ stats.translations }} translations)</span>
+        </div>
+        <div class="dt-stat">
+          <span class="dt-num">{{ fmt(stats.cross_references_explained) }}</span>
+          <span class="dt-label">explained cross-references</span>
+        </div>
+        <div class="dt-stat">
+          <span class="dt-num">{{ stats.explained_coverage_pct }}%</span>
+          <span class="dt-label">of {{ fmt(stats.cross_reference_candidates) }} candidate links explained so far</span>
+        </div>
+        <div class="dt-stat">
+          <span class="dt-num">{{ avgConfidencePct }}</span>
+          <span class="dt-label">average confidence</span>
+        </div>
+        <div class="dt-stat">
+          <span class="dt-num">{{ fmt(stats.provenance_records) }}</span>
+          <span class="dt-label">provenance records</span>
+        </div>
+        <div class="dt-stat" :class="{ 'dt-stat--ok': noDeadData }">
+          <span class="dt-num">{{ noDeadData ? '✓' : '⚠' }}</span>
+          <span class="dt-label">
+            {{ noDeadData ? 'every shown cross-reference is explained &amp; audited' : 'integrity check' }}
+          </span>
+        </div>
+      </div>
+      <p class="dt-note">
+        A cross-reference is only shown once it has both an explanation and a provenance record — no
+        “here are the links but nobody knows why.” Explained, audited, and provenance counts above
+        should move together.
+      </p>
+    </section>
+
+    <!-- Sources -->
+    <section class="dt-section">
+      <h2 class="dt-h2">Where the data comes from</h2>
+      <ul class="dt-sources">
+        <li v-for="s in sources" :key="s.name" class="dt-source">
+          <div class="dt-source__head">
+            <span class="dt-source__name">{{ s.name }}</span>
+            <span class="dt-license" :class="s.pd ? 'dt-license--pd' : 'dt-license--cc'">{{ s.license }}</span>
+          </div>
+          <p class="dt-source__desc">{{ s.desc }}</p>
+        </li>
+      </ul>
+    </section>
+
+    <!-- How explanations are made -->
+    <section class="dt-section">
+      <h2 class="dt-h2">How the “why” is written</h2>
+      <ol class="dt-steps">
+        <li><strong>Grounded, not invented.</strong> The AI is given the two verse texts and the one
+          shared idea that links them (a shared word or a shared original-language root). It explains
+          only that link — no doctrinal claims beyond the texts.</li>
+        <li><strong>Denominationally neutral.</strong> Explanations describe the textual/linguistic
+          connection; where traditions differ, they describe rather than adjudicate.</li>
+        <li><strong>Confidence-gated.</strong> Each link gets a 0–1 score (a real anchor word, plus
+          shared original-language roots, raise it). Links below the threshold are deferred, not shown.</li>
+        <li><strong>No dead data.</strong> Junk anchors (function words, editorial notes) and any answer
+          that drifts out of English are rejected, so a connection is only shown when it can be
+          explained well.</li>
+      </ol>
+    </section>
+
+    <!-- Trust tiers -->
+    <section class="dt-section">
+      <h2 class="dt-h2">Trust tiers</h2>
+      <div class="dt-tiers">
+        <div class="dt-tier"><span class="dt-tier__badge">📚 Sourced</span> directly from a cited source (tier A).</div>
+        <div class="dt-tier"><span class="dt-tier__badge">🤖 AI-assisted</span> AI-written explanation grounded in sources, with a confidence score (tier B).</div>
+        <div class="dt-tier"><span class="dt-tier__badge">⏸ Deferred</span> not trustworthy enough to show yet (tier C).</div>
+      </div>
+      <p class="dt-note" v-if="stats">
+        Current explained cross-references by tier:
+        <template v-for="(n, tier) in stats.cross_references_by_tier" :key="tier">
+          <strong>{{ tierName(tier) }}</strong> {{ fmt(n) }}<template v-if="!isLast(tier, stats.cross_references_by_tier)">, </template>
+        </template>
+        — generated by <code>{{ sourceLabel }}</code>.
+      </p>
+    </section>
+
+    <!-- Audit -->
+    <section class="dt-section">
+      <h2 class="dt-h2">Audit it yourself</h2>
+      <p class="dt-note">
+        Every provenance record is public. Inspect the full machine-readable audit log:
+      </p>
+      <a class="dt-link" href="/api/v1/provenance/export" target="_blank" rel="noopener">
+        /api/v1/provenance/export →
+      </a>
+    </section>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useApi } from '../composables/useApi'
+import type { DataStats } from '../types/api'
+import LoadingState from '../components/LoadingState.vue'
+
+const api = useApi()
+const stats = ref<DataStats | null>(null)
+
+const sources = [
+  { name: 'Treasury of Scripture Knowledge (TSK)', license: 'Public Domain', pd: true,
+    desc: 'The ~1880 cross-reference corpus — source→target links with anchor words — that seeds every connection.' },
+  { name: 'Berean Standard Bible (BSB)', license: 'Public Domain', pd: true,
+    desc: 'The default English text shown for verses and cross-reference previews.' },
+  { name: 'STEPBible (Tyndale House)', license: 'CC BY 4.0', pd: false,
+    desc: 'Hebrew/Greek text, morphology and Strong’s tagging behind the original-language word study.' },
+  { name: 'OpenScriptures / Abbott-Smith lexicons', license: 'PD / CC BY', pd: true,
+    desc: 'Hebrew and Greek lexicon entries linked from each original-language word.' },
+  { name: 'Easton’s Bible Dictionary (1897)', license: 'Public Domain', pd: true,
+    desc: 'Historical/cultural context — ingest is staged; linking is in progress.' },
+]
+
+const noDeadData = computed(() =>
+  !!stats.value && stats.value.cross_references > 0 && stats.value.cross_references_unexplained === 0,
+)
+
+const avgConfidencePct = computed(() =>
+  stats.value?.avg_confidence != null ? `${Math.round(stats.value.avg_confidence * 100)}%` : '—',
+)
+
+const sourceLabel = computed(() => Object.keys(stats.value?.cross_references_by_source || {}).join(', ') || '—')
+
+function fmt(n: number): string {
+  return n.toLocaleString()
+}
+
+function tierName(tier: string | number): string {
+  return { A: 'Sourced (A)', B: 'AI-assisted (B)', C: 'Deferred (C)' }[String(tier)] || String(tier)
+}
+
+function isLast(key: string | number, obj: Record<string, number>): boolean {
+  const keys = Object.keys(obj)
+  return keys[keys.length - 1] === String(key)
+}
+
+onMounted(async () => {
+  stats.value = await api.getStats()
+})
+</script>
+
+<style scoped>
+.data-trust {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.dt-header {
+  margin-bottom: 1.5rem;
+}
+
+.dt-title {
+  font-family: var(--font-ui);
+  font-size: 1.6rem;
+  margin-bottom: 0.4rem;
+}
+
+.dt-sub {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  opacity: 0.8;
+  max-width: 60ch;
+}
+
+.dt-error {
+  color: #c0392b;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+}
+
+.dt-section {
+  margin-bottom: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.dt-h2 {
+  font-family: var(--font-ui);
+  font-size: 1.05rem;
+  color: var(--color-accent);
+  margin-bottom: 0.85rem;
+}
+
+.dt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.dt-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.dt-stat--ok {
+  border-color: var(--color-accent);
+}
+
+.dt-num {
+  font-family: var(--font-ui);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  line-height: 1.1;
+}
+
+.dt-label {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  opacity: 0.7;
+  line-height: 1.3;
+}
+
+.dt-note {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  opacity: 0.75;
+  margin-top: 0.85rem;
+}
+
+.dt-sources {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.dt-source {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  background: var(--color-surface);
+}
+
+.dt-source__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
+
+.dt-source__name {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.dt-license {
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.dt-license--pd {
+  background: rgba(46, 125, 50, 0.12);
+  color: #2e7d32;
+}
+
+.dt-license--cc {
+  background: rgba(74, 111, 165, 0.12);
+  color: var(--color-accent);
+}
+
+.dt-source__desc {
+  font-size: 0.83rem;
+  line-height: 1.5;
+  opacity: 0.78;
+}
+
+.dt-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.dt-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dt-tier {
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.dt-tier__badge {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  padding: 0.12rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  margin-right: 0.4rem;
+  white-space: nowrap;
+}
+
+.dt-link {
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  color: var(--color-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.dt-link:hover {
+  text-decoration: underline;
+}
+
+code {
+  font-size: 0.85em;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+}
+</style>

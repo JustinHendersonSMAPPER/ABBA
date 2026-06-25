@@ -127,6 +127,30 @@ class CrossRef(BaseModel):
     text: Optional[str] = None
 
 
+# --- Data Transparency / Trust Models ---
+
+
+class DataStats(BaseModel):
+    """Public data-coverage + provenance transparency snapshot.
+
+    Powers the "Data & Trust" page so anyone can see what is in the corpus, where it
+    came from, and how trustworthy it is — the project's public-scrutiny principle.
+    """
+
+    translations: int = 0
+    verses: int = 0
+    cross_reference_candidates: int = 0
+    cross_references: int = 0
+    cross_references_explained: int = 0  # rows with a non-empty explanation
+    cross_references_unexplained: int = 0  # rows missing an explanation (should be 0 — no dead data)
+    explained_coverage_pct: float = 0.0  # explained / candidates * 100
+    cross_references_by_tier: Dict[str, int] = Field(default_factory=dict)
+    cross_references_by_source: Dict[str, int] = Field(default_factory=dict)
+    avg_confidence: Optional[float] = None
+    provenance_records: int = 0
+    dictionary_entries: int = 0  # 0 until a public-domain dictionary is ingested (D5)
+
+
 # --- Literary Structure Models ---
 
 

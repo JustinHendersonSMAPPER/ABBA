@@ -83,6 +83,12 @@ const routes = [
     meta: { title: 'Analysis' },
   },
   {
+    path: '/data',
+    name: 'data-trust',
+    component: () => import('./views/DataTrustView.vue'),
+    meta: { title: 'Data & Trust' },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('./views/NotFound.vue'),
