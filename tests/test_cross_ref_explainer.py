@@ -20,6 +20,7 @@ from abba.semantic.cross_ref_explainer import (
     build_prompt,
     compute_shared_strongs,
     generate_explanations,
+    is_meaningful_anchor,
     score_confidence,
 )
 
@@ -143,6 +144,43 @@ def test_score_confidence_bonus_capped() -> None:
     assert result == pytest.approx(0.3 + 0.3)
 
 
+def test_score_confidence_stopword_anchor_treated_as_no_anchor() -> None:
+    """A function-word-only anchor ('that') gets the no-anchor base, not 0.7."""
+    assert score_confidence("that", []) == pytest.approx(0.3)
+    assert score_confidence("I will", []) == pytest.approx(0.3)
+    # but it can still be promoted if backed by shared Strong's
+    assert score_confidence("that", ["H1", "H2", "H3"]) == pytest.approx(0.6)
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: is_meaningful_anchor
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "anchor,expected",
+    [
+        ("gave", True),
+        ("the Lord", True),
+        ("pure gold", True),
+        ("Manasseh", True),
+        (None, False),
+        ("", False),
+        ("   ", False),
+        ("that", False),
+        ("they", False),
+        ("I will", False),
+        ("for it is", False),
+        ("thou shalt", False),
+        ("See on Matt 4:1", False),
+        ("cf. Genesis 1:1", False),
+        ("compare John 1", False),
+    ],
+)
+def test_is_meaningful_anchor(anchor: Any, expected: bool) -> None:
+    assert is_meaningful_anchor(anchor) is expected
+
+
 # ---------------------------------------------------------------------------
 # Unit tests: compute_shared_strongs
 # ---------------------------------------------------------------------------
@@ -191,6 +229,42 @@ def test_build_prompt_no_anchor() -> None:
     """No anchor → 'a related theme'."""
     prompt = build_prompt("John 3:16", "text_a", "Gen 1:1", "text_b", None)
     assert "a related theme" in prompt
+
+
+def test_build_prompt_stopword_anchor_uses_generic_theme() -> None:
+    """A junk/stopword anchor is not quoted; falls back to 'a related theme'."""
+    prompt = build_prompt("A 1:1", "ta", "B 2:2", "tb", "See on Matt 4:1")
+    assert "a related theme" in prompt
+    assert "See on" not in prompt
+
+
+def test_build_prompt_requests_english() -> None:
+    """The prompt explicitly asks for an English answer (anti-drift)."""
+    prompt = build_prompt("A 1:1", "ta", "B 2:2", "tb", "gave")
+    assert "English" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: _generate_english (CJK drift handling)
+# ---------------------------------------------------------------------------
+
+
+def test_generate_english_retries_then_succeeds() -> None:
+    """A first CJK-contaminated response is rejected; a clean retry is returned."""
+    from abba.semantic import cross_ref_explainer as eng
+
+    with patch.object(eng, "_ollama_generate", side_effect=["这是中文回答", "A clean English answer."]):
+        out = eng._generate_english("p", "m", "u", attempts=3)
+    assert out == "A clean English answer."
+
+
+def test_generate_english_gives_up_on_persistent_cjk() -> None:
+    """If every attempt contains CJK, return None (candidate is deferred)."""
+    from abba.semantic import cross_ref_explainer as eng
+
+    with patch.object(eng, "_ollama_generate", return_value="始终是中文"):
+        out = eng._generate_english("p", "m", "u", attempts=3)
+    assert out is None
 
 
 # ---------------------------------------------------------------------------
@@ -303,6 +377,17 @@ def test_generate_explanations_skips_missing_text(tmp_path: Path) -> None:
 
     assert stats["skipped_no_text"] == 1
     assert stats["promoted"] == 1  # the original John 3:16 → Gen 1:1 still promoted
+
+
+def test_generate_explanations_drops_cjk_explanation(tmp_path: Path) -> None:
+    """A candidate whose explanation is always Chinese is dropped, not promoted."""
+    db_path = make_test_db(tmp_path)
+
+    with patch("abba.semantic.cross_ref_explainer._ollama_generate", return_value="全部都是中文的解释"):
+        stats = generate_explanations(db_path, model="m", url="u", threshold=0.6)
+
+    assert stats["promoted"] == 0
+    assert stats["skipped_no_text"] == 1  # explain_candidate returned None (no clean English)
 
 
 def test_generate_explanations_filter_by_verse(tmp_path: Path) -> None:

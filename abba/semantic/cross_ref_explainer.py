@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any, Optional
 
 import requests
@@ -94,15 +95,154 @@ BOOK_ID_TO_STEP_CODE: dict[int, str] = {
 PROMPT_TEMPLATE = (
     "You help Bible readers understand why two passages are cross-referenced. "
     "In 1-2 plain, denominationally-neutral sentences, explain why they are linked, "
-    "grounded ONLY in the shared idea given. No doctrinal claims beyond the texts.\n\n"
+    "grounded ONLY in the shared idea given. No doctrinal claims beyond the texts. "
+    "Write your entire answer in English.\n\n"
     "Passage A — {ref_a}: {text_a}\n"
     "Passage B — {ref_b}: {text_b}\n"
     "Shared idea: {shared_idea}.\n\n"
-    "Explanation:"
+    "Explanation (in English):"
 )
 
+# Function words that carry no semantic grounding on their own. An anchor made up
+# ENTIRELY of these (e.g. "I will", "they", "for it is") is not real grounding, so it
+# is treated like no anchor (must earn confidence via shared Strong's instead).
+_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "but",
+        "for",
+        "nor",
+        "so",
+        "yet",
+        "of",
+        "to",
+        "in",
+        "on",
+        "at",
+        "by",
+        "with",
+        "from",
+        "as",
+        "that",
+        "this",
+        "these",
+        "those",
+        "it",
+        "its",
+        "is",
+        "was",
+        "are",
+        "were",
+        "be",
+        "been",
+        "being",
+        "am",
+        "he",
+        "she",
+        "they",
+        "them",
+        "his",
+        "her",
+        "their",
+        "theirs",
+        "your",
+        "yours",
+        "my",
+        "mine",
+        "me",
+        "us",
+        "i",
+        "you",
+        "him",
+        "who",
+        "whom",
+        "whose",
+        "which",
+        "what",
+        "shall",
+        "shalt",
+        "will",
+        "would",
+        "should",
+        "may",
+        "might",
+        "can",
+        "could",
+        "must",
+        "not",
+        "no",
+        "all",
+        "any",
+        "into",
+        "unto",
+        "out",
+        "up",
+        "down",
+        "then",
+        "than",
+        "there",
+        "here",
+        "when",
+        "where",
+        "do",
+        "did",
+        "does",
+        "done",
+        "have",
+        "has",
+        "had",
+        "thee",
+        "thou",
+        "thy",
+        "thine",
+        "ye",
+        "let",
+        "if",
+        "because",
+        "for it is",
+        "we",
+    }
+)
 
-def _ollama_generate(prompt: str, model: str, url: str, timeout: int = 120) -> str:
+# CJK / fullwidth ranges — qwen models occasionally drift into Chinese mid-answer.
+_CJK_RE = re.compile(r"[　-〿㐀-鿿豈-﫿＀-￯]")
+
+
+def is_meaningful_anchor(anchor: Optional[str]) -> bool:
+    """Return True if ``anchor`` provides real semantic grounding.
+
+    False for: empty/whitespace, TSK structural notes ("See on Matt 4:1", "cf.",
+    "compare"), and phrases made up entirely of function/stop words ("I will", "they").
+    Such anchors get the no-anchor confidence base, so they must be backed by shared
+    Strong's numbers to be promoted (enforcing the "no dead data" gate).
+
+    Args:
+        anchor: Candidate anchor phrase, or None.
+
+    Returns:
+        True if the anchor is a meaningful content phrase.
+    """
+    if not anchor or not anchor.strip():
+        return False
+    a = anchor.strip().lower()
+    if a.startswith(("see on", "see also", "see ver", "cf.", "cf ", "compare ")):
+        return False
+    tokens = [t for t in re.split(r"[^a-z]+", a) if t]
+    if not tokens:
+        return False
+    return any(t not in _STOPWORDS for t in tokens)
+
+
+def _contains_cjk(text: str) -> bool:
+    """True if the text contains any CJK / fullwidth characters."""
+    return bool(_CJK_RE.search(text))
+
+
+def _ollama_generate(prompt: str, model: str, url: str, timeout: int = 120, temperature: float = 0.2) -> str:
     """Call Ollama /api/generate and return the generated text.
 
     Args:
@@ -110,6 +250,7 @@ def _ollama_generate(prompt: str, model: str, url: str, timeout: int = 120) -> s
         model: Ollama model name (e.g. ``qwen2.5:14b``).
         url: Base URL of the Ollama server.
         timeout: Request timeout in seconds.
+        temperature: Sampling temperature.
 
     Returns:
         The stripped generated text.
@@ -121,7 +262,7 @@ def _ollama_generate(prompt: str, model: str, url: str, timeout: int = 120) -> s
         "model": model,
         "prompt": prompt,
         "stream": False,
-        "options": {"temperature": 0.2, "num_predict": 180},
+        "options": {"temperature": temperature, "num_predict": 180},
     }
     response = requests.post(f"{url}/api/generate", json=payload, timeout=timeout)
     response.raise_for_status()
@@ -129,6 +270,32 @@ def _ollama_generate(prompt: str, model: str, url: str, timeout: int = 120) -> s
     if not text:
         raise RuntimeError("Ollama returned an empty response")
     return text
+
+
+def _generate_english(prompt: str, model: str, url: str, attempts: int = 3) -> Optional[str]:
+    """Generate an explanation, retrying if the model drifts into a non-English script.
+
+    Qwen models occasionally switch to Chinese partway through. We re-ask (with a slightly
+    higher temperature and an explicit English directive) up to ``attempts`` times; if every
+    attempt is contaminated we return None so the candidate is deferred rather than shown
+    with a half-Chinese explanation (the trust / no-dead-data gate).
+
+    Args:
+        prompt: The base prompt.
+        model: Ollama model name.
+        url: Ollama base URL.
+        attempts: Maximum generation attempts.
+
+    Returns:
+        Clean English text, or None if every attempt contained CJK characters.
+    """
+    for i in range(attempts):
+        p = prompt if i == 0 else prompt + "\n\nIMPORTANT: Write the entire explanation in English only."
+        text = _ollama_generate(p, model, url, temperature=0.2 + 0.2 * i)
+        if not _contains_cjk(text):
+            return text
+        logger.info("CJK drift detected (attempt %d/%d); retrying in English", i + 1, attempts)
+    return None
 
 
 def compute_shared_strongs(
@@ -196,7 +363,7 @@ def score_confidence(anchor_phrase: Optional[str], shared_strongs: list[str]) ->
     Returns:
         Confidence in [0.0, 1.0].
     """
-    base = 0.7 if (anchor_phrase and anchor_phrase.strip()) else 0.3
+    base = 0.7 if is_meaningful_anchor(anchor_phrase) else 0.3
     bonus = min(0.3, 0.1 * len(shared_strongs))
     return min(1.0, base + bonus)
 
@@ -220,7 +387,7 @@ def build_prompt(
     Returns:
         Formatted prompt string.
     """
-    if anchor and anchor.strip():
+    if is_meaningful_anchor(anchor):
         shared_idea = f'the word/idea "{anchor}"'
     else:
         shared_idea = "a related theme"
@@ -290,7 +457,10 @@ def explain_candidate(
     shared_strongs = compute_shared_strongs(db, src_book_id, src_ch, src_v, tgt_book_id, tgt_ch, tgt_v)
     confidence = score_confidence(anchor_phrase, shared_strongs)
     prompt = build_prompt(ref_a, text_a, ref_b, text_b, anchor_phrase)
-    explanation = _ollama_generate(prompt, model, url)
+    explanation = _generate_english(prompt, model, url)
+    if explanation is None:
+        logger.info("explain_candidate: dropping %s → %s (no clean English explanation)", ref_a, ref_b)
+        return None
 
     return {
         "source_book_id": src_book_id,
