@@ -109,3 +109,21 @@ deferred because they need careful STEP-format work or are low-confidence one-sh
   codes to human descriptions needs a parser/lookup (the `morphology` table has 2,756 code defs).
 - **Multi-brace compound roots** (only the first `{...}` is used) and **Aramaic** (coded as Hebrew).
 **Status:** OPEN (Pillar 1 functional; these are enhancements).
+
+## D9 — Source-level cleanups surfaced by the Windows test-suite fix (2026-06-25)
+The test-fixture cleanup (commit `fe6cd69`, suite now 672 passed / 0 failed) made the suite green
+test-side but surfaced two genuine **source** issues left untouched (low-risk but skipped mid-run to
+avoid editing hot paths while the 578K explanation job was live):
+- **`abba/database/migrations.py` leaks DB connections (31 sites).** Each helper uses
+  `with sqlite3.connect(db_path) as conn:` — Python's sqlite3 context manager commits/rolls back but
+  does **not** close the connection, so it lingers until GC. On Windows an open connection holds an OS
+  file lock → `PermissionError [WinError 32]` on temp-DB teardown (the root cause behind the ~22
+  failures; tests now work around it with `gc.collect()` + `shutil.rmtree(ignore_errors=True)`). Proper
+  fix: close each connection (e.g. a commit+close context manager helper) so the GC workaround can be
+  removed. Could also bite real Windows usage, not just tests.
+- **`abba/api/search.py` has two dead, broken wrappers:** `SearchAPI.get_words_for_verse` and
+  `SearchAPI.search_strongs` map old column names (`row["book"]`, `row["hebrew_text"]`…) onto the new
+  `stepbible_verses` shape → `IndexError` if ever called. Nothing calls them — `routes.py` uses
+  `db_manager.get_words_for_verse/search_strongs` directly, and `SearchAPI.get_word_analysis` (the only
+  live `SearchAPI` method) also bypasses them. Fix: delete the two wrappers (or update their column map).
+**Status:** OPEN (high-confidence, low-risk; do as a dedicated change when the live run is idle).
