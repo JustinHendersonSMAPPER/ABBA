@@ -39,8 +39,8 @@ defineEmits<{
 
 const levels: DepthOption[] = [
   { value: 'basic', label: 'Read', description: 'Clean reading experience', caption: 'Just the text' },
-  { value: 'standard', label: 'Understand', description: 'Key words and context', caption: 'Word meanings & original language' },
-  { value: 'deep', label: 'Study', description: 'Cross-references and structure', caption: 'Cross-references, context & syntax' },
+  { value: 'standard', label: 'Understand', description: 'Key words and why passages connect', caption: 'Original language & explained cross-references' },
+  { value: 'deep', label: 'Study', description: 'Context, structure and syntax', caption: 'Cultural context, literary structure & syntax' },
   { value: 'scholarly', label: 'Analyze', description: 'Full linguistic analysis', caption: 'Manuscript variants, morphology & discourse' },
 ]
 

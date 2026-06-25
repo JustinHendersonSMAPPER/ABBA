@@ -117,24 +117,34 @@
         </div>
       </section>
 
-      <section v-if="verseData.cross_references && verseData.cross_references.length" class="study-section">
+      <section
+        v-if="depth !== 'basic' && verseData.cross_references && verseData.cross_references.length"
+        class="study-section xref-section"
+      >
         <h2 class="section-heading">Cross-References</h2>
-        <ul class="cross-ref-list">
-          <li v-for="(ref, i) in verseData.cross_references" :key="i">
-            <router-link
-              v-if="ref.book_id && ref.chapter && ref.verse"
-              :to="`/study/${ref.book_id}/${ref.chapter}/${ref.verse}`"
-              class="ref-link"
-            >
-              {{ ref.label || `${ref.book_name || ref.book_id} ${ref.chapter}:${ref.verse}` }}
-            </router-link>
-            <span v-else>{{ ref.label }}</span>
-            <span v-if="ref.note" class="ref-note"> -- {{ ref.note }}</span>
-            <ProvenanceChip
-              v-if="ref.id != null"
-              entity-type="cross_reference"
-              :entity-id="ref.id"
-            />
+        <p class="xref-intro">Related passages — and why they connect.</p>
+        <ul class="xref-cards">
+          <li v-for="(ref, i) in verseData.cross_references" :key="i" class="xref-card">
+            <div class="xref-card__head">
+              <router-link
+                v-if="ref.book_id && ref.chapter && ref.verse"
+                :to="`/study/${ref.book_id}/${ref.chapter}/${ref.verse}`"
+                class="xref-ref"
+              >
+                {{ ref.label || `${ref.book_name || ref.book_id} ${ref.chapter}:${ref.verse}` }}
+                <span class="xref-arrow" aria-hidden="true">→</span>
+              </router-link>
+              <span v-else class="xref-ref">{{ ref.label }}</span>
+              <ProvenanceChip
+                v-if="ref.id != null"
+                entity-type="cross_reference"
+                :entity-id="ref.id"
+              />
+            </div>
+            <p v-if="ref.text" class="xref-target-text">{{ ref.text }}</p>
+            <p v-if="ref.note" class="xref-why">
+              <span class="xref-why__label">Why linked</span>{{ ref.note }}
+            </p>
           </li>
         </ul>
       </section>
@@ -488,27 +498,82 @@ watch(
   opacity: 0.5;
 }
 
-.cross-ref-list {
+/* ── Cross-reference cards ───────────────────────────────── */
+.xref-intro {
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  opacity: 0.6;
+  margin: -0.4rem 0 0.85rem;
+}
+
+.xref-cards {
   list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
-.cross-ref-list li {
-  padding: 0.25rem 0;
-  font-size: 0.9rem;
+.xref-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  background: var(--color-surface);
+  transition: border-color 0.15s ease;
 }
 
-.ref-link {
+.xref-card:hover {
+  border-color: var(--color-accent);
+}
+
+.xref-card__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.xref-ref {
   color: var(--color-accent);
   text-decoration: none;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 0.92rem;
 }
 
-.ref-link:hover {
+.xref-ref:hover {
   text-decoration: underline;
 }
 
-.ref-note {
-  opacity: 0.6;
+.xref-arrow {
+  opacity: 0.5;
+}
+
+.xref-target-text {
+  font-family: var(--font-reading, Georgia, serif);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0.45rem 0 0;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--color-border);
+  opacity: 0.9;
+}
+
+.xref-why {
   font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0.5rem 0 0;
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--color-border);
+}
+
+.xref-why__label {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+  margin-right: 0.45rem;
 }
 
 .feedback-section { text-align: center; }

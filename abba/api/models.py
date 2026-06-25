@@ -123,6 +123,8 @@ class CrossRef(BaseModel):
     book_name: Optional[str] = None
     label: Optional[str] = None
     note: Optional[str] = None
+    # Text of the linked verse (BSB), so the UI can preview it without a second fetch
+    text: Optional[str] = None
 
 
 # --- Literary Structure Models ---

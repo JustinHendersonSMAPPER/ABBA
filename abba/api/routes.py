@@ -304,7 +304,6 @@ async def get_verse(
             response.richness_flags = _get_richness_flags(book_name or str(book_id), chapter, verse)
 
             if depth in (DepthLevel.DEEP, DepthLevel.SCHOLARLY):
-                response.cross_references = _get_cross_refs(book_id, chapter, verse)
                 response.cultural_context = _get_cultural_context(book_id, chapter, verse)
                 response.passage_info = _get_passage_info(book_id, chapter, verse)
                 response.literary_structures = _get_literary_structures(book_id, chapter, verse)
@@ -314,6 +313,12 @@ async def get_verse(
                 response.genre = _get_active_genre(book_id, chapter, verse)
                 if response.genre in ("narrative", "unknown"):
                     response.is_descriptive = True
+
+        # Explained cross-references surface from STANDARD up — the "why two passages
+        # connect" is a core understanding aid, not just a scholarly extra. Run whether or
+        # not the annotation cache short-circuited above (cache may not carry them at standard).
+        if not response.cross_references:
+            response.cross_references = _get_cross_refs(book_id, chapter, verse)
 
     if depth == DepthLevel.SCHOLARLY:
         analysis = _get_analysis()
@@ -1582,11 +1587,14 @@ def _get_cross_refs(book_id: int, chapter: int, verse: int) -> List[CrossRef]:
             return db_book_names.get(bid) or book_names.get(bid, str(bid))
 
         rows = db.execute_query(
-            "SELECT ref_id, target_book_id, target_chapter, target_verse, ref_type, confidence, notes "
-            "FROM cross_references "
-            "WHERE source_book_id = ? AND source_chapter = ? AND source_verse = ? "
-            "ORDER BY target_book_id, target_chapter, target_verse",
-            (book_id, chapter, verse),
+            "SELECT cr.ref_id, cr.target_book_id, cr.target_chapter, cr.target_verse, "
+            "cr.ref_type, cr.confidence, cr.notes, v.text "
+            "FROM cross_references cr "
+            "LEFT JOIN verses v ON v.book_id = cr.target_book_id AND v.chapter = cr.target_chapter "
+            "AND v.verse = cr.target_verse AND v.translation_id = ? "
+            "WHERE cr.source_book_id = ? AND cr.source_chapter = ? AND cr.source_verse = ? "
+            "ORDER BY cr.target_book_id, cr.target_chapter, cr.target_verse",
+            (DEFAULT_TRANSLATION_ID, book_id, chapter, verse),
         )
         refs = []
         for r in rows:
@@ -1605,15 +1613,19 @@ def _get_cross_refs(book_id: int, chapter: int, verse: int) -> List[CrossRef]:
                     book_name=tgt_name,
                     label=lbl,
                     note=r[6],
+                    text=r[7],
                 )
             )
         # Also include incoming references
         rows2 = db.execute_query(
-            "SELECT ref_id, source_book_id, source_chapter, source_verse, ref_type, confidence, notes "
-            "FROM cross_references "
-            "WHERE target_book_id = ? AND target_chapter = ? AND target_verse = ? "
-            "ORDER BY source_book_id, source_chapter, source_verse",
-            (book_id, chapter, verse),
+            "SELECT cr.ref_id, cr.source_book_id, cr.source_chapter, cr.source_verse, "
+            "cr.ref_type, cr.confidence, cr.notes, v.text "
+            "FROM cross_references cr "
+            "LEFT JOIN verses v ON v.book_id = cr.source_book_id AND v.chapter = cr.source_chapter "
+            "AND v.verse = cr.source_verse AND v.translation_id = ? "
+            "WHERE cr.target_book_id = ? AND cr.target_chapter = ? AND cr.target_verse = ? "
+            "ORDER BY cr.source_book_id, cr.source_chapter, cr.source_verse",
+            (DEFAULT_TRANSLATION_ID, book_id, chapter, verse),
         )
         for r in rows2:
             src_name = _resolve_name(r[1])
@@ -1631,6 +1643,7 @@ def _get_cross_refs(book_id: int, chapter: int, verse: int) -> List[CrossRef]:
                     book_name=src_name,
                     label=lbl,
                     note=r[6],
+                    text=r[7],
                 )
             )
         return refs

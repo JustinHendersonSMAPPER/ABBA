@@ -42,6 +42,8 @@ export interface CrossRef {
   label?: string
   note?: string
   id?: number
+  text?: string
+  confidence?: number
 }
 
 /** Core verse data returned by the verse endpoint */
