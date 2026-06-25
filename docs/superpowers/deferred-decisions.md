@@ -126,4 +126,9 @@ avoid editing hot paths while the 578K explanation job was live):
   `stepbible_verses` shape → `IndexError` if ever called. Nothing calls them — `routes.py` uses
   `db_manager.get_words_for_verse/search_strongs` directly, and `SearchAPI.get_word_analysis` (the only
   live `SearchAPI` method) also bypasses them. Fix: delete the two wrappers (or update their column map).
-**Status:** OPEN (high-confidence, low-risk; do as a dedicated change when the live run is idle).
+**Status:** ✅ **RESOLVED (2026-06-25).** `migrations.py` now wraps connections in a `_connect`
+context manager that commits-on-success / rolls-back-on-error / always closes — all 31 sites converted
+(the test-side `gc.collect()` workaround can be removed later but is harmless). The two dead
+`SearchAPI` wrappers were deleted (confirmed no live callers). Full non-integration suite: **681
+passed, 0 failed**; ruff + pyright clean. (Done safely mid-run: the live explanation process had
+already loaded these modules and does not reload them.)

@@ -2,9 +2,41 @@
 
 import logging
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any, Iterator, Union
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _connect(db_path: Union[Path, str], *args: Any, **kwargs: Any) -> Iterator[sqlite3.Connection]:
+    """Open a SQLite connection that commits, rolls back, and always closes.
+
+    Python's built-in ``sqlite3`` connection context manager commits (or rolls
+    back on error) the active transaction but does **not** close the connection,
+    so it lingers until garbage collection. On Windows a lingering connection
+    holds an OS file lock, causing ``PermissionError`` on temp-DB teardown. This
+    helper preserves the commit/rollback semantics and additionally closes the
+    connection on exit.
+
+    Args:
+        db_path: Path to the database.
+        *args: Extra positional arguments forwarded to ``sqlite3.connect``.
+        **kwargs: Extra keyword arguments forwarded to ``sqlite3.connect``.
+
+    Yields:
+        An open ``sqlite3.Connection``.
+    """
+    conn = sqlite3.connect(db_path, *args, **kwargs)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def add_canon_column(db_path: Path) -> bool:
@@ -17,7 +49,7 @@ def add_canon_column(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
 
             # Check if column exists
@@ -71,7 +103,7 @@ def add_stepbible_verses_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
 
             # Check if table exists
@@ -138,7 +170,7 @@ def add_partial_canon_columns(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
 
             # Check if columns exist
@@ -183,7 +215,7 @@ def add_import_failure_tracking(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
 
             # Check if columns exist
@@ -266,7 +298,7 @@ def add_stepbible_hash_column(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
 
             # Check if column exists
@@ -308,7 +340,7 @@ def add_book_metadata_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='book_metadata'")
             if cursor.fetchone()[0] > 0:
@@ -351,7 +383,7 @@ def add_passages_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='passages'")
             if cursor.fetchone()[0] > 0:
@@ -399,7 +431,7 @@ def add_literary_structures_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='literary_structures'")
             if cursor.fetchone()[0] > 0:
@@ -445,7 +477,7 @@ def add_cultural_context_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='cultural_context'")
             if cursor.fetchone()[0] > 0:
@@ -500,7 +532,7 @@ def add_cross_references_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='cross_references'")
             if cursor.fetchone()[0] > 0:
@@ -558,7 +590,7 @@ def add_cross_reference_candidates_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='cross_reference_candidates'"
@@ -619,7 +651,7 @@ def add_dictionary_entries_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='dictionary_entries'")
             if cursor.fetchone()[0] > 0:
@@ -668,7 +700,7 @@ def add_stepbible_lexical_strongs_column(db_path: Path) -> bool:
         if stepbible_verses table does not exist yet.
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
 
             # If the table doesn't exist yet, nothing to do
@@ -711,7 +743,7 @@ def add_provenance_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='provenance'")
             if cursor.fetchone()[0] > 0:
@@ -758,7 +790,7 @@ def add_word_richness_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='word_richness'")
             if cursor.fetchone()[0] > 0:
@@ -803,7 +835,7 @@ def add_life_topics_tables(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='life_topics'")
             if cursor.fetchone()[0] > 0:
@@ -867,7 +899,7 @@ def add_life_topics_tables(db_path: Path) -> bool:
 def add_genre_shifts_table(db_path: Path) -> bool:
     """Add genre_shifts table for tracking genre transitions within books."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='genre_shifts'")
             if cursor.fetchone()[0] > 0:
@@ -897,7 +929,7 @@ def add_genre_shifts_table(db_path: Path) -> bool:
 def add_speaker_attributions_table(db_path: Path) -> bool:
     """Add speaker_attributions table for quoted speech."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='speaker_attributions'")
             if cursor.fetchone()[0] > 0:
@@ -931,7 +963,7 @@ def add_speaker_attributions_table(db_path: Path) -> bool:
 def add_word_explanations_table(db_path: Path) -> bool:
     """Add word_explanations table for plain-English word explanations."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='word_explanations'")
             if cursor.fetchone()[0] > 0:
@@ -960,7 +992,7 @@ def add_word_explanations_table(db_path: Path) -> bool:
 def add_concept_quality_tables(db_path: Path) -> bool:
     """Add tables for concept quality review metadata."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='semantic_range_warnings'")
             if cursor.fetchone()[0] > 0:
@@ -1016,7 +1048,7 @@ def add_verse_annotations_cache_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='verse_annotations_cache'")
             if cursor.fetchone()[0] > 0:
@@ -1113,7 +1145,7 @@ def add_range_query_indexes(db_path: Path) -> bool:
     ]
     added = False
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             for idx_name, table, columns in indexes:
                 # Check if table exists before adding index
@@ -1152,7 +1184,7 @@ def add_lexicon_definitions_table(db_path: Path) -> bool:
         True if migration was needed and succeeded, False if already exists
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='lexicon_definitions'")
             if cursor.fetchone()[0] > 0:
@@ -1190,7 +1222,7 @@ def add_lexicon_definitions_table(db_path: Path) -> bool:
 def add_user_annotation_tables(db_path: Path) -> bool:
     """Add tables for user notes, collections, and sharing."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='verse_notes'")
             if cursor.fetchone()[0] > 0:
@@ -1260,7 +1292,7 @@ def add_user_annotation_tables(db_path: Path) -> bool:
 def add_semantic_domain_tables(db_path: Path) -> bool:
     """Add semantic_domains and strongs_domain_mappings tables for Louw-Nida classification."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='semantic_domains'")
             if cursor.fetchone()[0] > 0:
@@ -1305,7 +1337,7 @@ def add_semantic_domain_tables(db_path: Path) -> bool:
 def add_syntax_tree_table(db_path: Path) -> bool:
     """Add syntax_trees table for MACULA treebank data."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='syntax_trees'")
             if cursor.fetchone()[0] > 0:
@@ -1345,7 +1377,7 @@ def add_syntax_tree_table(db_path: Path) -> bool:
 def add_discourse_annotation_table(db_path: Path) -> bool:
     """Add discourse_annotations table for OpenText.org discourse data."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='discourse_annotations'")
             if cursor.fetchone()[0] > 0:
@@ -1385,7 +1417,7 @@ def add_discourse_annotation_table(db_path: Path) -> bool:
 def add_manuscript_variant_table(db_path: Path) -> bool:
     """Add manuscript_variants table for textual criticism data."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='manuscript_variants'")
             if cursor.fetchone()[0] > 0:
@@ -1425,7 +1457,7 @@ def add_manuscript_variant_table(db_path: Path) -> bool:
 def add_community_contribution_tables(db_path: Path) -> bool:
     """Add community_contributions and contribution_reviews tables."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='community_contributions'")
             if cursor.fetchone()[0] > 0:
@@ -1478,7 +1510,7 @@ def add_community_contribution_tables(db_path: Path) -> bool:
 def add_concept_proposal_table(db_path: Path) -> bool:
     """Add concept_proposals table for collaborative concept editing."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='concept_proposals'")
             if cursor.fetchone()[0] > 0:
@@ -1514,7 +1546,7 @@ def add_concept_proposal_table(db_path: Path) -> bool:
 def add_ml_and_graph_tables(db_path: Path) -> bool:
     """Add concept_feedback and semantic_relationship_graph tables for ML and visualization."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with _connect(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='concept_feedback'")
             if cursor.fetchone()[0] > 0:

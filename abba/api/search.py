@@ -94,64 +94,6 @@ class SearchAPI:
             for row in results
         ]
 
-    def get_words_for_verse(self, book: str, chapter: int, verse: int) -> List[WordResult]:
-        """Get all words for a specific verse from original language texts.
-
-        Args:
-            book: Book name
-            chapter: Chapter number
-            verse: Verse number
-
-        Returns:
-            List of word analysis results
-        """
-        results = self.db_manager.get_words_for_verse(book, chapter, verse)
-        return [
-            WordResult(
-                book=row["book"],
-                chapter=row["chapter"],
-                verse=row["verse"],
-                word_num=row["word_num"],
-                word_ref=row["word_ref"],
-                hebrew_text=row["hebrew_text"],
-                greek_text=row["greek_text"],
-                transliteration=row["transliteration"],
-                translation=row["translation"],
-                strongs_primary=row["strongs_primary"],
-                morphology_code=row["morphology_code"],
-                language=row["language"],
-            )
-            for row in results
-        ]
-
-    def search_strongs(self, strongs_number: str) -> List[WordResult]:
-        """Search for verses containing a specific Strong's number.
-
-        Args:
-            strongs_number: Strong's number (e.g., "H0430")
-
-        Returns:
-            List of word occurrences
-        """
-        results = self.db_manager.search_strongs(strongs_number)
-        return [
-            WordResult(
-                book=row["book"],
-                chapter=row["chapter"],
-                verse=row["verse"],
-                word_num=row["word_num"],
-                word_ref=row["word_ref"],
-                hebrew_text=row["hebrew_text"],
-                greek_text=row["greek_text"],
-                transliteration=row["transliteration"],
-                translation=row["translation"],
-                strongs_primary=row["strongs_primary"],
-                morphology_code=row["morphology_code"],
-                language=row["language"],
-            )
-            for row in results
-        ]
-
     def get_word_analysis(self, book: str, chapter: int, verse: int, word_num: int) -> Optional[Dict[str, Any]]:
         """Get complete analysis for a specific word.
 
