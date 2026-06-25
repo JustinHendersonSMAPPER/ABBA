@@ -43,9 +43,9 @@
         <p v-else class="verse-text">{{ verseData.text }}</p>
       </section>
 
-      <!-- Original Language panel: shown whenever the API returned words -->
+      <!-- Original Language panel: from Understand depth up (Read stays just the text) -->
       <section
-        v-if="verseData.words && verseData.words.length"
+        v-if="depth !== 'basic' && verseData.words && verseData.words.length"
         class="study-section orig-lang-section"
         aria-label="Original Language"
       >
