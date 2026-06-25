@@ -1,5 +1,7 @@
 """Tests for STEPBible data parsing functionality."""
 
+import gc
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,6 +26,19 @@ class TestSTEPBibleParsing(unittest.TestCase):
         self.db_path = Path(self.temp_dir) / "test.db"
         self.db_manager = SQLiteManager(self.db_path)
         self.db_manager.initialize_database()
+
+    def tearDown(self):
+        """Clean up test environment.
+
+        Force a GC pass first so any lingering SQLite connections (migration
+        connections opened via ``with sqlite3.connect(...)`` commit but do not
+        close) are finalized; otherwise Windows raises
+        ``PermissionError [WinError 32]`` while removing the temp directory.
+        """
+        self.db_manager = None
+        self.extractor = None
+        gc.collect()
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_parse_lexicon_hebrew(self):
         """Test parsing Hebrew lexicon from OpenScriptures XML."""
@@ -116,7 +131,13 @@ ADJ-NSF\tAdjective - Nominative Singular Feminine\tAdjective Nominative Singular
         result = self.extractor.parse_stepbible_text("tahot_gen_deu.txt", self.db_manager)
         self.assertTrue(result)
 
-        words = self.db_manager.get_words_for_verse("Gen", 1, 1)
+        # parse_stepbible_text imports into the ``words`` table via insert_word,
+        # so verify there (get_words_for_verse reads the separate
+        # stepbible_verses table, which this parser does not populate).
+        words = self.db_manager.execute_query(
+            "SELECT * FROM words WHERE book = ? AND chapter = ? AND verse = ?",
+            ("Gen", 1, 1),
+        )
         self.assertTrue(len(words) >= 3)
 
     def test_parse_stepbible_text_greek(self):
@@ -136,7 +157,13 @@ ADJ-NSF\tAdjective - Nominative Singular Feminine\tAdjective Nominative Singular
         result = self.extractor.parse_stepbible_text("tagnt_mat_jhn.txt", self.db_manager)
         self.assertTrue(result)
 
-        words = self.db_manager.get_words_for_verse("Mat", 1, 1)
+        # parse_stepbible_text imports into the ``words`` table via insert_word,
+        # so verify there (get_words_for_verse reads the separate
+        # stepbible_verses table, which this parser does not populate).
+        words = self.db_manager.execute_query(
+            "SELECT * FROM words WHERE book = ? AND chapter = ? AND verse = ?",
+            ("Mat", 1, 1),
+        )
         self.assertTrue(len(words) >= 3)
 
     def test_parse_nonexistent_lexicon(self):

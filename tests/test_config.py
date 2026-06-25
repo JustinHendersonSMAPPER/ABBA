@@ -1,5 +1,6 @@
 """Tests for configuration management."""
 
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -57,6 +58,10 @@ class TestConfigManager(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.config_manager = ConfigManager()
 
+    def tearDown(self):
+        """Clean up test environment."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
     def test_load_default_config(self):
         """Test loading default configuration."""
         config = self.config_manager.load_config([])
@@ -78,7 +83,10 @@ class TestConfigManager(unittest.TestCase):
         new_manager._load_config_file(config_file)
 
         self.assertTrue(new_manager.config.verbose)
-        self.assertEqual(str(new_manager.config.data_dir), "/custom/path")
+        # data_dir round-trips through JSON as a string; on Windows str(Path)
+        # uses backslash separators, so compare as Path objects (which normalize
+        # separators) to keep the assertion OS-independent.
+        self.assertEqual(Path(new_manager.config.data_dir), Path("/custom/path"))
 
 
 if __name__ == "__main__":

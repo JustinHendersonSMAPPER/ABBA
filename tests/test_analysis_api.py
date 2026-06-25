@@ -1,8 +1,10 @@
 """Tests for the linguistic analysis API."""
 
+import gc
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
 from abba.api import AnalysisAPI, LexicalCluster, MorphologyPattern, WordFrequency
@@ -14,8 +16,8 @@ class TestAnalysisAPI(unittest.TestCase):
 
     def setUp(self):
         """Set up test environment."""
-        self.temp_dir = TemporaryDirectory()
-        self.db_path = Path(self.temp_dir.name) / "test.db"
+        self.temp_dir = tempfile.mkdtemp()
+        self.db_path = Path(self.temp_dir) / "test.db"
         self.db_manager = SQLiteManager(self.db_path)
         self.db_manager.initialize_database()
         self.api = AnalysisAPI(self.db_manager)
@@ -24,8 +26,18 @@ class TestAnalysisAPI(unittest.TestCase):
         self._insert_test_data()
 
     def tearDown(self):
-        """Clean up test environment."""
-        self.temp_dir.cleanup()
+        """Clean up test environment.
+
+        On Windows, lingering SQLite connections (e.g. migration connections
+        opened via ``with sqlite3.connect(...)``, which commit but do not close)
+        keep the file locked, raising ``PermissionError [WinError 32]`` during
+        directory cleanup. Force a GC pass so those connections are finalized
+        before removing the temp directory, and tolerate any residual lock.
+        """
+        self.api = None
+        self.db_manager = None
+        gc.collect()
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def _insert_test_data(self):
         """Insert test data into database."""

@@ -1,5 +1,7 @@
 """Tests for SQLiteManager database operations."""
 
+import gc
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,9 +20,17 @@ class TestSQLiteManager(unittest.TestCase):
         self.db_manager.initialize_database()
 
     def tearDown(self):
-        """Clean up test database."""
-        if self.db_path.exists():
-            self.db_path.unlink()
+        """Clean up test database.
+
+        On Windows, lingering SQLite connections (e.g. migration connections
+        opened via ``with sqlite3.connect(...)``, which commit but do not close)
+        keep the file locked, raising ``PermissionError [WinError 32]`` on
+        unlink. Force a GC pass so those connections are finalized before
+        removing the temp directory, and tolerate any residual lock.
+        """
+        self.db_manager = None
+        gc.collect()
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_database_initialization(self):
         """Test database is created and schema is applied."""
@@ -100,8 +110,12 @@ class TestSQLiteManager(unittest.TestCase):
 
         self.db_manager.insert_word(word_data)
 
-        # Verify insertion
-        words = self.db_manager.get_words_for_verse("Genesis", 1, 1)
+        # Verify insertion against the ``words`` table (insert_word's target).
+        # get_words_for_verse reads the separate stepbible_verses table.
+        words = self.db_manager.execute_query(
+            "SELECT * FROM words WHERE book = ? AND chapter = ? AND verse = ?",
+            ("Genesis", 1, 1),
+        )
         self.assertEqual(len(words), 1)
         self.assertEqual(words[0]["hebrew_text"], "בְּרֵאשִׁית")
 
