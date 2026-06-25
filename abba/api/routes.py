@@ -280,6 +280,7 @@ async def get_data_stats() -> DataStats:
         cross_reference_candidates=candidates,
         cross_references=_scalar("SELECT COUNT(*) FROM cross_references"),
         cross_references_explained=explained,
+        cross_references_unexplained=unexplained,
         explained_coverage_pct=round(explained / candidates * 100, 2) if candidates else 0.0,
         cross_references_by_tier=by_tier,
         cross_references_by_source=by_source,
