@@ -9,6 +9,7 @@ export interface VerseResponse {
   words?: WordData[] | null
   richness_flags?: RichnessFlag[] | null
   cultural_context?: CulturalNote[] | null
+  dictionary_context?: DictionaryContextItem[] | null
   cross_references?: CrossRef[] | null
   passage_info?: PassageInfo | null
   literary_structures?: LiteraryStructure[] | null
@@ -32,6 +33,16 @@ export interface RichnessFlag {
 export interface CulturalNote {
   text: string
   category?: string
+}
+
+/** A public-domain dictionary entry that cites this verse (Tier-A historical context) */
+export interface DictionaryContextItem {
+  entry_id: number
+  headword: string
+  article: string
+  source: string
+  provenance_entity_id: string
+  match_method: string
 }
 
 export interface CrossRef {

@@ -69,7 +69,18 @@ the entity linking (key context to people/places/terms vs. to verse ranges)?
 **Why deferred:** Scope + source-quality judgment; several valid approaches.
 **Recommended default:** Defer until after cross-references ship; when started, prefer ISBE (1915) for
 breadth, key entries to verse ranges first (simpler), entity-level linking later.
-**Status:** OPEN — researched (2026-06-24), **NOT a clean high-confidence one-shot like TSK was.**
+**Status:** ✅ **v1 SHIPPED (2026-06-25, GPU-free).** Solved the entity-linking problem by sidestepping
+NER entirely: each Easton article *cites its own verses* (`ref_targets`), so the dictionary itself
+vouches for the link. `abba/database/dictionary_linker.py` parses those OSIS citations →
+`verse_dictionary_links` (**23,063 links / 12,551 verses**); the verse API returns `dictionary_context`
+(Tier-A 📚 Sourced, verbatim PD article + provenance) at STANDARD+ and StudyView renders a "Historical
+Context" section. No AI, no disambiguation guessing — fully auditable. Validated: Exodus 6:20 →
+Aaron/Amram/Jochebed; Genesis 22:2 → Burnt offering/Moriah. **Deferred (needs GPU):** the optional
+LLM-summary stage (condense long articles for a verse's context) — same pattern as the cross-ref
+explainer, to be run when the explanation run is idle. **Next source:** ISBE (1915), additive (the
+`source` column + linker are source-agnostic). Proper-noun matching (beyond `ref_target`) is a later
+enhancement. Original research note follows ↓
+OPEN — researched (2026-06-24), **NOT a clean high-confidence one-shot like TSK was.**
 Source landscape: Easton's (1897), ISBE (1915), Smith's are public domain and available as CrossWire
 SWORD dictionary modules — but those are **entry-keyed** (headword → article: "Bethlehem", "Pharisee"),
 NOT verse-keyed. Mapping them to per-verse `cultural_context` requires **entity-linking** (identify the

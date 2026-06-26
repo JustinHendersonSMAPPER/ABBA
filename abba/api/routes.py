@@ -31,6 +31,7 @@ from .models import (
     CulturalNote,
     DataStats,
     DepthLevel,
+    DictionaryContextItem,
     DiscourseUnit,
     GenreShift,
     LexiconEntry,
@@ -377,6 +378,11 @@ async def get_verse(
         # not the annotation cache short-circuited above (cache may not carry them at standard).
         if not response.cross_references:
             response.cross_references = _get_cross_refs(book_id, chapter, verse)
+
+        # Historical context (PD dictionary entries that cite this verse) — also a core
+        # understanding aid, surfaced from STANDARD up. Source-vouched, Tier A, no AI.
+        if not response.dictionary_context:
+            response.dictionary_context = _get_dictionary_context(book_id, chapter, verse)
 
     if depth == DepthLevel.SCHOLARLY:
         analysis = _get_analysis()
@@ -1736,6 +1742,37 @@ def _get_cultural_context(book_id: int, _chapter: int = 0, _verse: int = 0) -> L
         ]
     except sqlite3.OperationalError:
         return []
+
+
+def _get_dictionary_context(book_id: int, chapter: int, verse: int, limit: int = 12) -> List[DictionaryContextItem]:
+    """Return public-domain dictionary entries that cite this verse (Tier-A context).
+
+    Joins ``verse_dictionary_links`` (source-vouched citations) to ``dictionary_entries``.
+    Returns the most substantial articles first, capped to ``limit``. Empty if the
+    dictionary has not been ingested/linked (tables absent).
+    """
+    db = _get_db()
+    try:
+        rows = db.execute_query(
+            "SELECT d.entry_id, d.headword, d.article, d.source, l.match_method "
+            "FROM verse_dictionary_links l JOIN dictionary_entries d ON d.entry_id = l.entry_id "
+            "WHERE l.book_id = ? AND l.chapter = ? AND l.verse = ? "
+            "ORDER BY LENGTH(d.article) DESC, d.headword ASC LIMIT ?",
+            (book_id, chapter, verse, limit),
+        )
+    except sqlite3.OperationalError:
+        return []
+    return [
+        DictionaryContextItem(
+            entry_id=r[0],
+            headword=r[1],
+            article=r[2],
+            source=r[3],
+            provenance_entity_id=f"{r[3]}:{r[1]}",
+            match_method=r[4],
+        )
+        for r in rows
+    ]
 
 
 def _get_passage_info(book_id: int, chapter: int, verse: int) -> Optional[PassageInfo]:

@@ -1,9 +1,16 @@
 # D5 — Historical / Cultural Context via PD Dictionary Entity-Linking
 
-**Status:** Design + GPU-free groundwork (parser, schema, importer, tests). Linking + LLM-summary
-stages are specified here but **not yet built** (they need a brainstorm→build cycle and Ollama).
+**Status:** ✅ **v1 BUILT & LIVE (GPU-free), 2026-06-25.** Ingest + `ref_target` linking + display
+all shipped — Easton's (3,961 entries) ingested, **23,063 source-vouched links across 12,551 verses**,
+surfaced in StudyView's "Historical Context" section with a Tier-A "📚 Sourced" provenance chip. The
+**LLM-summary stage is deliberately deferred** (it needs the GPU, which the cross-ref run is using);
+v1 shows the verbatim PD article (a fact) directly, so no AI is required for trustworthy context.
 **Decision reference:** [`deferred-decisions.md` D5](../deferred-decisions.md).
-**Author:** groundwork pass, 2026-06-25.
+**Author:** groundwork pass + v1 build, 2026-06-25.
+
+**Populate (idempotent):** `import_easton_entries(db, "bible_data/sources/Easton.zip")` →
+`link_dictionary_entries(db)` (see `claude/d5_ingest.py` + `claude/d5_link.py`). Re-fetch Easton.zip
+from the CrossWire URL in §2.
 
 ---
 

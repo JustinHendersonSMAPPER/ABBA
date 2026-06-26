@@ -105,6 +105,21 @@ class CulturalNote(BaseModel):
     confidence: Optional[str] = None
 
 
+class DictionaryContextItem(BaseModel):
+    """A public-domain dictionary entry that cites this verse (Tier-A historical context).
+
+    Source-vouched: the dictionary article itself references the verse, so the verbatim PD
+    text is shown directly (no AI). ``provenance_entity_id`` resolves the audit record.
+    """
+
+    entry_id: int
+    headword: str
+    article: str
+    source: str
+    provenance_entity_id: str
+    match_method: str
+
+
 # --- Cross-Reference Models ---
 
 
@@ -242,6 +257,7 @@ class VerseResponse(BaseModel):
 
     # Deep depth
     cultural_context: Optional[List[CulturalNote]] = None
+    dictionary_context: Optional[List[DictionaryContextItem]] = None
     cross_references: Optional[List[CrossRef]] = None
     passage_info: Optional[PassageInfo] = None
     literary_structures: Optional[List[LiteraryStructure]] = None

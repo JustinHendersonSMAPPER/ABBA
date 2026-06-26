@@ -118,6 +118,29 @@
       </section>
 
       <section
+        v-if="depth !== 'basic' && verseData.dictionary_context && verseData.dictionary_context.length"
+        class="study-section hist-section"
+      >
+        <h2 class="section-heading">Historical Context</h2>
+        <p class="hist-intro">Public-domain reference entries that reference this verse.</p>
+        <ul class="hist-cards">
+          <li v-for="entry in verseData.dictionary_context" :key="entry.entry_id" class="hist-card">
+            <div class="hist-card__head">
+              <span class="hist-headword">{{ entry.headword }}</span>
+              <ProvenanceChip entity-type="dictionary_entry" :entity-id="entry.provenance_entity_id" />
+            </div>
+            <p class="hist-article" :class="{ 'is-clamped': !expanded.has(entry.entry_id) }">{{ entry.article }}</p>
+            <button
+              v-if="entry.article.length > 320"
+              class="hist-toggle"
+              @click="toggleEntry(entry.entry_id)"
+            >{{ expanded.has(entry.entry_id) ? 'Show less' : 'Show more' }}</button>
+            <p class="hist-source">{{ entry.source }}</p>
+          </li>
+        </ul>
+      </section>
+
+      <section
         v-if="depth !== 'basic' && verseData.cross_references && verseData.cross_references.length"
         class="study-section xref-section"
       >
@@ -230,8 +253,16 @@ const translationStore = useTranslationStore()
 
 const verseData = ref<VerseResponse | null>(null)
 const selectedWord = ref<WordDetail | null>(null)
+const expanded = ref<Set<number>>(new Set())
 const shareUrl = ref<string | null>(null)
 const showCollectionPicker = ref<boolean>(false)
+
+function toggleEntry(id: number): void {
+  const next = new Set(expanded.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expanded.value = next
+}
 const collections = ref<CollectionInfo[]>([])
 const audioData = ref<AudioResource | null>(null)
 const feedbackGiven = ref<string | null>(null)
@@ -259,6 +290,7 @@ async function loadVerse(): Promise<void> {
 
   verseData.value = null
   selectedWord.value = null
+  expanded.value = new Set()
   shareUrl.value = null
   audioData.value = null
   feedbackGiven.value = null
@@ -495,6 +527,80 @@ watch(
   font-family: var(--font-ui);
   font-weight: 600;
   font-size: 0.8rem;
+  opacity: 0.5;
+}
+
+/* ── Historical-context cards ────────────────────────────── */
+.hist-intro {
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  opacity: 0.6;
+  margin: -0.4rem 0 0.85rem;
+}
+
+.hist-cards {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.hist-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  background: var(--color-surface);
+}
+
+.hist-card__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.hist-headword {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-accent);
+}
+
+.hist-article {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-line;
+}
+
+.hist-article.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hist-toggle {
+  margin-top: 0.35rem;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.hist-toggle:hover {
+  text-decoration: underline;
+}
+
+.hist-source {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
   opacity: 0.5;
 }
 
